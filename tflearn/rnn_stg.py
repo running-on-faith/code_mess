@@ -37,7 +37,7 @@ class AIStg(StgBase):
     def __init__(self, instrument_type, unit=1, train=True):
         super().__init__()
         self.unit = unit
-        self.input_size = 38
+        self.input_size = 39
         self.batch_size = 64
         self.n_step = 20
         self.output_size = 2
@@ -130,13 +130,24 @@ class AIStg(StgBase):
         # ys_all = self.calc_y_against_future_data(price_arr, -0.01, 0.01)
         # ys_all = self.calc_y_against_future_data(price_arr, -self.classify_wave_rate, self.classify_wave_rate)
         ys_all = calc_label2(price_arr, -self.classify_wave_rate, self.classify_wave_rate, one_hot=True)
-        idx_last_available_label = get_last_idx(ys_all, lambda x: x.sum() == 0)
-        factors = factors[:idx_last_available_label + 1, :]
-        range_from = self.n_step - 1
-        range_to = idx_last_available_label + 1
+        if ys_all.shape[1] == 3:
+            idx_last_available_label = get_last_idx(ys_all, lambda x: x[1] == 1 or x[2] == 1)
+            if idx_last_available_label is not None:
+                factors = factors[:idx_last_available_label + 1, :]
+                ys_all = ys_all[:idx_last_available_label + 1, [1, 2]]
+
+                range_from = self.n_step
+                range_to = idx_last_available_label + 1
+            else:
+                range_from = self.n_step
+                range_to = factors.shape[0]
+        else:
+            range_from = self.n_step
+            range_to = factors.shape[0]
+
         xs = np.zeros((range_to - range_from, self.n_step, self.input_size))
         for num, index in enumerate(range(range_from, range_to)):
-            xs[num, :, :] = factors[(index - self.n_step + 1):(index + 1), :]
+            xs[num, :, :] = factors[(index - self.n_step):index, :]
 
         ys = ys_all[range_from:range_to, :]
 

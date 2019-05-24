@@ -130,16 +130,23 @@ class AIStg(StgBase):
         # ys_all = self.calc_y_against_future_data(price_arr, -self.classify_wave_rate, self.classify_wave_rate)
         ys_all = calc_label2(price_arr, -self.classify_wave_rate, self.classify_wave_rate, one_hot=True)
         if ys_all.shape[1] == 3:
-            idx_last_available_label = get_last_idx(ys_all, lambda x: x[1] == 1)
+            idx_last_available_label = get_last_idx(ys_all, lambda x: x[1] == 1 or x[2] == 1)
             if idx_last_available_label is not None:
                 factors = factors[:idx_last_available_label + 1, :]
                 ys_all = ys_all[:idx_last_available_label + 1, [1, 2]]
 
-        range_from = self.n_step - 1
-        range_to = idx_last_available_label + 1
+                range_from = self.n_step
+                range_to = idx_last_available_label + 1
+            else:
+                range_from = self.n_step
+                range_to = factors.shape[0]
+        else:
+            range_from = self.n_step
+            range_to = factors.shape[0]
+
         xs = np.zeros((range_to - range_from, self.n_step, self.input_size))
         for num, index in enumerate(range(range_from, range_to)):
-            xs[num, :, :] = factors[(index - self.n_step + 1):(index + 1), :]
+            xs[num, :, :] = factors[(index - self.n_step):index, :]
 
         ys = ys_all[range_from:range_to, :]
 
