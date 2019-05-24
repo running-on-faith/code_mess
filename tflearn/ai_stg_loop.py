@@ -20,6 +20,7 @@ from sklearn.model_selection import train_test_split
 
 from ibats_common import module_root_path
 from ibats_common.backend.factor import get_factor
+from ibats_common.backend.label import calc_label2
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
 from ibats_common.example.data import get_trade_date_series, get_delivery_date_series
 from ibats_common.strategy import StgBase
@@ -126,7 +127,8 @@ class AIStg(StgBase):
         price_arr = factors[:, 0]
         self.input_size = factors.shape[1]
         # ys_all = self.calc_y_against_future_data(price_arr, -0.01, 0.01)
-        ys_all = self.calc_y_against_future_data(price_arr, -self.classify_wave_rate, self.classify_wave_rate)
+        # ys_all = self.calc_y_against_future_data(price_arr, -self.classify_wave_rate, self.classify_wave_rate)
+        ys_all = calc_label2(price_arr, -self.classify_wave_rate, self.classify_wave_rate, one_hot=True)
         idx_last_available_label = get_last_idx(ys_all, lambda x: x.sum() == 0)
         factors = factors[:idx_last_available_label + 1, :]
         range_from = self.n_step - 1
@@ -138,35 +140,6 @@ class AIStg(StgBase):
         ys = ys_all[range_from:range_to, :]
 
         return xs, ys
-
-    def calc_y_against_future_data(self, value_arr: np.ndarray, min_pct: float, max_pct: float, max_future=None):
-        """
-        根据时间序列数据 pct_arr 计算每一个时点目标标示 -1 0 1
-        计算方式：
-        当某一点未来波动首先 > 上届 min_pct，则标记为： [0, 1]
-        当某一点未来波动首先 < 下届 max_pct，则标记为： [1, 0]
-        :param value_arr:
-        :param min_pct:
-        :param max_pct:
-        :param max_future:最大搜索长度
-        :param output_size:最大搜索长度
-        :return:
-        """
-
-        value_arr[np.isnan(value_arr)] = 0
-        arr_len = value_arr.shape[0]
-        target_arr = np.zeros((arr_len, self.output_size))
-        for i in range(arr_len):
-            base = value_arr[i]
-            for j in range(i + 1, arr_len):
-                result = value_arr[j] / base - 1
-                if result < min_pct:
-                    target_arr[i, 0] = 1
-                    break
-                elif result > max_pct:
-                    target_arr[i, 1] = 1
-                    break
-        return target_arr
 
     def get_batch_xs(self, factors: np.ndarray, index=None):
         """
