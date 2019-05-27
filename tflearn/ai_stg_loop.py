@@ -52,7 +52,7 @@ class AIStg(StgBase):
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
         self.classify_wave_rate = 0.0025
         self.predict_test_random_state = None
-        datetime_str = datetime.now().strftime('%Y-%m-%d %H_%M_%S')
+        datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
         self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
         model_folder_path = os.path.join(folder_path, 'model_tfls')
         if not os.path.exists(model_folder_path):
