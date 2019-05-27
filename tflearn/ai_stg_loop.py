@@ -53,7 +53,7 @@ class AIStg(StgBase):
         self.classify_wave_rate = 0.0025
         self.predict_test_random_state = None
         datetime_str = datetime.now().strftime('%Y-%m-%d %H_%M_%S')
-        folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+        self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
         model_folder_path = os.path.join(folder_path, 'model_tfls')
         if not os.path.exists(model_folder_path):
             os.makedirs(model_folder_path, exist_ok=True)
@@ -64,7 +64,7 @@ class AIStg(StgBase):
         self.checkpoint_path = os.path.join(
             model_folder_path,
             f'model_{int(self.classify_wave_rate * 10000)}.tfl.ckpt')
-        tensorboard_dir = os.path.join(folder_path, f'tensorboard_logs_{datetime_str}')
+        tensorboard_dir = os.path.join(folder_path, f'tensorboard_logs')
         if not os.path.exists(tensorboard_dir):
             os.makedirs(tensorboard_dir)
         self.tensorboard_dir = tensorboard_dir
@@ -512,7 +512,7 @@ def _test_use(is_plot):
     if is_plot:
         from ibats_common.analysis.summary import summary_stg_2_docx
         from ibats_utils.mess import open_file_with_system_app
-        file_path = summary_stg_2_docx(stg_run_id)
+        file_path = summary_stg_2_docx(stg_run_id, doc_file_path=stghandler.stg_base.base_folder_path)
         open_file_with_system_app(file_path)
 
     return stg_run_id

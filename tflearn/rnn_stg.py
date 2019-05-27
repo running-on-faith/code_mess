@@ -54,7 +54,7 @@ class AIStg(StgBase):
         self.classify_wave_rate = 0.0025
         self.predict_test_random_state = None
         datetime_str = datetime.now().strftime('%Y-%m-%d %H_%M_%S')
-        folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+        self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
         model_folder_path = os.path.join(folder_path, 'model_tfls')
         if not os.path.exists(model_folder_path):
             os.makedirs(model_folder_path, exist_ok=True)
@@ -65,7 +65,7 @@ class AIStg(StgBase):
         self.checkpoint_path = os.path.join(
             model_folder_path,
             f'model_{int(self.classify_wave_rate * 10000)}.tfl.ckpt')
-        tensorboard_dir = os.path.join(folder_path, f'tensorboard_logs_{datetime_str}')
+        tensorboard_dir = os.path.join(folder_path, f'tensorboard_logs')
         if not os.path.exists(tensorboard_dir):
             os.makedirs(tensorboard_dir)
         self.tensorboard_dir = tensorboard_dir
@@ -145,9 +145,9 @@ class AIStg(StgBase):
             range_from = self.n_step
             range_to = factors.shape[0]
 
-        xs = np.zeros((range_to - range_from, self.n_step, self.input_size))
+        xs = np.zeros((range_to - range_from, self.n_step, self.input_size, 1))
         for num, index in enumerate(range(range_from, range_to)):
-            xs[num, :, :] = factors[(index - self.n_step):index, :]
+            xs[num, :, :, :] = factors[(index - self.n_step):index, :, np.newaxis]
 
         ys = ys_all[range_from:range_to, :]
 
@@ -163,8 +163,8 @@ class AIStg(StgBase):
         if index is None:
             index = factors.shape[0] - 1
 
-        batch_xs = np.zeros((1, self.n_step, self.input_size))
-        batch_xs[0, :, :] = factors[(index - self.n_step + 1):(index + 1), :]
+        batch_xs = np.zeros((1, self.n_step, self.input_size, 1))
+        batch_xs[0, :, :, :] = factors[(index - self.n_step + 1):(index + 1), :, np.newaxis]
 
         return batch_xs
 
@@ -205,24 +205,24 @@ class AIStg(StgBase):
         # n_hidden_units = CELL_SIZE  # neurons in hidden layer
         # n_classes = OUTPUT_SIZE  # MNIST classes (0-9 digits)
         # Network building
-        net = tflearn.input_data([None, self.n_step, self.input_size])
+        net = tflearn.input_data([None, self.n_step, self.input_size, 1])
         net = tflearn.layers.normalization.batch_normalization(net)
         # layer1
-        conv_2d(net, self.n_step * 2, int(self.input_size / 2), strides=2, activation='relu', name='Conv2D_1')
+        net = conv_2d(net, self.n_step * 2, int(self.input_size / 2), strides=2, activation='relu', name='Conv2D_1')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
         # layer2
-        conv_2d(net, self.n_step * 4, int(self.input_size / 4), strides=2, activation='relu', name='Conv2D_2')
-        net = max_pool_2d(net, 3, strides=2)
-        net = local_response_normalization(net)
-
-        # layer2
-        conv_2d(net, self.n_step * 8, int(self.input_size / 8), strides=2, activation='relu', name='Conv2D_3')
+        net = conv_2d(net, self.n_step * 4, int(self.input_size / 4), strides=2, activation='relu', name='Conv2D_2')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
 
         # layer2
-        conv_2d(net, self.n_step * 16, int(self.input_size / 16), strides=2, activation='relu', name='Conv2D_4')
+        net = conv_2d(net, self.n_step * 8, int(self.input_size / 8), strides=2, activation='relu', name='Conv2D_3')
+        net = max_pool_2d(net, 3, strides=2)
+        net = local_response_normalization(net)
+
+        # layer2
+        net = conv_2d(net, self.n_step * 16, int(self.input_size / 16), strides=2, activation='relu', name='Conv2D_4')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
 
