@@ -385,7 +385,7 @@ class AIStg(StgBase):
                 _, (train_acc, val_acc) = self.train(md_df, num)
                 if val_acc < 0.55:
                     logger.warning('第 %d 次训练，训练结果不及预期，重新采样训练', num)
-                elif train_acc - val_acc > 0.1:
+                elif train_acc - val_acc > 0.1 or val_acc > 0.75:
                     logger.warning('第 %d 次训练，train_acc=%.4f, val_acc=%.4f 相差大于 10%%，重新采样训练', num, train_acc, val_acc)
                 else:
                     break
