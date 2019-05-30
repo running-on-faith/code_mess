@@ -15,13 +15,13 @@ from datetime import datetime
 import numpy as np
 import tensorflow as tf
 import tflearn
-from ibats_utils.mess import get_last_idx, date_2_str
+from ibats_utils.mess import date_2_str
 from sklearn.model_selection import train_test_split
 from tflearn import conv_2d, max_pool_2d, local_response_normalization, fully_connected, dropout
 
 from ibats_common import module_root_path
 from ibats_common.backend.factor import get_factor
-from ibats_common.backend.label import calc_label2, calc_label3
+from ibats_common.backend.label import calc_label3
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
 from ibats_common.example.data import get_trade_date_series, get_delivery_date_series
 from ibats_common.strategy import StgBase
@@ -47,7 +47,7 @@ class AIStg(StgBase):
         self._session = None
         self.train_validation_rate = 0.8
         self.enable_load_model_if_exist = False
-        self.n_epoch = 50
+        self.n_epoch = 100
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
         self.label_func_max_rr = 0.0141
         self.label_func_min_rr = -0.0153
@@ -107,13 +107,6 @@ class AIStg(StgBase):
         if tail_n is not None:
             md_df = md_df.tail(tail_n)
         df = md_df[~md_df['close'].isnull()]
-        # df = md_df[~md_df['close'].isnull()][[
-        #     'open', 'high', 'low', 'close', 'volume', 'oi', 'warehousewarrant', 'termstructure']]
-        # df['ma5'] = df['close'].rolling(window=5).mean()
-        # df['ma10'] = df['close'].rolling(window=10).mean()
-        # df['ma20'] = df['close'].rolling(window=20).mean()
-        # df['pct_change_vol'] = df['volume'].pct_change()
-        # df['pct_change'] = df['close'].pct_change()
 
         factors = df.fillna(0).to_numpy()
         if self.input_size is None or self.input_size != factors.shape[1]:
@@ -248,12 +241,14 @@ class AIStg(StgBase):
                          trade_date_from, trade_date_to)
             for num in range(1, 6):
                 logger.info('第 %d 轮训练开始 [%s, %s]', num, trade_date_from, trade_date_to)
-                self.model.fit(xs_train, ys_train, validation_set=(xs_validation, ys_validation),
-                               show_metric=True, batch_size=self.batch_size, n_epoch=self.n_epoch,
-                               run_id=f'{trade_date_to}_{num}_at_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}')
+                run_id = f'{trade_date_to}_{predict_test_random_state}_at_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                self.model.fit(
+                    xs_train, ys_train, validation_set=(xs_validation, ys_validation),
+                    show_metric=False, batch_size=self.batch_size, n_epoch=self.n_epoch,
+                    run_id=run_id)
 
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
-                # logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
+                logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
                 val_acc = result[0]
                 if result[0] > 0.55:
                     break
@@ -378,8 +373,9 @@ class AIStg(StgBase):
                 _, (train_acc, val_acc) = self.train(md_df, num)
                 if val_acc < 0.55:
                     logger.warning('第 %d 次训练，训练结果不及预期，重新采样训练', num)
-                elif train_acc - val_acc > 0.1 or val_acc > 0.75:
-                    logger.warning('第 %d 次训练，train_acc=%.4f, val_acc=%.4f 相差大于 10%%，重新采样训练', num, train_acc, val_acc)
+                elif train_acc - val_acc > 0.1 and val_acc < 0.75:
+                    logger.warning('第 %d 次训练，train_acc=%.2f%%, val_acc=%.2f%% 相差大于 10%% 且验证集正确率小于75%，重新采样训练',
+                                   num, train_acc * 100, val_acc * 100)
                 else:
                     break
 
