@@ -15,7 +15,7 @@ from datetime import datetime
 import numpy as np
 import tensorflow as tf
 import tflearn
-from ibats_utils.mess import get_last_idx
+from ibats_utils.mess import get_last_idx, date_2_str
 from sklearn.model_selection import train_test_split
 from tflearn import conv_2d, max_pool_2d, local_response_normalization, fully_connected, dropout
 
@@ -38,7 +38,7 @@ class AIStg(StgBase):
         super().__init__()
         self.unit = unit
         self.input_size = 39
-        self.batch_size = 64
+        self.batch_size = 128
         self.n_step = 20
         self.output_size = 3
         self.n_hidden_units = 10
@@ -47,7 +47,7 @@ class AIStg(StgBase):
         self._session = None
         self.train_validation_rate = 0.8
         self.enable_load_model_if_exist = False
-        self.n_epoch = 20
+        self.n_epoch = 50
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
         self.label_func_max_rr = 0.0141
         self.label_func_min_rr = -0.0153
@@ -226,7 +226,7 @@ class AIStg(StgBase):
 
     def train(self, md_df, predict_test_random_state):
         xs, ys = self.get_x_y(md_df)
-        trade_date_from, trade_date_to = md_df.index[0], md_df.index[-1]
+        trade_date_from, trade_date_to = date_2_str(md_df.index[0]), date_2_str(md_df.index[-1])
         # xs_train, xs_validation, ys_train, ys_validation = self.separate_train_validation(xs, ys)
         if self.predict_test_random_state is None:
             random_state = predict_test_random_state
@@ -249,10 +249,11 @@ class AIStg(StgBase):
             for num in range(1, 6):
                 logger.info('第 %d 轮训练开始 [%s, %s]', num, trade_date_from, trade_date_to)
                 self.model.fit(xs_train, ys_train, validation_set=(xs_validation, ys_validation),
-                               show_metric=False, batch_size=self.batch_size, n_epoch=self.n_epoch)
+                               show_metric=True, batch_size=self.batch_size, n_epoch=self.n_epoch,
+                               run_id=f'{trade_date_to}_{num}_at_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}')
 
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
-                logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
+                # logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
                 val_acc = result[0]
                 if result[0] > 0.55:
                     break
