@@ -261,9 +261,7 @@ class AIStg(StgBase):
             # logger.info("train accuracy: %.2f%%" % (result[0] * 100))
             train_acc = result[0]
 
-        # trade_date = md_df['trade_date'].iloc[-1]
-        trade_date = md_df.index[-1]
-        self.trade_date_last_train = trade_date
+        self.trade_date_last_train = trade_date_to
         return self.model, (train_acc, val_acc)
 
     def save_model(self):
