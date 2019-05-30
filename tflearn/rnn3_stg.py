@@ -187,24 +187,24 @@ class AIStg(StgBase):
 
     def _build_model(self) -> tflearn.models.DNN:
         # Network building
-        net = tflearn.input_data([None, self.n_step, self.input_size, 1])
+        net = tflearn.input_data([None, self.n_step, self.input_size, 1])  # input_size=39
         net = tflearn.layers.normalization.batch_normalization(net)
         # layer1
-        net = conv_2d(net, self.n_step * 2, int(self.input_size / 2), strides=2, activation='relu', name='Conv2D_1')
+        net = conv_2d(net, 32, 3, activation='relu', name='Conv2D_1')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
         # layer2
-        net = conv_2d(net, self.n_step * 4, int(self.input_size / 4), strides=2, activation='relu', name='Conv2D_2')
+        net = conv_2d(net, 64, 3, activation='relu', name='Conv2D_2')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
 
         # layer3
-        net = conv_2d(net, self.n_step * 8, int(self.input_size / 8), strides=2, activation='relu', name='Conv2D_3')
+        net = conv_2d(net, 128, 3, activation='relu', name='Conv2D_3')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
 
         # layer4
-        net = conv_2d(net, self.n_step * 16, int(self.input_size / 16), strides=2, activation='relu', name='Conv2D_4')
+        net = conv_2d(net, 256, 3, activation='relu', name='Conv2D_4')
         net = max_pool_2d(net, 3, strides=2)
         net = local_response_normalization(net)
 
