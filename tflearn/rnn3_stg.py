@@ -47,7 +47,7 @@ class AIStg(StgBase):
         self._session = None
         self.train_validation_rate = 0.8
         self.enable_load_model_if_exist = False
-        self.n_epoch = 100
+        self.n_epoch = 800
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
         self.label_func_max_rr = 0.0141
         self.label_func_min_rr = -0.0153
@@ -70,7 +70,7 @@ class AIStg(StgBase):
             os.makedirs(tensorboard_dir)
         self.tensorboard_dir = tensorboard_dir
         self.trade_date_last_train = None
-        self.retrain_period = 10
+        self.retrain_period = 360
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
         self.delivery_date_series = get_delivery_date_series(instrument_type)
@@ -244,13 +244,13 @@ class AIStg(StgBase):
                 run_id = f'{trade_date_to}_{predict_test_random_state}_at_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
-                    show_metric=False, batch_size=self.batch_size, n_epoch=self.n_epoch,
+                    show_metric=True, batch_size=self.batch_size, n_epoch=self.n_epoch // num,
                     run_id=run_id)
 
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
                 logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
                 val_acc = result[0]
-                if result[0] > 0.55:
+                if result[0] > 0.60:
                     break
                 elif num < 5:
                     logger.warning('第 %d 轮训练，样本外训练精度不足，继续训练 [%s, %s]', num, trade_date_from, trade_date_to)
@@ -369,11 +369,11 @@ class AIStg(StgBase):
                 num += 1
                 # 训练模型
                 _, (train_acc, val_acc) = self.train(md_df, num)
-                if val_acc < 0.55:
+                if val_acc < 0.6:
                     logger.warning('第 %d 次训练，训练结果不及预期，重新采样训练', num)
-                elif train_acc - val_acc > 0.1 and val_acc < 0.75:
-                    logger.warning('第 %d 次训练，train_acc=%.2f%%, val_acc=%.2f%% 相差大于 10%% 且验证集正确率小于75%，重新采样训练',
-                                   num, train_acc * 100, val_acc * 100)
+                # elif train_acc - val_acc > 0.15 and val_acc < 0.75:
+                #     logger.warning('第 %d 次训练，train_acc=%.2f%%, val_acc=%.2f%% 相差大于 15%% 且验证集正确率小于75%%，重新采样训练',
+                #                    num, train_acc * 100, val_acc * 100)
                 else:
                     break
 
