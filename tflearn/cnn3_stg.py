@@ -79,17 +79,17 @@ class AIStg(StgBase):
         self.label_func_min_rr = -0.0054
         self.max_future = 3
         self.predict_test_random_state = None
-        self.n_epoch = 100
+        self.n_epoch = 50
         self.retrain_period = 360
-        self.validation_accuracy_base_line = 0.6  # 如果为 None，则不进行 validation 成功率检查
+        self.validation_accuracy_base_line = None   # 0.6  # 如果为 None，则不进行 validation 成功率检查
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
         self.delivery_date_series = get_delivery_date_series(instrument_type)
         self.tensorboard_verbose = 3
         # 模型保存路径相关参数
-        self.enable_load_model_if_exist = False  # 是否使用现有模型进行操作，如果是记得修改以下下方的路径
+        self.enable_load_model_if_exist = True     # 是否使用现有模型进行操作，如果是记得修改以下下方的路径
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-06_08_44_26')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-06_14_21_01')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
@@ -261,24 +261,27 @@ class AIStg(StgBase):
             logger.debug('xs_train %s, ys_train %s, xs_validation %s, ys_validation %s [%s, %s]',
                          xs_train.shape, ys_train.shape, xs_validation.shape, ys_validation.shape,
                          trade_date_from, trade_date_to)
-            for num in range(1, 6):
-                logger.info('第 %d 轮训练开始 [%s, %s]', num, trade_date_from, trade_date_to)
+            max_loop = 6
+            for num in range(max_loop):
+                n_epoch = self.n_epoch // (2 ** num)
+                logger.info('第 %d/%d 轮训练开始 [%s, %s] n_epoch=%d', num + 1, max_loop, trade_date_from, trade_date_to, n_epoch)
                 run_id = f'{trade_date_to}_{xs_train.shape[0]}[{predict_test_random_state}]' \
                     f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
-                    show_metric=True, batch_size=self.batch_size, n_epoch=self.n_epoch // num,
+                    show_metric=True, batch_size=self.batch_size, n_epoch=n_epoch,
                     run_id=run_id)
 
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
-                logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
+                logger.info("样本外准确率: %.2f%%" % (result[0] * 100))
                 val_acc = result[0]
                 if self.validation_accuracy_base_line is not None:
                     if result[0] > self.validation_accuracy_base_line:
                         break
                     elif num < 5:
-                        logger.warning('第 %d 轮训练，样本外训练精度不足，继续训练 [%s, %s]',
-                                       num, trade_date_from, trade_date_to)
+                        logger.warning('第 %d/%d 轮训练，样本外训练准确率不足 %.0f %%，继续训练 [%s, %s]',
+                                       num + 1, max_loop, self.validation_accuracy_base_line * 100,
+                                       trade_date_from, trade_date_to)
                 else:
                     break
 
@@ -355,9 +358,9 @@ class AIStg(StgBase):
                             if m is None:
                                 continue
                             model_name = m.group()
-                            if model_name in model_name_set:
+                            if key in model_name_set:
                                 continue
-                            model_name_set.add(model_name)
+                            model_name_set.add(key)
                             file_path = os.path.join(folder_path, model_name)
                             date_file_path_pair_list.append([key, file_path])
                     except:
@@ -368,13 +371,15 @@ class AIStg(StgBase):
                 # 获取小于等于当期交易日的最大的一个交易日对应的文件名
                 # file_path = get_last(date_file_path_pair_list, lambda x: x[0] <= trade_date, lambda x: x[1])
                 trade_date = str_2_date(trade_date)
-                key, folder_path = get_last(date_file_path_pair_list, lambda x: x[0] <= trade_date)
-                if folder_path is not None:
-                    model = self.model  # 这句话是必须的，需要实现建立模型才可以加载
-                    model.load(folder_path)
-                    self.trade_date_last_train = key
-                    logger.info("load from path: %s", folder_path)
-                    return True
+                ret = get_last(date_file_path_pair_list, lambda x: x[0] <= trade_date)
+                if ret is not None:
+                    key, folder_path = ret
+                    if folder_path is not None:
+                        model = self.model  # 这句话是必须的，需要实现建立模型才可以加载
+                        model.load(folder_path)
+                        self.trade_date_last_train = key
+                        logger.info("trade_date_last_train: %s load from path: %s", key, folder_path)
+                        return True
 
         return False
 
@@ -387,18 +392,14 @@ class AIStg(StgBase):
             self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = xs_train, xs_validation, ys_train, ys_validation
 
         with self.session.as_default() as sess:
-            # logger.info('sess.graph:%s', sess.graph)
-            # logger.info('tf.get_default_graph():%s', tf.get_default_graph())
-            # logger.info("批量预测")
-            # result = self.model.evaluate(self.xs_validation, self.ys_validation, batch_size=self.batch_size)
-            # logger.info("accuracy: %.2f%%" % (result[0] * 100))
-
-            logger.info("批量预测2")
             real_ys = np.argmax(self.ys_validation, axis=1)
+
+            # logger.info("批量预测2")
             # pred_ys = np.argmax(self.model.predict_label(self.xs_validation), axis=1) 与 evaluate 结果刚好相反
             # 因此不使用 predict_label 函数
-            pred_ys = np.argmax(self.model.predict(self.xs_validation), axis=1)
-            logger.info("accuracy: %.2f%%" % (sum(pred_ys == real_ys) / len(pred_ys) * 100))
+            # pred_ys = np.argmax(self.model.predict(self.xs_validation), axis=1)
+            # logger.info("模型训练基准日期：%s，validation accuracy: %.2f%%",
+            #             self.trade_date_last_train, sum(pred_ys == real_ys) / len(pred_ys) * 100)
             # logger.info("pred/real: \n%s\n%s", pred_ys, real_ys)
 
             logger.info("独立样本预测(predict_latest)")
@@ -409,7 +410,8 @@ class AIStg(StgBase):
                 pred_ys.extend(np.argmax(pred_y, axis=1))
 
             pred_ys = np.array(pred_ys)
-            logger.info("accuracy: %.2f%%" % (sum(pred_ys == real_ys) / len(pred_ys) * 100))
+            logger.info("模型训练基准日期：%s，validation accuracy: %.2f%%",
+                        self.trade_date_last_train, sum(pred_ys == real_ys) / len(pred_ys) * 100)
             # logger.info("pred: \n%s\n%s", pred_ys, real_ys)
 
     def predict_latest(self, md_df):
@@ -478,7 +480,7 @@ class AIStg(StgBase):
         factor_df = get_factor(factor_df, close_key='close',
                                trade_date_series=self.trade_date_series, delivery_date_series=self.delivery_date_series)
         # 获取最新交易日
-        trade_date = factor_df.index[-1]
+        trade_date = str_2_date(factor_df.index[-1])
         days_after_last_train = (trade_date - self.trade_date_last_train).days
         if days_after_last_train > self.retrain_period:
             # 重新训练
@@ -581,10 +583,11 @@ def show_accuracy(accuracy_df, close_df):
     ax = fig.add_subplot(111)
     l1 = ax.plot(accuracy_df, color='r', label='accuracy')
     ax2 = ax.twinx()
-    l2 = ax2.plot(close_df, label='base_line')
+    l2 = ax2.plot(close_df, label='md')
     lns = l1 + l2
     plt.legend(lns, [_.get_label() for _ in lns], loc=0)
     plt.suptitle(f'累计平均准确率')
+    plt.grid(True)
     plt.show()
 
 
