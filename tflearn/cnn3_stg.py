@@ -7,15 +7,41 @@
 @contact : mmmaaaggg@163.com
 @desc    : CNN 三分类预测
 pip3 install tensorflow sklearn tflearn
+2019-06-06
+1）  模型及日志目录结构调整如下：
+    tf_saves_2019-06-05_16_21_39
+      *   model_tfls
+      *       *   2012-12-31
+      *       *       *   checkpoint
+      *       *       *   model_-54_51.tfl.data-00000-of-00001
+      *       *       *   model_-54_51.tfl.index
+      *       *       *   model_-54_51.tfl.meta
+      *       *   2013-02-28
+      *       *       *   checkpoint
+      *       *       *   model_-54_51.tfl.data-00000-of-00001
+      *       *       *   model_-54_51.tfl.index
+      *       *       *   model_-54_51.tfl.meta
+      *   tensorboard_logs
+      *       *   2012-12-31_496[1]_20190605_184316
+      *       *       *   events.out.tfevents.1559731396.mg-ubuntu64        datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
+    self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+
+      *       *   2013-02-28_496[1]_20190605_184716
+      *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
+
+2）  调整restore功能
+3）  增加模型对未来数据预测成功率走势图
+
 """
 import os
 import random
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 
 import numpy as np
 import tensorflow as tf
 import tflearn
-from ibats_utils.mess import date_2_str
+from ibats_utils.mess import date_2_str, get_last
 from sklearn.model_selection import train_test_split
 from tflearn import conv_2d, max_pool_2d, local_response_normalization, fully_connected, dropout
 
@@ -37,50 +63,50 @@ class AIStg(StgBase):
     def __init__(self, instrument_type, unit=1):
         super().__init__()
         self.unit = unit
+        # 模型相关参数
         self.input_size = 38
         self.batch_size = 128
         self.n_step = 60
         self.output_size = 3
         self.n_hidden_units = 10
         self.lr = 0.006
+        # 模型训练，及数据集相关参数
         self._model = None
         self._session = None
         self.train_validation_rate = 0.8
-        self.enable_load_model_if_exist = False
-        self.n_epoch = 2000
         self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = None, None, None, None
-        self.label_func_max_rr = 0.0081
-        self.label_func_min_rr = -0.0081
+        self.label_func_max_rr = 0.0051
+        self.label_func_min_rr = -0.0054
         self.max_future = 3
         self.predict_test_random_state = None
-        datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
-        self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
-        model_folder_path = os.path.join(folder_path, 'model_tfls')
-        if not os.path.exists(model_folder_path):
-            os.makedirs(model_folder_path, exist_ok=True)
-        file_path = os.path.join(
-            model_folder_path,
-            f"model_{int(self.label_func_max_rr * 10000)}.tfl")
-        self.model_file_path = file_path
-        self.checkpoint_path = os.path.join(
-            model_folder_path,
-            f'model_{int(self.label_func_max_rr * 10000)}.tfl.ckpt')
-        tensorboard_dir = os.path.join(folder_path, f'tensorboard_logs')
-        if not os.path.exists(tensorboard_dir):
-            os.makedirs(tensorboard_dir)
-        self.tensorboard_dir = tensorboard_dir
-        self.trade_date_last_train = None
+        self.n_epoch = 100
         self.retrain_period = 360
+        self.validation_accuracy_base_line = 0.6  # 如果为 None，则不进行 validation 成功率检查
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
         self.delivery_date_series = get_delivery_date_series(instrument_type)
         self.tensorboard_verbose = 3
+        # 模型保存路径相关参数
+        self.enable_load_model_if_exist = False  # 是否使用现有模型进行操作，如果是记得修改以下下方的路径
+        if self.enable_load_model_if_exist:
+            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-06_08_44_26')
+        else:
+            datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+
+        self.model_folder_path = model_folder_path = os.path.join(folder_path, 'model_tfls')
+        if not os.path.exists(model_folder_path):
+            os.makedirs(model_folder_path, exist_ok=True)
+        self.tensorboard_dir = tensorboard_dir = os.path.join(folder_path, f'tensorboard_logs')
+        if not os.path.exists(tensorboard_dir):
+            os.makedirs(tensorboard_dir)
+        self.trade_date_last_train = None
 
     @property
     def session(self):
         return self.get_session()
 
-    def get_session(self, renew=False, as_default=True, close_last_one_if_renew=True):
+    def get_session(self, renew=False, close_last_one_if_renew=True):
         if renew or self._session is None:
             if self.model is None:
                 raise ValueError('model 需要先于 session 被创建')
@@ -88,9 +114,6 @@ class AIStg(StgBase):
                 self._session.close()
             self._session = tf.Session()
             self._session.run(tf.global_variables_initializer())
-            # if as_default:
-            #     self._session.as_default()
-            #     logger.info('default session:%s', self._session.graph)
         return self._session
 
     @property
@@ -115,10 +138,10 @@ class AIStg(StgBase):
             logger.info("set input_size: %d", self.input_size)
             logger.info("set n_hidden_units: %d", self.n_hidden_units)
 
-        return factors
+        return factors, df.index
 
-    def get_x_y(self, md_df):
-        factors = self.get_factor_array(md_df)
+    def get_x_y(self, factor_df):
+        factors, trade_date_index = self.get_factor_array(factor_df)
         price_arr = factors[:, 0]
         self.input_size = factors.shape[1]
         # ys_all = self.calc_y_against_future_data(price_arr, -0.01, 0.01)
@@ -134,7 +157,7 @@ class AIStg(StgBase):
 
         ys = ys_all[range_from:range_to, :]
 
-        return xs, ys
+        return xs, ys, trade_date_index[range_from:range_to]
 
     def get_batch_xs(self, factors: np.ndarray, index=None):
         """
@@ -213,12 +236,12 @@ class AIStg(StgBase):
 
         # Training
         _model = tflearn.DNN(net, tensorboard_verbose=self.tensorboard_verbose,
-                             checkpoint_path=self.checkpoint_path,
+                             # checkpoint_path=self.checkpoint_path,
                              tensorboard_dir=self.tensorboard_dir)
         return _model
 
     def train(self, md_df, predict_test_random_state):
-        xs, ys = self.get_x_y(md_df)
+        xs, ys, _ = self.get_x_y(md_df)
         trade_date_from, trade_date_to = date_2_str(md_df.index[0]), date_2_str(md_df.index[-1])
         # xs_train, xs_validation, ys_train, ys_validation = self.separate_train_validation(xs, ys)
         if self.predict_test_random_state is None:
@@ -250,10 +273,14 @@ class AIStg(StgBase):
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
                 logger.info("validation accuracy: %.2f%%" % (result[0] * 100))
                 val_acc = result[0]
-                if result[0] > 0.60:
+                if self.validation_accuracy_base_line is not None:
+                    if result[0] > self.validation_accuracy_base_line:
+                        break
+                    elif num < 5:
+                        logger.warning('第 %d 轮训练，样本外训练精度不足，继续训练 [%s, %s]',
+                                       num, trade_date_from, trade_date_to)
+                else:
                     break
-                elif num < 5:
-                    logger.warning('第 %d 轮训练，样本外训练精度不足，继续训练 [%s, %s]', num, trade_date_from, trade_date_to)
 
             tflearn.is_training(False)
 
@@ -264,31 +291,90 @@ class AIStg(StgBase):
         self.trade_date_last_train = trade_date_to
         return self.model, (train_acc, val_acc)
 
-    def save_model(self):
+    def save_model(self, trade_date):
         """
         将模型导出到文件
+        :param trade_date:
         :return:
         """
-        # saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=5)
-        # save_path = saver.save(self.session, self.model_file_path)
-        self.model.save(self.model_file_path)
-        logger.info("模型训练截止日期： %s 保存到: %s", self.trade_date_last_train, self.model_file_path)
-        return self.model_file_path
+        folder_path = os.path.join(self.model_folder_path, date_2_str(trade_date))
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+        file_path = os.path.join(
+            folder_path,
+            f"model_{int(self.label_func_min_rr * 10000)}_{int(self.label_func_max_rr * 10000)}.tfl")
+        self.model.save(file_path)
+        logger.info("模型训练截止日期： %s 保存到: %s", self.trade_date_last_train, file_path)
+        return file_path
 
-    def load_model_if_exist(self):
+    def load_model_if_exist(self, trade_date):
         """
         将模型导出到文件
+        目录结构：
+        tf_saves_2019-06-05_16_21_39
+          *   model_tfls
+          *       *   2012-12-31
+          *       *       *   checkpoint
+          *       *       *   model_-54_51.tfl.data-00000-of-00001
+          *       *       *   model_-54_51.tfl.index
+          *       *       *   model_-54_51.tfl.meta
+          *       *   2013-02-28
+          *       *       *   checkpoint
+          *       *       *   model_-54_51.tfl.data-00000-of-00001
+          *       *       *   model_-54_51.tfl.index
+          *       *       *   model_-54_51.tfl.meta
+          *   tensorboard_logs
+          *       *   2012-12-31_496[1]_20190605_184316
+          *       *       *   events.out.tfevents.1559731396.mg-ubuntu64        datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
+        self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+
+          *       *   2013-02-28_496[1]_20190605_184716
+          *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
+        :param trade_date:
         :return:
         """
-        if self.enable_load_model_if_exist and self.model_file_exists():
-            # 检查文件是否存在
-            model = self.model  # 这句话是必须的，需要实现建立模型才可以加载
-            # sess = self.session
-            # saver = tf.train.Saver(tf.trainable_variables())
-            # save_path = saver.restore(sess, self.model_file_path)
-            model.load(self.model_file_path)
-            logger.info("load from path: %s", self.model_file_path)
-            return True
+        if self.enable_load_model_if_exist:
+            # 获取小于等于当期交易日的最大的一个交易日对应的文件名
+            # 获取全部文件名
+            pattern = re.compile(r'model_[-]?\d+_\d+.tfl')
+            date_file_path_pair_list, model_name_set = [], set()
+            min_available_date = str_2_date(trade_date) - timedelta(days=self.retrain_period)
+            for folder_name in os.listdir(self.model_folder_path):
+                folder_path = os.path.join(self.model_folder_path, folder_name)
+                if os.path.isdir(folder_path):
+                    try:
+                        key = str_2_date(folder_name)
+                        if key < min_available_date:
+                            continue
+                        for file_name in os.listdir(folder_path):
+                            # 对下列有效文件名，匹配结果："model_-54_51.tfl"
+                            # model_-54_51.tfl.data-00000-of-00001
+                            # model_-54_51.tfl.index
+                            # model_-54_51.tfl.meta
+                            m = pattern.search(file_name)
+                            if m is None:
+                                continue
+                            model_name = m.group()
+                            if model_name in model_name_set:
+                                continue
+                            model_name_set.add(model_name)
+                            file_path = os.path.join(folder_path, model_name)
+                            date_file_path_pair_list.append([key, file_path])
+                    except:
+                        pass
+            if len(date_file_path_pair_list) > 0:
+                # 按日期排序
+                date_file_path_pair_list.sort(key=lambda x: x[0])
+                # 获取小于等于当期交易日的最大的一个交易日对应的文件名
+                # file_path = get_last(date_file_path_pair_list, lambda x: x[0] <= trade_date, lambda x: x[1])
+                trade_date = str_2_date(trade_date)
+                key, folder_path = get_last(date_file_path_pair_list, lambda x: x[0] <= trade_date)
+                if folder_path is not None:
+                    model = self.model  # 这句话是必须的，需要实现建立模型才可以加载
+                    model.load(folder_path)
+                    self.trade_date_last_train = key
+                    logger.info("load from path: %s", folder_path)
+                    return True
 
         return False
 
@@ -296,7 +382,7 @@ class AIStg(StgBase):
         logger.info('开始预测')
         # sess = self.session
         if self.xs_train is None:
-            xs, ys = self.get_x_y(md_df)
+            xs, ys, _ = self.get_x_y(md_df)
             xs_train, xs_validation, ys_train, ys_validation = train_test_split(xs, ys, test_size=0.2, random_state=1)
             self.xs_train, self.xs_validation, self.ys_train, self.ys_validation = xs_train, xs_validation, ys_train, ys_validation
 
@@ -334,7 +420,7 @@ class AIStg(StgBase):
         :param md_df:
         :return:
         """
-        factors = self.get_factor_array(md_df, tail_n=self.n_step)
+        factors, _ = self.get_factor_array(md_df, tail_n=self.n_step)
         x = self.get_batch_xs(factors)
         pred_y = np.argmax(self.model.predict(x), axis=1)[-1]
         # is_buy, is_sell = pred_mark == 1, pred_mark == 0
@@ -344,71 +430,64 @@ class AIStg(StgBase):
     def on_prepare_min1(self, md_df, context):
         if md_df is None:
             return
-        df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
-        df.index = pd.DatetimeIndex(df.index)
-        df = get_factor(df, close_key='close',
-                        trade_date_series=self.trade_date_series,
-                        delivery_date_series=self.delivery_date_series)
+        factor_df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
+        factor_df.index = pd.DatetimeIndex(factor_df.index)
+        factor_df = get_factor(factor_df, close_key='close',
+                               trade_date_series=self.trade_date_series, delivery_date_series=self.delivery_date_series)
+        self.load_train_test(factor_df, enable_load_model=self.enable_load_model_if_exist)
 
-        self.load_train_test(df, enable_load_model=self.enable_load_model_if_exist)
-
-    def load_train_test(self, md_df, enable_load_model, rebuild_model=False, enable_train_if_load_not_suss=True,
-                        enable_train=True, enable_test=True):
+    def load_train_test(self, factor_df, enable_load_model, rebuild_model=False, enable_train_if_load_not_suss=True,
+                        enable_train_even_load_succ=False, enable_test=True):
         if rebuild_model:
             self.get_model(rebuild_model=True)
 
+        trade_date = factor_df.index[-1]
         # 加载模型
         if enable_load_model:
-            is_load = self.load_model_if_exist()
+            is_load = self.load_model_if_exist(trade_date)
         else:
             is_load = False
 
-        if enable_train or not (enable_train_if_load_not_suss and not is_load):
+        if enable_train_even_load_succ or (enable_train_if_load_not_suss and not is_load):
             num = 0
             while True:
                 num += 1
                 # 训练模型
-                _, (train_acc, val_acc) = self.train(md_df, num)
-                if val_acc < 0.6:
-                    logger.warning('第 %d 次训练，训练结果不及预期，重新采样训练', num)
-                # elif train_acc - val_acc > 0.15 and val_acc < 0.75:
-                #     logger.warning('第 %d 次训练，train_acc=%.2f%%, val_acc=%.2f%% 相差大于 15%% 且验证集正确率小于75%%，重新采样训练',
-                #                    num, train_acc * 100, val_acc * 100)
+                _, (train_acc, val_acc) = self.train(factor_df, num)
+                if self.validation_accuracy_base_line is not None:
+                    if val_acc < self.validation_accuracy_base_line:
+                        logger.warning('第 %d 次训练，训练结果不及预期，重新采样训练', num)
+                    elif train_acc - val_acc > 0.15 and val_acc < 0.75:
+                        logger.warning('第 %d 次训练，train_acc=%.2f%%, val_acc=%.2f%% 相差大于 15%% 且验证集正确率小于75%%，重新采样训练',
+                                       num, train_acc * 100, val_acc * 100)
+                    else:
+                        break
                 else:
                     break
 
-            self.save_model()
-
-            # trade_date = md_df['trade_date'].iloc[-1]
-            trade_date = md_df.index[-1]
-            self.trade_date_last_train = trade_date
-        elif is_load:
-            # trade_date = md_df['trade_date'].iloc[-1]
-            trade_date = md_df.index[-1]
+            self.save_model(trade_date)
             self.trade_date_last_train = trade_date
 
         if enable_test:
-            self.predict_test(md_df)
+            self.predict_test(factor_df)
 
     def on_min1(self, md_df, context):
         # 数据整理
-        df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
-        df.index = pd.DatetimeIndex(df.index)
-        df = get_factor(df, close_key='close',
-                        trade_date_series=self.trade_date_series,
-                        delivery_date_series=self.delivery_date_series)
-        # 获取最新jiaoyhiriq
-        # trade_date = md_df['trade_date'].iloc[-1]
-        # trade_date = df.index[-1]
-        # days_after_last_train = (trade_date - self.trade_date_last_train).days
-        # if days_after_last_train >= self.retrain_period:
-        #     # 重新训练
-        #     logger.info('当前日期 %s 距离上一次训练 %s 已经过去 %d 天',
-        #                 trade_date, self.trade_date_last_train, days_after_last_train)
-        #     self.load_train_test(df, rebuild_model=True, enable_load_model=False, enable_train=True)
+        factor_df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
+        factor_df.index = pd.DatetimeIndex(factor_df.index)
+        factor_df = get_factor(factor_df, close_key='close',
+                               trade_date_series=self.trade_date_series, delivery_date_series=self.delivery_date_series)
+        # 获取最新交易日
+        trade_date = factor_df.index[-1]
+        days_after_last_train = (trade_date - self.trade_date_last_train).days
+        if days_after_last_train > self.retrain_period:
+            # 重新训练
+            logger.info('当前日期 %s 距离上一次训练 %s 已经过去 %d 天，重新训练',
+                        trade_date, self.trade_date_last_train, days_after_last_train)
+            self.load_train_test(factor_df, rebuild_model=True, enable_load_model=False)
 
         # 预测
-        pred_mark = self.predict_latest(df)
+        pred_mark = self.predict_latest(factor_df)
         is_holding, is_buy, is_sell = pred_mark == 0, pred_mark == 1, pred_mark == 2
         # logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
@@ -446,15 +525,67 @@ class AIStg(StgBase):
         if is_holding:
             logger.debug("%s %s * * %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
 
-    def model_file_exists(self):
-        folder_path, file_name = os.path.split(self.model_file_path)
-        if not os.path.exists(folder_path):
-            return False
-        for f_name in os.listdir(folder_path):
-            if f_name.find(file_name) == 0:
-                return True
+    def on_min1_release(self, md_df):
+        """
+        增加模型对未来数据预测成功率走势图展示
+        :param md_df:
+        :return:
+        """
+        # logger.debug('%s %s', md_df['trade_date'].iloc[-1], md_df.shape)
+        # 建立验证数据集
+        df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
+        trade_date_list = list(df.index)
+        df.index = pd.DatetimeIndex(trade_date_list)
+        factor_df = get_factor(df, close_key='close',
+                               trade_date_series=self.trade_date_series,
+                               delivery_date_series=self.delivery_date_series)
+        xs, ys, trade_date_index = self.get_x_y(factor_df)
+        is_4_validation = (factor_df.index >= self.trade_date_last_train)[:len(xs)]
+        xs, ys = xs[is_4_validation, :, :, :], ys[is_4_validation, :]
+        trade_date_list = trade_date_index[is_4_validation]
+        close_df = df.loc[trade_date_list, 'close']
+        # 预测结果
+        logger.info("检验预测结果(predict_latest)")
+        real_ys, pred_ys = np.argmax(ys, axis=1), []
+        for idx, y in enumerate(ys):
+            x = xs[idx:idx + 1, :, :, :]
+            pred_y = self.model.predict(x)
+            pred_ys.extend(np.argmax(pred_y, axis=1))
 
-        return False
+        pred_ys = np.array(pred_ys)
+        # 分析成功率
+        # 累计平均成功率
+        logger.info("accuracy: %.2f%%" % (sum(pred_ys == real_ys) / len(pred_ys) * 100))
+        is_fit_arr = pred_ys == real_ys
+        accuracy_list, fit_sum = [], 0
+        for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_list), start=1):
+            if is_fit:
+                fit_sum += 1
+            accuracy_list.append(fit_sum / tot_count)
+
+        accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_list)
+        show_accuracy(accuracy_df, close_df)
+        # 移动平均成功率
+        accuracy_list, win_size = [], 60
+        for idx in range(win_size, len(is_fit_arr)):
+            accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
+
+        close2_df = close_df.iloc[win_size:]
+        accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
+        show_accuracy(accuracy_df, close2_df)
+
+
+def show_accuracy(accuracy_df, close_df):
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    l1 = ax.plot(accuracy_df, color='r', label='accuracy')
+    ax2 = ax.twinx()
+    l2 = ax2.plot(close_df, label='base_line')
+    lns = l1 + l2
+    plt.legend(lns, [_.get_label() for _ in lns], loc=0)
+    plt.suptitle(f'累计平均准确率')
+    plt.show()
 
 
 def _test_use(is_plot):
