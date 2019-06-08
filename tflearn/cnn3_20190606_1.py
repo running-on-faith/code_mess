@@ -79,15 +79,15 @@ class AIStg(StgBase):
         self.label_func_min_rr = -0.0054
         self.max_future = 3
         self.predict_test_random_state = None
-        self.n_epoch = 200
-        self.retrain_period = 180
-        self.validation_accuracy_base_line = None  # 0.6  # 如果为 None，则不进行 validation 成功率检查
+        self.n_epoch = 50
+        self.retrain_period = 360
+        self.validation_accuracy_base_line = None   # 0.6  # 如果为 None，则不进行 validation 成功率检查
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
         self.delivery_date_series = get_delivery_date_series(instrument_type)
         self.tensorboard_verbose = 3
         # 模型保存路径相关参数
-        self.enable_load_model_if_exist = True  # 是否使用现有模型进行操作，如果是记得修改以下下方的路径
+        self.enable_load_model_if_exist = True     # 是否使用现有模型进行操作，如果是记得修改以下下方的路径
         if self.enable_load_model_if_exist:
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-06_14_21_01')
         else:
@@ -242,7 +242,7 @@ class AIStg(StgBase):
 
     def train(self, md_df, predict_test_random_state):
         xs, ys, _ = self.get_x_y(md_df)
-        trade_date_from_str, trade_date_to_str = date_2_str(md_df.index[0]), date_2_str(md_df.index[-1])
+        trade_date_from, trade_date_to = date_2_str(md_df.index[0]), date_2_str(md_df.index[-1])
         # xs_train, xs_validation, ys_train, ys_validation = self.separate_train_validation(xs, ys)
         if self.predict_test_random_state is None:
             random_state = predict_test_random_state
@@ -260,14 +260,13 @@ class AIStg(StgBase):
             tflearn.is_training(True)
             logger.debug('xs_train %s, ys_train %s, xs_validation %s, ys_validation %s [%s, %s]',
                          xs_train.shape, ys_train.shape, xs_validation.shape, ys_validation.shape,
-                         trade_date_from_str, trade_date_to_str)
+                         trade_date_from, trade_date_to)
             max_loop = 6
             for num in range(max_loop):
                 n_epoch = self.n_epoch // (2 ** num)
-                logger.info('第 %d/%d 轮训练开始 [%s, %s] n_epoch=%d', num + 1, max_loop,
-                            trade_date_from_str, trade_date_to_str, n_epoch)
-                run_id = f'{trade_date_to_str}_{xs_train.shape[0]}[{predict_test_random_state}]' \
-                         f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                logger.info('第 %d/%d 轮训练开始 [%s, %s] n_epoch=%d', num + 1, max_loop, trade_date_from, trade_date_to, n_epoch)
+                run_id = f'{trade_date_to}_{xs_train.shape[0]}[{predict_test_random_state}]' \
+                    f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
                     show_metric=True, batch_size=self.batch_size, n_epoch=n_epoch,
@@ -282,7 +281,7 @@ class AIStg(StgBase):
                     elif num < 5:
                         logger.warning('第 %d/%d 轮训练，样本外训练准确率不足 %.0f %%，继续训练 [%s, %s]',
                                        num + 1, max_loop, self.validation_accuracy_base_line * 100,
-                                       trade_date_from_str, trade_date_to_str)
+                                       trade_date_from, trade_date_to)
                 else:
                     break
 
@@ -292,7 +291,7 @@ class AIStg(StgBase):
             # logger.info("train accuracy: %.2f%%" % (result[0] * 100))
             train_acc = result[0]
 
-        self.trade_date_last_train = str_2_date(trade_date_to_str)
+        self.trade_date_last_train = trade_date_to
         return self.model, (train_acc, val_acc)
 
     def save_model(self, trade_date):
@@ -329,7 +328,9 @@ class AIStg(StgBase):
           *       *       *   model_-54_51.tfl.meta
           *   tensorboard_logs
           *       *   2012-12-31_496[1]_20190605_184316
-          *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
+          *       *       *   events.out.tfevents.1559731396.mg-ubuntu64        datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
+        self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+
           *       *   2013-02-28_496[1]_20190605_184716
           *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
         :param trade_date:
@@ -337,8 +338,33 @@ class AIStg(StgBase):
         """
         if self.enable_load_model_if_exist:
             # 获取小于等于当期交易日的最大的一个交易日对应的文件名
+            # 获取全部文件名
+            pattern = re.compile(r'model_[-]?\d+_\d+.tfl')
+            date_file_path_pair_list, model_name_set = [], set()
             min_available_date = str_2_date(trade_date) - timedelta(days=self.retrain_period)
-            date_file_path_pair_list = [_ for _ in self.get_date_file_path_pair_list() if _[0] >= min_available_date]
+            for folder_name in os.listdir(self.model_folder_path):
+                folder_path = os.path.join(self.model_folder_path, folder_name)
+                if os.path.isdir(folder_path):
+                    try:
+                        key = str_2_date(folder_name)
+                        if key < min_available_date:
+                            continue
+                        for file_name in os.listdir(folder_path):
+                            # 对下列有效文件名，匹配结果："model_-54_51.tfl"
+                            # model_-54_51.tfl.data-00000-of-00001
+                            # model_-54_51.tfl.index
+                            # model_-54_51.tfl.meta
+                            m = pattern.search(file_name)
+                            if m is None:
+                                continue
+                            model_name = m.group()
+                            if key in model_name_set:
+                                continue
+                            model_name_set.add(key)
+                            file_path = os.path.join(folder_path, model_name)
+                            date_file_path_pair_list.append([key, file_path])
+                    except:
+                        pass
             if len(date_file_path_pair_list) > 0:
                 # 按日期排序
                 date_file_path_pair_list.sort(key=lambda x: x[0])
@@ -417,7 +443,7 @@ class AIStg(StgBase):
         if rebuild_model:
             self.get_model(rebuild_model=True)
 
-        trade_date = str_2_date(factor_df.index[-1])
+        trade_date = factor_df.index[-1]
         # 加载模型
         if enable_load_model:
             is_load = self.load_model_if_exist(trade_date)
@@ -507,18 +533,7 @@ class AIStg(StgBase):
         :param md_df:
         :return:
         """
-        if md_df is None or md_df.shape[0] == 0:
-            logger.warning('md_df is None or shape[0] == 0')
-            return
-        else:
-            logger.debug('md_df.shape= %s', md_df.shape)
-
-        # 获取各个模型训练时间点及路径
-        date_file_path_pair_list = self.get_date_file_path_pair_list()
-        if len(date_file_path_pair_list) > 0:
-            # 按日期排序
-            date_file_path_pair_list.sort(key=lambda x: x[0])
-
+        # logger.debug('%s %s', md_df['trade_date'].iloc[-1], md_df.shape)
         # 建立验证数据集
         df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
         trade_date_list = list(df.index)
@@ -527,41 +542,17 @@ class AIStg(StgBase):
                                trade_date_series=self.trade_date_series,
                                delivery_date_series=self.delivery_date_series)
         xs, ys, trade_date_index = self.get_x_y(factor_df)
-        is_4_validation = (factor_df.index >= pd.to_datetime(self.trade_date_last_train))[:len(xs)]
-        logger.debug("len(is_4_validation)=%d, True Count=%d", len(is_4_validation), sum(is_4_validation))
+        is_4_validation = (factor_df.index >= self.trade_date_last_train)[:len(xs)]
         xs, ys = xs[is_4_validation, :, :, :], ys[is_4_validation, :]
         trade_date_list = trade_date_index[is_4_validation]
-        if len(ys) == 0:
-            logger.warning('ys 长度为0，请检查是否存在数据错误')
-            return
         close_df = df.loc[trade_date_list, 'close']
-        trade_date2_list = [_[0] for _ in date_file_path_pair_list][1:]
-        trade_date2_list.append(None)
         # 预测结果
         logger.info("检验预测结果(predict_latest)")
         real_ys, pred_ys = np.argmax(ys, axis=1), []
-        # 根据模型 trade_date_last_train 进行分段预测，并将结果记录到 pred_ys
-        for num, ((trade_date_last_train, file_path), trade_date_next) in enumerate(zip(
-                date_file_path_pair_list, trade_date2_list)):
-            # 获取当前时段对应的 xs
-            if trade_date2_list is None:
-                is_in_range = trade_date_list >= pd.to_datetime(trade_date_last_train)
-            else:
-                is_in_range = ((trade_date_list >= pd.to_datetime(trade_date_last_train)) &
-                               (trade_date_list < pd.to_datetime(trade_date_next)))
-
-            xs_count = sum(is_in_range)
-            if xs_count == 0:
-                logger.debug('没有数据集可验证 [%s - %s) model path:%s',
-                             trade_date_last_train, trade_date_next, file_path)
-                continue
-            else:
-                logger.debug('%d 条数据将被验证 [%s - %s) model path:%s',
-                             xs_count, trade_date_last_train, trade_date_next, file_path)
-            xs_sub = xs[is_in_range, :, :, :]
-            pred_ys_one_hot = self.model.predict(xs_sub)
-            pred_ys.extend(np.argmax(pred_ys_one_hot, axis=1))
-            # TODO: 为每一个时段单独验证成功率
+        for idx, y in enumerate(ys):
+            x = xs[idx:idx + 1, :, :, :]
+            pred_y = self.model.predict(x)
+            pred_ys.extend(np.argmax(pred_y, axis=1))
 
         pred_ys = np.array(pred_ys)
         # 分析成功率
@@ -584,55 +575,6 @@ class AIStg(StgBase):
         close2_df = close_df.iloc[win_size:]
         accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
         show_accuracy(accuracy_df, close2_df)
-
-    def get_date_file_path_pair_list(self):
-        """
-        目录结构：
-        tf_saves_2019-06-05_16_21_39
-          *   model_tfls
-          *       *   2012-12-31
-          *       *       *   checkpoint
-          *       *       *   model_-54_51.tfl.data-00000-of-00001
-          *       *       *   model_-54_51.tfl.index
-          *       *       *   model_-54_51.tfl.meta
-          *       *   2013-02-28
-          *       *       *   checkpoint
-          *       *       *   model_-54_51.tfl.data-00000-of-00001
-          *       *       *   model_-54_51.tfl.index
-          *       *       *   model_-54_51.tfl.meta
-          *   tensorboard_logs
-          *       *   2012-12-31_496[1]_20190605_184316
-          *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
-          *       *   2013-02-28_496[1]_20190605_184716
-          *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
-        :return:
-        """
-        # 获取全部文件名
-        pattern = re.compile(r'model_[-]?\d+_\d+.tfl')
-        date_file_path_pair_list, model_name_set = [], set()
-        for folder_name in os.listdir(self.model_folder_path):
-            folder_path = os.path.join(self.model_folder_path, folder_name)
-            if os.path.isdir(folder_path):
-                try:
-                    key = str_2_date(folder_name)
-                    for file_name in os.listdir(folder_path):
-                        # 对下列有效文件名，匹配结果："model_-54_51.tfl"
-                        # model_-54_51.tfl.data-00000-of-00001
-                        # model_-54_51.tfl.index
-                        # model_-54_51.tfl.meta
-                        m = pattern.search(file_name)
-                        if m is None:
-                            continue
-                        model_name = m.group()
-                        if key in model_name_set:
-                            continue
-                        model_name_set.add(key)
-                        file_path = os.path.join(folder_path, model_name)
-                        date_file_path_pair_list.append([key, file_path])
-                except:
-                    pass
-
-        return date_file_path_pair_list
 
 
 def show_accuracy(accuracy_df, close_df):
@@ -712,8 +654,7 @@ def _test_use(is_plot):
         from ibats_common.analysis.summary import summary_stg_2_docx
         from ibats_utils.mess import open_file_with_system_app
         file_path = summary_stg_2_docx(stg_run_id)
-        if file_path is not None:
-            open_file_with_system_app(file_path)
+        open_file_with_system_app(file_path)
 
     return stg_run_id
 
