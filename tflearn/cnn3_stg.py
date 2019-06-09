@@ -352,7 +352,7 @@ class AIStg(StgBase):
                         model = self.model  # 这句话是必须的，需要实现建立模型才可以加载
                         model.load(folder_path)
                         self.trade_date_last_train = key
-                        logger.info("trade_date_last_train: %s load from path: %s", key, folder_path)
+                        logger.info("加载模型成功。trade_date_last_train: %s load from path: %s", key, folder_path)
                         return True
 
         return False
@@ -460,7 +460,7 @@ class AIStg(StgBase):
             # 重新训练
             logger.info('当前日期 %s 距离上一次训练 %s 已经过去 %d 天，重新训练',
                         trade_date, self.trade_date_last_train, days_after_last_train)
-            self.load_train_test(factor_df, rebuild_model=True, enable_load_model=False)
+            self.load_train_test(factor_df, rebuild_model=True, enable_load_model=self.enable_load_model_if_exist)
 
         # 预测
         pred_mark = self.predict_latest(factor_df)
@@ -519,71 +519,87 @@ class AIStg(StgBase):
             # 按日期排序
             date_file_path_pair_list.sort(key=lambda x: x[0])
 
-        # 建立验证数据集
+        # 建立数据集
         df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
-        trade_date_list = list(df.index)
-        df.index = pd.DatetimeIndex(trade_date_list)
         factor_df = get_factor(df, close_key='close',
                                trade_date_series=self.trade_date_series,
                                delivery_date_series=self.delivery_date_series)
         xs, ys, trade_date_index = self.get_x_y(factor_df)
-        is_4_validation = (factor_df.index >= pd.to_datetime(self.trade_date_last_train))[:len(xs)]
-        logger.debug("len(is_4_validation)=%d, True Count=%d", len(is_4_validation), sum(is_4_validation))
-        xs, ys = xs[is_4_validation, :, :, :], ys[is_4_validation, :]
-        trade_date_list = trade_date_index[is_4_validation]
-        if len(ys) == 0:
+        data_len = len(trade_date_index)
+        if data_len == 0:
             logger.warning('ys 长度为0，请检查是否存在数据错误')
             return
-        close_df = df.loc[trade_date_list, 'close']
         trade_date2_list = [_[0] for _ in date_file_path_pair_list][1:]
         trade_date2_list.append(None)
         # 预测结果
-        logger.info("检验预测结果(predict_latest)")
-        real_ys, pred_ys = np.argmax(ys, axis=1), []
+        logger.info("按日期分段验证检验预测结果")
+        pred_ys_tot = []
+        # 获取 real_ys
+        trade_date_last_train_first = pd.to_datetime(date_file_path_pair_list[0][0])
+        real_ys = ys[trade_date_index >= trade_date_last_train_first, :]
         # 根据模型 trade_date_last_train 进行分段预测，并将结果记录到 pred_ys
         for num, ((trade_date_last_train, file_path), trade_date_next) in enumerate(zip(
                 date_file_path_pair_list, trade_date2_list)):
-            # 获取当前时段对应的 xs
-            if trade_date2_list is None:
-                is_in_range = trade_date_list >= pd.to_datetime(trade_date_last_train)
-            else:
-                is_in_range = ((trade_date_list >= pd.to_datetime(trade_date_last_train)) &
-                               (trade_date_list < pd.to_datetime(trade_date_next)))
-
-            xs_count = sum(is_in_range)
-            if xs_count == 0:
-                logger.debug('没有数据集可验证 [%s - %s) model path:%s',
-                             trade_date_last_train, trade_date_next, file_path)
+            # 以模型训练日期为基准，后面的数据作为验证集数据（样本外数据）
+            # 获取有效的日期范围 from - to
+            range_from = trade_date_index >= pd.to_datetime(trade_date_last_train)
+            range_from_len = len(range_from)
+            if range_from_len == 0:  # range_from_len 应该与 trade_date_list_count 等长度，所以这个条件应该永远不会满足
+                logger.error('总共%d条数据，%s 开始后面没有可验证数据', data_len, trade_date_last_train)
                 continue
+            true_count = sum(range_from)
+            logger.debug("len(range_from)=%d, True Count=%d", len(range_from), true_count)
+            if true_count == 0:
+                logger.warning('总共%d条数据，%s 开始后面没有可验证数据', data_len, trade_date_last_train)
+                continue
+            # 自 trade_date_last_train 起的所有有效日期
+            trade_date_list_sub = trade_date_index[range_from]
+
+            # 获取 in_range，作为 range_from, range_to 的交集
+            if trade_date_next is None:
+                in_range = None
+                in_range_count = true_count
             else:
-                logger.debug('%d 条数据将被验证 [%s - %s) model path:%s',
-                             xs_count, trade_date_last_train, trade_date_next, file_path)
-            xs_sub = xs[is_in_range, :, :, :]
+                in_range = trade_date_list_sub < pd.to_datetime(trade_date_next)
+                in_range_count = sum(in_range)
+                if in_range_count == 0:
+                    logger.warning('总共%d条数据，[%s - %s) 之间没有可用数据',
+                                   data_len, trade_date_last_train, trade_date_next)
+                    continue
+                else:
+                    logger.debug('总共%d条数据，[%s - %s) 之间有 %d 条数据将被验证 model path:%s',
+                                 data_len, trade_date_last_train, trade_date_next, in_range_count,
+                                 file_path)
+
+            # 获取当前时段对应的 xs
+            # 进行验证时，对 range_from 开始的全部数据进行预测，按照 range_to 为分界线分区着色显示
+            xs_sub, ys_sub = xs[range_from, :, :, :], ys[range_from, :]
+            close_df = df.loc[trade_date_list_sub, 'close']
+            # 获取样本外数据
+            real_ys = np.argmax(ys_sub, axis=1)
+
+            # 加载模型
+            is_load = self.load_model_if_exist(trade_date_last_train)
+            if not is_load:
+                logger.error('%s 模型加载失败：%s', trade_date_last_train, file_path)
+                continue
+            # 预测
             pred_ys_one_hot = self.model.predict(xs_sub)
-            pred_ys.extend(np.argmax(pred_ys_one_hot, axis=1))
-            # TODO: 为每一个时段单独验证成功率
+            pred_ys = np.argmax(pred_ys_one_hot, axis=1)
+            if in_range is not None and in_range_count > 0:
+                pred_ys_tot.extend(pred_ys[in_range])
+                # 为每一个时段单独验证成功率，以当前模型为基准，验证后面全部历史数据成功率走势
+                if trade_date_next is None:
+                    split_point_list = None
+                else:
+                    split_point_list = [close_df.index[0], trade_date_next, close_df.index[-1]]
+                show_accuracy(real_ys, pred_ys, close_df.index, close_df, split_point_list)
 
-        pred_ys = np.array(pred_ys)
-        # 分析成功率
-        # 累计平均成功率
-        logger.info("accuracy: %.2f%%" % (sum(pred_ys == real_ys) / len(pred_ys) * 100))
-        is_fit_arr = pred_ys == real_ys
-        accuracy_list, fit_sum = [], 0
-        for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_list), start=1):
-            if is_fit:
-                fit_sum += 1
-            accuracy_list.append(fit_sum / tot_count)
-
-        accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_list)
-        show_accuracy(accuracy_df, close_df)
-        # 移动平均成功率
-        accuracy_list, win_size = [], 60
-        for idx in range(win_size, len(is_fit_arr)):
-            accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
-
-        close2_df = close_df.iloc[win_size:]
-        accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
-        show_accuracy(accuracy_df, close2_df)
+        pred_ys_tot = np.array(pred_ys_tot)
+        close_df = df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
+        split_point_list = [_[0] for _ in date_file_path_pair_list]
+        split_point_list.append(trade_date_index[-1])
+        show_accuracy(real_ys, pred_ys_tot, trade_date_index, close_df, split_point_list)
 
     def get_date_file_path_pair_list(self):
         """
@@ -635,8 +651,38 @@ class AIStg(StgBase):
         return date_file_path_pair_list
 
 
-def show_accuracy(accuracy_df, close_df):
+def show_accuracy(real_ys, pred_ys, trade_date_index, close_df, split_point_list=None):
+    # 分析成功率
+    # 累计平均成功率
+    logger.info("[%s - %s] accuracy: %.2f%%", trade_date_index[0], trade_date_index[-1],
+                sum(pred_ys == real_ys) / len(pred_ys) * 100)
+    is_fit_arr = pred_ys == real_ys
+    accuracy_list, fit_sum = [], 0
+    for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_index), start=1):
+        if is_fit:
+            fit_sum += 1
+        accuracy_list.append(fit_sum / tot_count)
+
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_index)
+    plot_accuracy(accuracy_df, close_df, title=f'累计平均准确率', split_point_list=split_point_list)
+    # 移动平均成功率
+    accuracy_list, win_size = [], 60
+    for idx in range(win_size, len(is_fit_arr)):
+        accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
+
+    close2_df = close_df.iloc[win_size:]
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
+    plot_accuracy(accuracy_df, close2_df, title=f'{win_size}日移动平均准确率', split_point_list=split_point_list)
+
+
+def plot_accuracy(accuracy_df, close_df, title=None, split_point_list=None):
+    from matplotlib.font_manager import FontProperties
     import matplotlib.pyplot as plt
+    from pylab import mpl
+
+    # 调用系统字体  C:\WINDOWS\Fonts
+    font = FontProperties(fname=r"C:\\WINDOWS\\Fonts\\FZSTK.TTF", size=14)
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
     l1 = ax.plot(accuracy_df, color='r', label='accuracy')
@@ -644,9 +690,38 @@ def show_accuracy(accuracy_df, close_df):
     l2 = ax2.plot(close_df, label='md')
     lns = l1 + l2
     plt.legend(lns, [_.get_label() for _ in lns], loc=0)
-    plt.suptitle(f'累计平均准确率')
+    if title is not None:
+        plt.suptitle(title, fontproperties=font)
     plt.grid(True)
+    # 分段着色
+    if split_point_list is not None and len(split_point_list) > 2:
+        x0, x1 = None, None
+        for num, point in enumerate(split_point_list):
+            if num % 2 == 0:
+                x0 = point
+            else:
+                x1 = point
+                if num >= 1:
+                    p = plt.axvspan(x0, x1, facecolor='#2ca02c', alpha=0.5)
+    datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f')
+    file_name = f"{datetime_str}" if title is None else f"{title}_{datetime_str}"
+    from ibats_common.analysis import get_cache_folder_path
+    file_path = os.path.join(get_cache_folder_path(), file_name)
+    plt.savefig(file_path)
     plt.show()
+
+
+def _test_plot_accuracy():
+    """测试 plot_accuracy"""
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+    accuracy_df = pd.DataFrame({'acc': np.cos(np.linspace(0, 10, 100))}, index=date_index)
+    split_point_list = np.random.randint(len(date_arr), size=10)
+    split_point_list.sort()
+    split_point_list = date_arr[split_point_list]
+    plot_accuracy(accuracy_df, close_df, title='测试使用', split_point_list=split_point_list)
 
 
 def _test_use(is_plot):
@@ -722,3 +797,4 @@ if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG, format=config.LOG_FORMAT)
     is_plot = True
     _test_use(is_plot)
+    # _test_plot_accuracy()
