@@ -251,7 +251,7 @@ class AIStg(StgBase):
 
     def train(self, factor_df_dic: dict, predict_test_random_state):
         factor_df = factor_df_dic[1]
-        xs, ys, _ = self.get_x_y(factor_df)
+
         trade_date_from_str, trade_date_to_str = date_2_str(factor_df.index[0]), date_2_str(factor_df.index[-1])
         # xs_train, xs_validation, ys_train, ys_validation = self.separate_train_validation(xs, ys)
         if self.predict_test_random_state is None:
@@ -262,6 +262,7 @@ class AIStg(StgBase):
         # 利用生成数据做训练数据集，只用原始数据中的 validation 部分做验证集
         arr_list, xs_validation, ys_validation = [], None, None
         for adj_factor, factor_df in factor_df_dic.items():
+            xs, ys, _ = self.get_x_y(factor_df)
             xs_train_tmp, xs_validation_tmp, ys_train_tmp, ys_validation_tmp = train_test_split(
                 xs, ys, test_size=0.2, random_state=random_state)
             arr_list.append([xs_train_tmp, ys_train_tmp])
