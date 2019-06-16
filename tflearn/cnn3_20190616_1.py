@@ -82,8 +82,8 @@ class AIStg(StgBase):
         self.label_func_min_rr = -0.0054
         self.max_future = 3
         self.predict_test_random_state = None
-        self.n_epoch = 48
-        self.retrain_period = 60
+        self.n_epoch = 50
+        self.retrain_period = 180
         self.validation_accuracy_base_line = 0.55  # 0.6    # 如果为 None，则不进行 validation 成功率检查
         self.over_fitting_train_acc = 0.9  # 过拟合训练集成功率，如果为None则不进行判断
         # 其他辅助信息
@@ -97,7 +97,7 @@ class AIStg(StgBase):
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
         self.enable_load_model_if_exist = False
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-16_09_33_30')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-13_08_33_25')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
@@ -110,7 +110,7 @@ class AIStg(StgBase):
             os.makedirs(tensorboard_dir)
         self.trade_date_last_train = None
         self.trade_date_acc_list = defaultdict(lambda: [0.0, 0.0])
-        self.do_nothing_on_min_bar = False  # 仅供调试使用
+        self.do_nothing_on_min_bar = True  # 仅供调试使用
         # 用于记录 open,high,low,close,amount 的 column 位置
         self.ohlca_col_name_list = ["open", "high", "low", "close", "amount"]
 
@@ -793,6 +793,21 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
     file_name = f"accuracy [{date_from_str}-{date_to_str}]"
     from ibats_common.analysis.plot import plot_or_show
     plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
+
+
+def data_multiplication(xs_train_original: np.ndarray, ys_train_original: np.ndarray, idx_list: list):
+    """
+    针对当期 factor_md 对数据进行倍增，以提高训练集数量
+    :param xs_train_original:
+    :param ys_train_original:
+    :param idx_list:
+    :return:
+    """
+    # 对 开高低收，成交额，乘以一个因子[0.5 ... 2.0]之间的数字
+    xs_train, ys_train = xs_train_original.copy(), ys_train_original.copy()
+    for factor in np.arange(0.5, 2.0, 0.2):
+        xs_train_tmp, ys_train_tmp = xs_train_original.copy(), ys_train_original.copy()
+        xs_train_tmp[:, idx_list]
 
 
 def _test_use(is_plot):
