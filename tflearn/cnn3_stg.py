@@ -82,9 +82,9 @@ class AIStg(StgBase):
         self.label_func_min_rr = -0.0054
         self.max_future = 3
         self.predict_test_random_state = None
-        self.n_epoch = 50
-        self.retrain_period = 0     # 每隔 N 日重新训练，0/None代表不重新训练
-        self.validation_accuracy_base_line = 0.55  # 0.6  # 如果为 None，则不进行 validation 成功率检查
+        self.n_epoch = 48
+        self.retrain_period = 60
+        self.validation_accuracy_base_line = 0.55  # 0.6    # 如果为 None，则不进行 validation 成功率检查
         self.over_fitting_train_acc = 0.9  # 过拟合训练集成功率，如果为None则不进行判断
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
@@ -97,7 +97,7 @@ class AIStg(StgBase):
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
         self.enable_load_model_if_exist = False
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-13_08_33_25')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-16_09_33_30')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
@@ -295,7 +295,7 @@ class AIStg(StgBase):
                 logger.info('第 %d/%d 轮训练开始 [%s, %s] random_state=%d n_epoch=%d', num + 1, max_loop,
                             trade_date_from_str, trade_date_to_str, random_state, n_epoch)
                 run_id = f'{trade_date_to_str}_{xs_train.shape[0]}[{predict_test_random_state}]' \
-                    f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                         f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 tflearn.is_training(True)
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
@@ -304,12 +304,13 @@ class AIStg(StgBase):
                 tflearn.is_training(False)
 
                 result = self.model.evaluate(xs_train, ys_train, batch_size=self.batch_size)
+                # logger.info("train accuracy: %.2f%%" % (result[0] * 100))
                 train_acc = result[0]
-
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
-                logger.info("[%s - %s] random_state=%d 样本外准确率: %.2f%%",
-                            trade_date_from_str, trade_date_to_str, predict_test_random_state, result[0] * 100)
                 val_acc = result[0]
+                logger.info("[%s - %s] random_state=%d, 训练集准确率(train_acc)：%.2f%%， 样本外准确率(val_acc): %.2f%%",
+                            trade_date_from_str, trade_date_to_str, predict_test_random_state,
+                            train_acc * 100, val_acc * 100)
                 if self.over_fitting_train_acc is not None and train_acc > self.over_fitting_train_acc:
                     logger.warning('第 %d/%d 轮训练，训练集精度超过 %.2f%% 可能存在过拟合 [%s, %s]',
                                    num + 1, max_loop, self.over_fitting_train_acc * 100,
