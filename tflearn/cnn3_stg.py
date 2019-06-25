@@ -44,7 +44,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import tensorflow as tf
 import tflearn
-from ibats_utils.mess import date_2_str, get_last
+from ibats_utils.mess import date_2_str, get_last, str_2_date
 from sklearn.model_selection import train_test_split
 from tflearn import conv_2d, max_pool_2d, local_response_normalization, fully_connected, dropout
 
@@ -85,6 +85,7 @@ class AIStg(StgBase):
         self.n_epoch = 50
         self.retrain_period = 0     # 每隔 N 日重新训练，0/None代表不重新训练
         self.validation_accuracy_base_line = 0.55  # 0.6  # 如果为 None，则不进行 validation 成功率检查
+        self.over_fitting_train_acc = 0.9  # 过拟合训练集成功率，如果为None则不进行判断
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
         self.delivery_date_series = get_delivery_date_series(instrument_type)
@@ -109,7 +110,7 @@ class AIStg(StgBase):
             os.makedirs(tensorboard_dir)
         self.trade_date_last_train = None
         self.trade_date_acc_list = defaultdict(lambda: [0.0, 0.0])
-        self.do_nothing_on_min_bar = True  # 仅供调试使用
+        self.do_nothing_on_min_bar = False  # 仅供调试使用
         # 用于记录 open,high,low,close,amount 的 column 位置
         self.ohlca_col_name_list = ["open", "high", "low", "close", "amount"]
 
@@ -282,7 +283,6 @@ class AIStg(StgBase):
         with sess.as_default():
             # with tf.Graph().as_default():
             # logger.debug('sess.graph:%s tf.get_default_graph():%s', sess.graph, tf.get_default_graph())
-            tflearn.is_training(True)
             logger.debug('random_state=%d, xs_train %s, ys_train %s, xs_validation %s, ys_validation %s, [%s, %s]',
                          random_state, xs_train.shape, ys_train.shape, xs_validation.shape, ys_validation.shape,
                          trade_date_from_str, trade_date_to_str)
@@ -296,15 +296,25 @@ class AIStg(StgBase):
                             trade_date_from_str, trade_date_to_str, random_state, n_epoch)
                 run_id = f'{trade_date_to_str}_{xs_train.shape[0]}[{predict_test_random_state}]' \
                     f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                tflearn.is_training(True)
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
                     show_metric=True, batch_size=self.batch_size, n_epoch=n_epoch,
                     run_id=run_id)
+                tflearn.is_training(False)
+
+                result = self.model.evaluate(xs_train, ys_train, batch_size=self.batch_size)
+                train_acc = result[0]
 
                 result = self.model.evaluate(xs_validation, ys_validation, batch_size=self.batch_size)
                 logger.info("[%s - %s] random_state=%d 样本外准确率: %.2f%%",
                             trade_date_from_str, trade_date_to_str, predict_test_random_state, result[0] * 100)
                 val_acc = result[0]
+                if self.over_fitting_train_acc is not None and train_acc > self.over_fitting_train_acc:
+                    logger.warning('第 %d/%d 轮训练，训练集精度超过 %.2f%% 可能存在过拟合 [%s, %s]',
+                                   num + 1, max_loop, self.over_fitting_train_acc * 100,
+                                   trade_date_from_str, trade_date_to_str)
+                    break
                 if self.validation_accuracy_base_line is not None:
                     if result[0] > self.validation_accuracy_base_line:
                         break
@@ -314,12 +324,6 @@ class AIStg(StgBase):
                                        trade_date_from_str, trade_date_to_str)
                 else:
                     break
-
-            tflearn.is_training(False)
-
-            result = self.model.evaluate(xs_train, ys_train, batch_size=self.batch_size)
-            # logger.info("train accuracy: %.2f%%" % (result[0] * 100))
-            train_acc = result[0]
 
         self.trade_date_last_train = str_2_date(trade_date_to_str)
         return train_acc, val_acc
@@ -487,8 +491,9 @@ class AIStg(StgBase):
                     self.get_model(rebuild_model=True)
                 # 训练模型
                 train_acc, val_acc = self.train(factor_df_dic, predict_test_random_state=num)
-                if train_acc > 0.95:
-                    logger.warning('第 %d 次训练，训练集精度 train_acc=%.2f%% 过高，重新采样训练', num, train_acc * 100)
+                if self.over_fitting_train_acc is not None and train_acc > self.over_fitting_train_acc:
+                    logger.warning('第 %d 次训练，训练集精度 train_acc=%.2f%% 过高，可能存在过拟合，重新采样训练',
+                                   num, train_acc * 100)
                     continue
                 if self.validation_accuracy_base_line is not None:
                     if val_acc < self.validation_accuracy_base_line:
@@ -787,21 +792,6 @@ def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=Non
     file_name = f"accuracy [{date_from_str}-{date_to_str}]"
     from ibats_common.analysis.plot import plot_or_show
     plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
-
-
-def data_multiplication(xs_train_original: np.ndarray, ys_train_original: np.ndarray, idx_list: list):
-    """
-    针对当期 factor_md 对数据进行倍增，以提高训练集数量
-    :param xs_train_original:
-    :param ys_train_original:
-    :param idx_list:
-    :return:
-    """
-    # 对 开高低收，成交额，乘以一个因子[0.5 ... 2.0]之间的数字
-    xs_train, ys_train = xs_train_original.copy(), ys_train_original.copy()
-    for factor in np.arange(0.5, 2.0, 0.2):
-        xs_train_tmp, ys_train_tmp = xs_train_original.copy(), ys_train_original.copy()
-        xs_train_tmp[:, idx_list]
 
 
 def _test_use(is_plot):
