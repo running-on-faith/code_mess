@@ -83,7 +83,7 @@ class AIStg(StgBase):
         self.max_future = 3
         self.predict_test_random_state = None
         self.n_epoch = 50
-        self.retrain_period = 0     # 每隔 N 日重新训练，0/None代表不重新训练
+        self.retrain_period = None
         self.validation_accuracy_base_line = 0.55  # 0.6  # 如果为 None，则不进行 validation 成功率检查
         # 其他辅助信息
         self.trade_date_series = get_trade_date_series()
@@ -215,36 +215,12 @@ class AIStg(StgBase):
 
     def _build_model(self) -> tflearn.models.DNN:
         # Network building
-        net = tflearn.input_data([None, self.n_step, self.input_size, 1])  # input_size=39
+        net = tflearn.input_data([None, self.n_step, self.input_size])
         net = tflearn.layers.normalization.batch_normalization(net)
-        # layer1
-        net = conv_2d(net, 32, 3, activation='relu', name='Conv2D_1')
-        net = max_pool_2d(net, 3, strides=2)
-        net = local_response_normalization(net)
-        # layer2
-        net = conv_2d(net, 64, 3, activation='relu', name='Conv2D_2')
-        net = max_pool_2d(net, 3, strides=2)
-        net = local_response_normalization(net)
-
-        # layer3
-        net = conv_2d(net, 128, 3, activation='relu', name='Conv2D_3')
-        net = max_pool_2d(net, 3, strides=2)
-        net = local_response_normalization(net)
-
-        # layer4
-        net = conv_2d(net, 256, 3, activation='relu', name='Conv2D_4')
-        net = max_pool_2d(net, 3, strides=2)
-        net = local_response_normalization(net)
-
-        net = fully_connected(net, 1024, activation='tanh', name='fc1')
-        net = dropout(net, 0.4, name='Dropout1')
-        net = fully_connected(net, 1024, activation='tanh', name='fc2')
-        net = dropout(net, 0.4, name='Dropout2')
-        net = fully_connected(net, self.output_size, activation='softmax')
-
-        net = tflearn.regression(net, optimizer='momentum',
-                                 learning_rate=0.001,
-                                 loss='categorical_crossentropy')
+        net = tflearn.lstm(net, self.n_hidden_units, dropout=0.9, forget_bias=0.9)
+        net = tflearn.lstm(net, self.n_hidden_units, dropout=0.9, forget_bias=0.9)
+        net = tflearn.fully_connected(net, self.output_size, activation='softmax')
+        net = tflearn.regression(net, optimizer='adam', learning_rate=0.001, loss='categorical_crossentropy')
 
         # Training
         _model = tflearn.DNN(net, tensorboard_verbose=self.tensorboard_verbose,
