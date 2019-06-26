@@ -94,9 +94,9 @@ class AIStg(StgBase):
         # enable_load_model_if_exist 将会在调用 self.load_model_if_exist 时进行检查
         # 如果该字段为 False，调用 load_model_if_exist 时依然可以传入参数的方式加载已有模型
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
-        self.enable_load_model_if_exist = False
+        self.enable_load_model_if_exist = True
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_2019-06-16_09_33_30')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-26_07_28_11')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
@@ -772,4 +772,4 @@ def _test_use(is_plot):
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG, format=config.LOG_FORMAT)
     is_plot = True
-    # _test_use(is_plot)
+    _test_use(is_plot)
