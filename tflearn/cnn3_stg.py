@@ -682,14 +682,17 @@ class AIStg(StgBase):
             show_accuracy(real_ys, pred_ys, close_df, split_point_list,
                           base_line_list=base_line_list)
 
-        pred_ys_tot = np.array(pred_ys_tot)
-        trade_date_last_train_first = pd.to_datetime(date_file_path_pair_list[0][0])
-        split_point_list = [_[0] for _ in date_file_path_pair_list]
-        split_point_list.append(trade_date_index[-1])
-        # 获取 real_ys
-        real_ys = ys[trade_date_index >= trade_date_last_train_first]
-        close_df = indexed_df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
-        show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
+        if len(pred_ys_tot) > 0:
+            pred_ys_tot = np.array(pred_ys_tot)
+            trade_date_last_train_first = pd.to_datetime(date_file_path_pair_list[0][0])
+            split_point_list = [_[0] for _ in date_file_path_pair_list]
+            split_point_list.append(trade_date_index[-1])
+            # 获取 real_ys
+            real_ys = ys[trade_date_index >= trade_date_last_train_first]
+            close_df = indexed_df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
+            show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
+        else:
+            logger.warning("len(real_ys)=%d, len(pred_ys_tot)=%d 无法展示对比图", len(real_ys), len(pred_ys_tot))
 
     def get_date_file_path_pair_list(self):
         """
