@@ -44,7 +44,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import tensorflow as tf
 import tflearn
-from ibats_utils.mess import date_2_str, get_last, str_2_date
+from ibats_utils.mess import date_2_str, get_last
 from sklearn.model_selection import train_test_split
 from tflearn import conv_2d, max_pool_2d, local_response_normalization, fully_connected, dropout
 
@@ -296,7 +296,7 @@ class AIStg(StgBase):
                 logger.info('第 %d/%d 轮训练开始 [%s, %s] random_state=%d n_epoch=%d', num + 1, max_loop,
                             trade_date_from_str, trade_date_to_str, random_state, n_epoch)
                 run_id = f'{trade_date_to_str}_{xs_train.shape[0]}[{predict_test_random_state}]' \
-                         f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                    f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 tflearn.is_training(True)
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
@@ -753,7 +753,6 @@ class AIStg(StgBase):
                     pass
 
         return date_file_path_pair_list
-
 
 
 def _test_use(is_plot):

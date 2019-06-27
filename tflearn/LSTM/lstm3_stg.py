@@ -94,7 +94,7 @@ class AIStg(StgBase):
         # enable_load_model_if_exist 将会在调用 self.load_model_if_exist 时进行检查
         # 如果该字段为 False，调用 load_model_if_exist 时依然可以传入参数的方式加载已有模型
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
-        self.enable_load_model_if_exist = True
+        self.enable_load_model_if_exist = False
         if self.enable_load_model_if_exist:
             self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-26_07_28_11')
         else:
