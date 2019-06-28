@@ -48,6 +48,7 @@ from sklearn.model_selection import train_test_split
 
 from ibats_common import module_root_path
 from ibats_common.analysis.plot import show_accuracy
+from ibats_common.analysis.summary import summary_release_2_docx
 from ibats_common.backend.factor import get_factor
 from ibats_common.backend.label import calc_label3
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
@@ -94,9 +95,9 @@ class AIStg(StgBase):
         # enable_load_model_if_exist 将会在调用 self.load_model_if_exist 时进行检查
         # 如果该字段为 False，调用 load_model_if_exist 时依然可以传入参数的方式加载已有模型
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
-        self.enable_load_model_if_exist = False
+        self.enable_load_model_if_exist = True
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-26_07_28_11')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-27_16_24_34')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
@@ -556,6 +557,7 @@ class AIStg(StgBase):
 
         # 建立数据集
         indexed_df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
+        trade_date_end = indexed_df.index[-1]
         factor_df = get_factor(indexed_df, close_key='close',
                                trade_date_series=self.trade_date_series,
                                delivery_date_series=self.delivery_date_series)
@@ -569,7 +571,7 @@ class AIStg(StgBase):
         trade_date2_list.append(None)
         # 预测结果
         logger.info("按日期分段验证检验预测结果")
-        pred_ys_tot, real_ys_tot = [], []
+        pred_ys_tot, real_ys_tot, img_meta_dic_list = [], [], []
         # 根据模型 trade_date_last_train 进行分段预测，并将结果记录到 pred_ys
         for num, ((trade_date_last_train, file_path, predict_test_random_state), trade_date_next) in enumerate(zip(
                 date_file_path_pair_list, trade_date2_list)):
@@ -628,8 +630,17 @@ class AIStg(StgBase):
             else:
                 split_point_list = [close_df.index[0], trade_date_next, close_df.index[-1]]
             base_line_list = self.trade_date_acc_list[trade_date_last_train]
-            show_accuracy(real_ys, pred_ys, close_df, split_point_list,
+            img_file_path = show_accuracy(real_ys, pred_ys, close_df, split_point_list,
                           base_line_list=base_line_list)
+            img_meta_dic_list.append({
+                'img_file_path': img_file_path,
+                'trade_date_last_train': trade_date_last_train,
+                'module_file_path': file_path,
+                'predict_test_random_state': predict_test_random_state,
+                'split_point_list': split_point_list,
+                'in_range_count': in_range_count,
+                'trade_date_end': trade_date_end,
+            })
 
         pred_ys_tot = np.array(pred_ys_tot)
         trade_date_last_train_first = pd.to_datetime(date_file_path_pair_list[0][0])
@@ -638,7 +649,21 @@ class AIStg(StgBase):
         # 获取 real_ys
         real_ys = ys[trade_date_index >= trade_date_last_train_first]
         close_df = indexed_df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
-        show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
+        img_file_path = show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
+
+        img_meta_dic_list.append({
+            'img_file_path': img_file_path,
+            'trade_date_last_train': trade_date_last_train_first,
+            'module_file_path': date_file_path_pair_list[0][1],
+            'predict_test_random_state': date_file_path_pair_list[0][2],
+            'split_point_list': split_point_list,
+            'in_range_count': close_df.shape[0],
+            'trade_date_end': trade_date_end,
+        })
+        is_output_docx = True
+        if is_output_docx:
+            title = f"[{self.stg_run_id}] predict accuracy trend report"
+            summary_release_2_docx(title, img_meta_dic_list)
 
     def get_date_file_path_pair_list(self):
         """
