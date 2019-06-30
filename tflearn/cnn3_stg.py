@@ -44,12 +44,11 @@ from datetime import datetime, timedelta
 import numpy as np
 import tensorflow as tf
 import tflearn
-from ibats_utils.mess import date_2_str, get_last
+from ibats_utils.mess import date_2_str, get_last, str_2_date
 from sklearn.model_selection import train_test_split
 from tflearn import conv_2d, max_pool_2d, local_response_normalization, fully_connected, dropout
 
 from ibats_common import module_root_path
-from ibats_common.analysis.plot import show_accuracy
 from ibats_common.backend.factor import get_factor
 from ibats_common.backend.label import calc_label3
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
@@ -296,7 +295,7 @@ class AIStg(StgBase):
                 logger.info('第 %d/%d 轮训练开始 [%s, %s] random_state=%d n_epoch=%d', num + 1, max_loop,
                             trade_date_from_str, trade_date_to_str, random_state, n_epoch)
                 run_id = f'{trade_date_to_str}_{xs_train.shape[0]}[{predict_test_random_state}]' \
-                    f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                         f'_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
                 tflearn.is_training(True)
                 self.model.fit(
                     xs_train, ys_train, validation_set=(xs_validation, ys_validation),
@@ -482,7 +481,7 @@ class AIStg(StgBase):
 
         if enable_train_even_load_succ or (enable_train_if_load_not_suss and not is_load):
             factor_df_dic = get_factor(indexed_df, close_key='close',
-                                       ohlca_col_name_list=self.ohlca_col_name_list,
+                                       ohlcav_col_name_list=self.ohlca_col_name_list,
                                        trade_date_series=self.trade_date_series,
                                        delivery_date_series=self.delivery_date_series)
             factor_df = factor_df_dic[1]
@@ -683,17 +682,14 @@ class AIStg(StgBase):
             show_accuracy(real_ys, pred_ys, close_df, split_point_list,
                           base_line_list=base_line_list)
 
-        if len(pred_ys_tot) > 0:
-            pred_ys_tot = np.array(pred_ys_tot)
-            trade_date_last_train_first = pd.to_datetime(date_file_path_pair_list[0][0])
-            split_point_list = [_[0] for _ in date_file_path_pair_list]
-            split_point_list.append(trade_date_index[-1])
-            # 获取 real_ys
-            real_ys = ys[trade_date_index >= trade_date_last_train_first]
-            close_df = indexed_df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
-            show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
-        else:
-            logger.warning("len(real_ys)=%d, len(pred_ys_tot)=%d 无法展示对比图", len(real_ys), len(pred_ys_tot))
+        pred_ys_tot = np.array(pred_ys_tot)
+        trade_date_last_train_first = pd.to_datetime(date_file_path_pair_list[0][0])
+        split_point_list = [_[0] for _ in date_file_path_pair_list]
+        split_point_list.append(trade_date_index[-1])
+        # 获取 real_ys
+        real_ys = ys[trade_date_index >= trade_date_last_train_first]
+        close_df = indexed_df.loc[trade_date_index[trade_date_index >= trade_date_last_train_first], 'close']
+        show_accuracy(real_ys, pred_ys_tot, close_df, split_point_list)
 
     def get_date_file_path_pair_list(self):
         """
@@ -753,6 +749,50 @@ class AIStg(StgBase):
                     pass
 
         return date_file_path_pair_list
+
+
+def show_accuracy(real_ys, pred_ys, close_df: pd.DataFrame, split_point_list=None,
+                  base_line_list: (None, dict) = None):
+    trade_date_index = close_df.index
+    date_from_str, date_to_str = date_2_str(trade_date_index[0]), date_2_str(trade_date_index[-1])
+    # 检查长度是否一致
+    if len(real_ys) != len(pred_ys) or len(real_ys) == 0:
+        logger.error("[%s - %s] len(real_ys)=%d, len(pred_ys)=%d 不一致",
+                     date_from_str, date_to_str, len(real_ys), len(pred_ys))
+        return
+    # 分析成功率
+    # 累计平均成功率
+    accuracy = sum(pred_ys == real_ys) / len(pred_ys) * 100
+    logger.info("模型准确率 [%s - %s] accuracy: %.2f%%", date_from_str, date_to_str, accuracy)
+    is_fit_arr = pred_ys == real_ys
+    accuracy_list, fit_sum = [], 0
+    for tot_count, (is_fit, trade_date) in enumerate(zip(is_fit_arr, trade_date_index), start=1):
+        if is_fit:
+            fit_sum += 1
+        accuracy_list.append(fit_sum / tot_count)
+
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=trade_date_index)
+    from ibats_common.analysis.plot import plot_accuracy
+    import matplotlib.pyplot as plt
+    fig = plt.figure(figsize=(8, 12))
+    ax = fig.add_subplot(211)
+    plot_accuracy(accuracy_df, close_df, ax=ax, base_line_list=base_line_list,
+                  name=f'Accumulation Avg Accuracy [{date_from_str}{date_to_str}]',
+                  split_point_list=split_point_list, enable_show_plot=False, enable_save_plot=False)
+    # 移动平均成功率
+    accuracy_list, win_size = [], 60
+    for idx in range(win_size, len(is_fit_arr)):
+        accuracy_list.append(sum(is_fit_arr[idx - win_size:idx] / win_size))
+
+    close2_df = close_df.iloc[win_size:]
+    ax2 = fig.add_subplot(212)
+    accuracy_df = pd.DataFrame({'accuracy': accuracy_list}, index=close2_df.index)
+    plot_accuracy(accuracy_df, close2_df, ax=ax2, base_line_list=base_line_list,
+                  name=f'{win_size} Moving Avg Accuracy [{date_from_str}{date_to_str}]',
+                  split_point_list=split_point_list, enable_show_plot=False, enable_save_plot=False)
+    file_name = f"accuracy [{date_from_str}-{date_to_str}]"
+    from ibats_common.analysis.plot import plot_or_show
+    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=file_name)
 
 
 def _test_use(is_plot):
@@ -822,6 +862,21 @@ def _test_use(is_plot):
             open_file_with_system_app(file_path)
 
     return stg_run_id
+
+
+def _test_show_accuracy():
+    real_ys, pred_ys = np.random.randint(1, 3, size=100), np.random.randint(1, 3, size=100)
+    date_arr = pd.date_range(pd.to_datetime('2018-01-01'),
+                             pd.to_datetime('2018-01-01') + pd.Timedelta(days=99))
+    date_index = pd.DatetimeIndex(date_arr)
+    close_df = pd.DataFrame({'close': np.sin(np.linspace(0, 10, 100))}, index=date_index)
+
+    split_point_list = np.random.randint(len(date_arr), size=10)
+    split_point_list.sort()
+    split_point_list = date_arr[split_point_list]
+    base_line_list = [0.3, 0.6]
+
+    show_accuracy(real_ys, pred_ys, close_df, split_point_list, base_line_list)
 
 
 if __name__ == '__main__':
