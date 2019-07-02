@@ -1,6 +1,5 @@
 import tensorflow as tf
 import sonnet as snt
-from ibats_common.example.drl.d3qn1.params import *
 
 
 def Swich(inputs):
@@ -8,15 +7,16 @@ def Swich(inputs):
 
 
 class Forward(snt.AbstractModule):
-    def __init__(self, name='forward'):
+    def __init__(self, name='forward', action_size=3):
         super().__init__(name=name)
         self.name = name
+        self.action_size = action_size
 
     def _build(self, inputs):
         with tf.variable_scope(self.name):
             net = self._build_shared_network(inputs)
             V = snt.Linear(1, 'value')(net)
-            A = snt.Linear(ACTION_SIZE, 'advantage')(net)
+            A = snt.Linear(self.action_size, 'advantage')(net)
             Q = V + (A - tf.reduce_mean(A, axis=1, keep_dims=True))
             return Q
 
