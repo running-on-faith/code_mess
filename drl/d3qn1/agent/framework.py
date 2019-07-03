@@ -3,7 +3,7 @@ from collections import deque
 
 import numpy as np
 import tensorflow as tf
-
+import logging
 from ibats_common.example.drl.d3qn1.agent.forward import Forward
 
 _EPSILON = 1e-6  # avoid nan
@@ -56,6 +56,7 @@ class Framework(object):
 
         # cache for experience replay
         self.cache = deque(maxlen=memory_size)
+        self.logger = logging.getLogger(str(self.__class__))
 
     # get random sample from experience pool
     def _get_samples(self):
@@ -92,5 +93,15 @@ class Framework(object):
         mask = np.array(done).astype('float')
 
         target_eval = sess.run(self.target_eval, {self.inputs: next_state})
-        target = mask * reward + (1 - mask) * (reward + self.gamma * target_eval)
-        sess.run(self._train_op, {self.inputs: state, self.actions: action, self.targets: target})
+        is_nan = np.isnan(target_eval)
+        if all(is_nan):
+            self.logger.error('target_eval 长度 %d 全部为 NaN', target_eval.shape[0])
+            return
+        is_not_nan = ~is_nan
+        target_eval2 = target_eval[is_not_nan]
+        state2 = state[is_not_nan]
+        action2 = action[is_not_nan]
+        reward2 = reward[is_not_nan]
+        mask2 = mask[is_not_nan]
+        target = mask2 * reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
+        sess.run(self._train_op, {self.inputs: state2, self.actions: action2, self.targets: target})

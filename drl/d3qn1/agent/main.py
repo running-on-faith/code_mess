@@ -32,10 +32,10 @@ class Agent(object):
         self.sess.run(tf.global_variables_initializer())
         self.sess.graph.finalize()
 
-    def get_deterministic_policy(self, inputs):
+    def choose_action_deterministic(self, inputs):
         return self.agent.get_deterministic_policy(self.sess, inputs)
 
-    def get_stochastic_policy(self, inputs, epsilon=0.9):
+    def choose_action_stochastic(self, inputs, epsilon=0.9):
         return self.agent.get_stochastic_policy(self.sess, inputs, epsilon)
 
     def update_cache(self, state, action, reward, next_state, done):
@@ -77,7 +77,7 @@ def _test_agent():
     for episode in range(2):
         state = env.reset()
         while True:
-            action = agent.get_stochastic_policy(state, 0)
+            action = agent.choose_action_stochastic(state, 0)
             next_state, reward, done = env.step(action)
             agent.update_cache(state, action, reward, next_state, done)
             state = next_state
@@ -101,11 +101,12 @@ def _test_agent2():
     shape = [data_arr_batch.shape[0], 5, int(n_step/5), data_arr_batch.shape[2]]
     data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     md_df = md_df.loc[df_index, :]
+    print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
 
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=data_factors)
     agent = Agent(input_shape=data_factors.shape)
-    num_episodes = 10
+    num_episodes = 1000
 
     target_step_size = 512
     train_step_size = 32
@@ -119,19 +120,21 @@ def _test_agent2():
             global_step += 1
             episode_step += 1
 
-            action = agent.get_stochastic_policy(state)
+            action = agent.choose_action_stochastic(state)
             next_state, reward, done = env.step(action)
             agent.update_cache(state, action, reward, next_state, done)
             state = next_state
 
             if global_step % target_step_size == 0:
                 agent.update_target()
+                # print('global_step=%d, episode_step=%d, agent.update_target()' % (global_step, episode_step))
 
             if episode_step % train_step_size == 0 or done:
                 agent.update_eval()
+                # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
 
-                if done:
-                    print(episode, env.A.total_value)
+                if done and episode % 10 == 0:
+                    print("episode=%d, env.A.total_value=%f" % (episode, env.A.total_value))
                     episodes_train.append(env.plot_data())
                     break
 
