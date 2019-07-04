@@ -19,6 +19,7 @@ from ibats_common.example.drl.d3qn1.agent.framework import Framework
 
 class Agent(object):
     def __init__(self, input_shape=None, **kwargs):
+        tf.reset_default_graph()
         if input_shape is not None:
             input_shape = list(input_shape)
             input_shape[0] = None
