@@ -50,7 +50,7 @@ class Agent(object):
         self.agent.update_target_net(self.sess)
 
     def save_model(self, path="model/ddqn.ckpt"):
-        self.saver.save(self.sess, path)
+        return self.saver.save(self.sess, path)
 
     def restore_model(self, path="model/ddqn.ckpt"):
         self.saver.restore(self.sess, path)
@@ -88,14 +88,14 @@ def _test_agent():
     print(len(agent.agent.cache))
 
 
-def train(md_df, data_factors):
+def train(md_df, batch_factors, round_n=None):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
-    env = Account(md_df, data_factors=data_factors)
-    agent = Agent(input_shape=data_factors.shape)
-    num_episodes = 200
+    env = Account(md_df, data_factors=batch_factors)
+    agent = Agent(input_shape=batch_factors.shape)
+    num_episodes = 500
 
-    target_step_size = 512
+    target_step_size = 128
     train_step_size = 32
 
     episodes_train = []
@@ -121,9 +121,15 @@ def train(md_df, data_factors):
                 # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
 
                 if done:
-                    print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
-                        episode, env.A.data_observation.shape[0], env.A.total_value))
-                    if episode % 25 == 0 or episode == num_episodes - 1:
+                    # print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
+                    #     episode, env.A.data_observation.shape[0], env.A.total_value))
+                    if episode % 100 == 0 or episode == num_episodes - 1:
+                        if round_n is None:
+                            print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
+                                episode, env.A.data_observation.shape[0], env.A.total_value))
+                        else:
+                            print("round=%d, episode=%d, env.A.total_value=%f" % (
+                                round_n, episode, env.A.total_value))
                         episodes_train.append(env.plot_data())
                     break
 
@@ -141,7 +147,8 @@ def train(md_df, data_factors):
     plt.suptitle(datetime_2_str(datetime.datetime.now()))
     plt.show()
 
-    agent.save_model()
+    path = agent.save_model()
+    print('model save to path:', path)
     agent.close()
     return tmp
 
@@ -159,17 +166,52 @@ def _test_agent2():
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
+    batch_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
+    md_df = md_df.loc[df_index, :]
+    print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
+
+    success_count, success_max_count, round_n = 0, 10, 0
+    while True:
+        round_n += 1
+        df = train(md_df, batch_factors, round_n=round_n)
+        print(df.iloc[-1, :])
+        if df["value"].iloc[-1] > df["value"].iloc[0]:
+            success_count += 1
+            print('is win %d/%d' % (success_count, success_max_count))
+            if success_count >= success_max_count:
+                break
+
+
+def load_predict(md_df, data_factors, tail_n=1):
+    import pandas as pd
+    from ibats_common.backend.rl.emulator.account import Account
+    latest_state = data_factors[-1:]
+    env = Account(md_df, data_factors=data_factors)
+    agent = Agent(input_shape=data_factors.shape)
+    path = "model/ddqn.ckpt"
+    agent.restore_model(path=path)
+    action = agent.choose_action_deterministic(latest_state)
+    print('latest action', action)
+
+
+def _test_load_predict():
+    import pandas as pd
+    import numpy as np
+    # 建立相关数据
+    n_step = 250
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    from ibats_common.example.data import load_data
+    md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
+    md_df.index = pd.DatetimeIndex(md_df.index)
+    from ibats_common.backend.factor import get_factor, transfer_2_batch
+    factors_df = get_factor(md_df, dropna=True)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     md_df = md_df.loc[df_index, :]
     print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
 
-    success_count, success_max_count = 0, 10
-    while True:
-        df = train(md_df, data_factors)
-        if df["value"].iloc[-1] > 0:
-            success_count += 1
-            if success_count >= success_max_count:
-                break
+    load_predict(md_df, data_factors, tail_n=1)
 
 
 if __name__ == '__main__':
