@@ -144,8 +144,10 @@ def train(md_df, batch_factors, round_n=None):
                              for num, df in enumerate(episodes_train, start=1)
                              if df.shape[0] > 0})
     value_df.plot()
-    plt.suptitle(datetime_2_str(datetime.datetime.now()))
-    plt.show()
+    title = datetime_2_str(datetime.datetime.now())
+    plt.suptitle(title)
+    from ibats_common.analysis.plot import plot_or_show
+    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_{title}')
 
     path = agent.save_model()
     print('model save to path:', path)
