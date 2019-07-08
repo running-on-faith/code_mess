@@ -38,7 +38,7 @@ class DRLStg(StgBase):
         self.instrument_type = instrument_type
         # 模型运行所需参数
         self.enable_load_model_if_exist = True
-        self.retrain_period = 0  # 60 每隔60天重新训练一次，0 则为不进行重新训练
+        self.retrain_period = 60  # 60 每隔60天重新训练一次，0 则为不进行重新训练
         self.trade_date_last_train = None
         self.do_nothing_on_min_bar = False  # 仅供调试使用
         # 模型训练所需参数
@@ -65,7 +65,7 @@ class DRLStg(StgBase):
         # enable_load_model_if_exist 将会在调用 self.load_model_if_exist 时进行检查
         # 如果该字段为 False，调用 load_model_if_exist 时依然可以传入参数的方式加载已有模型
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
-        self.enable_load_model_if_exist = True
+        self.enable_load_model_if_exist = False
         if self.enable_load_model_if_exist:
             self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-07-08_12_32_12')
         else:
@@ -113,7 +113,7 @@ class DRLStg(StgBase):
             self._data_factors_latest_date = trade_date_latest
             self._factor_df = factors_df.loc[df_index, :]
             self._md_df = md_df.loc[df_index, :]
-            if self.input_size is None or self.input_size != self._batch_factors.shape:
+            if self.input_size is None or self.input_size[1:] != self._batch_factors.shape[1:]:
                 self.input_size = self._batch_factors.shape
                 self.logger.warning("set input_size: %s", self.input_size)
 
