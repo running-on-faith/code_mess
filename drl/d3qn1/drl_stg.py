@@ -38,7 +38,7 @@ class DRLStg(StgBase):
         self.instrument_type = instrument_type
         # 模型运行所需参数
         self.enable_load_model_if_exist = True
-        self.retrain_period = 30  # 60 每隔60天重新训练一次，0 则为不进行重新训练
+        self.retrain_period = 0  # 60 每隔60天重新训练一次，0 则为不进行重新训练
         self.trade_date_last_train = None
         self.do_nothing_on_min_bar = False  # 仅供调试使用
         # 模型训练所需参数
@@ -55,7 +55,7 @@ class DRLStg(StgBase):
         self.benchmark_cagr = 0.05              # 如果为空则不检查此项
         self.benchmark_total_return = 0.00      # 如果为空则不检查此项
         # 模型因子构建所需参数
-        self.input_size = 38
+        self.input_size = [None, 12, 93, 5]
         self.n_step = 60
         self.ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
         self.trade_date_series = get_trade_date_series()
@@ -65,9 +65,9 @@ class DRLStg(StgBase):
         # enable_load_model_if_exist 将会在调用 self.load_model_if_exist 时进行检查
         # 如果该字段为 False，调用 load_model_if_exist 时依然可以传入参数的方式加载已有模型
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
-        self.enable_load_model_if_exist = False
+        self.enable_load_model_if_exist = True
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-27_16_24_34')
+            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-07-08_12_32_12')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
@@ -113,9 +113,9 @@ class DRLStg(StgBase):
             self._data_factors_latest_date = trade_date_latest
             self._factor_df = factors_df.loc[df_index, :]
             self._md_df = md_df.loc[df_index, :]
-            if self.input_size is None or self.input_size != self._batch_factors.shape[1]:
-                self.input_size = self._batch_factors.shape[1]
-                self.logger.warning("set input_size: %d", self.input_size)
+            if self.input_size is None or self.input_size != self._batch_factors.shape:
+                self.input_size = self._batch_factors.shape
+                self.logger.warning("set input_size: %s", self.input_size)
 
         return self._md_df, self._factor_df, self._batch_factors
 
@@ -229,7 +229,7 @@ class DRLStg(StgBase):
         :return: pd.DataFrame columns:["value", "reward", "cash", "action"]
         """
         agent = self._agent
-        env = Account(md_df, data_factors=batch_factors)
+        self._env = env = Account(md_df, data_factors=batch_factors)
 
         episodes_train = []
         global_step = 0
@@ -282,9 +282,9 @@ class DRLStg(StgBase):
         else:
             reward_df = env.plot_data()
 
-        path = agent.save_model()
-        self.logger.info('model save to path:', path)
-        agent.close()
+        # path = agent.save_model()
+        # self.logger.info('model save to path:%s', path)
+        # agent.close()
         return reward_df
 
     def save_model(self, trade_date, key=None):
@@ -331,12 +331,12 @@ class DRLStg(StgBase):
                 # 训练模型
                 reward_df = self.train(md_df, batch_factors, has_try_n_times=num)
                 stats = reward_df['value'].calc_stats()
-                total_return = stats['total_return']
+                total_return = stats.total_return
                 if self.benchmark_total_return is not None and total_return < self.benchmark_total_return:
                     self.logger.warning('第 %d 次训练，样本内收益率 rr=%.2f%% 过低，重新采样训练',
                                         num, total_return * 100)
                     continue
-                cagr = stats['cagr']
+                cagr = stats.cagr
                 if self.benchmark_cagr is not None and (np.isnan(cagr) or cagr < self.benchmark_cagr):
                     self.logger.warning('第 %d 次训练，cagr=%.2f，重新采样训练',
                                         num, cagr * 100, self.benchmark_cagr * 100)
@@ -347,9 +347,7 @@ class DRLStg(StgBase):
             self.save_model(trade_date)
             self.trade_date_last_train = trade_date
         else:
-            factor_df = get_factor(indexed_df, ohlcav_col_name_list=self.ohlcav_col_name_list,
-                                   trade_date_series=self.trade_date_series,
-                                   delivery_date_series=self.delivery_date_series)
+            md_df, factor_df, batch_factors = self.get_factor(indexed_df)
             # train_acc, val_acc = self.valid_model_acc(factor_df)
 
         # enable_test 默认为 False
@@ -405,52 +403,12 @@ class DRLStg(StgBase):
         close = md_df['close'].iloc[-1]
         instrument_id = context[ContextKey.instrument_id_list][0]
         if is_buy:  # is_buy
-            # position_date_pos_info_dic = self.get_position(instrument_id)
-            # no_target_position = True
-            # if position_date_pos_info_dic is not None:
-            #     for position_date, pos_info in position_date_pos_info_dic.items():
-            #         if pos_info.position == 0:
-            #             continue
-            #         direction = pos_info.direction
-            #         if direction == Direction.Short:
-            #             self.close_short(instrument_id, close, pos_info.position)
-            #         elif direction == Direction.Long:
-            #             no_target_position = False
-            # if no_target_position:
-            #     self.open_long(instrument_id, close, self.unit)
-            # else:
-            #     self.logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
             self.keep_long(instrument_id, close, self.unit)
 
         if is_sell:  # is_sell
-            # position_date_pos_info_dic = self.get_position(instrument_id)
-            # no_holding_target_position = True
-            # if position_date_pos_info_dic is not None:
-            #     for position_date, pos_info in position_date_pos_info_dic.items():
-            #         if pos_info.position == 0:
-            #             continue
-            #         direction = pos_info.direction
-            #         if direction == Direction.Long:
-            #             self.close_long(instrument_id, close, pos_info.position)
-            #         elif direction == Direction.Short:
-            #             no_holding_target_position = False
-            # if no_holding_target_position:
-            #     self.open_short(instrument_id, close, self.unit)
-            # else:
-            #     self.logger.debug("%s %s     %.2f holding", self.trade_agent.curr_timestamp, instrument_id, close)
             self.keep_short(instrument_id, close, self.unit)
 
         if is_empty:
-            # position_date_pos_info_dic = self.get_position(instrument_id)
-            # if position_date_pos_info_dic is not None:
-            #     for position_date, pos_info in position_date_pos_info_dic.items():
-            #         if pos_info.position == 0:
-            #             continue
-            #         direction = pos_info.direction
-            #         if direction == Direction.Long:
-            #             self.close_long(instrument_id, close, pos_info.position)
-            #         elif direction == Direction.Short:
-            #             self.close_short(instrument_id, close, pos_info.position)
             self.keep_empty(instrument_id, close)
 
     def predict(self):
@@ -579,7 +537,7 @@ class DRLStg(StgBase):
             else:
                 split_point_list = [close_df.index[0], trade_date_next, close_df.index[-1]]
 
-            img_file_path = show_dl_accuracy(real_label_s, action_s, close_df, split_point_list)
+            img_file_path = show_drl_accuracy(real_label_s, action_s, close_df, split_point_list)
             img_meta_dic_list.append({
                 'img_file_path': img_file_path,
                 'trade_date_last_train': trade_date_last_train,
@@ -617,16 +575,17 @@ class DRLStg(StgBase):
 def _test_use(is_plot):
     from ibats_common import module_root_path
     import os
+    instrument_type = 'RB'
     # 参数设置
     run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal
-    strategy_params = {'unit': 1}
+    strategy_params = {'instrument_type': instrument_type, 'unit': 1}
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
-        'instrument_id_list': ['RB'],
+        'instrument_id_list': [instrument_type],
         'datetime_key': 'trade_date',
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
-        'init_md_date_to': '2010-1-1',
+        'init_md_date_to': '2013-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
         'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', 'RB.csv')),
         'symbol_key': 'instrument_type',
@@ -643,7 +602,7 @@ def _test_use(is_plot):
             "calc_mode": calc_mode,
         }
         strategy_handler_param = {
-            'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
+            'date_from': '2013-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
             'date_to': '2018-10-18',
         }
     else:
@@ -653,7 +612,7 @@ def _test_use(is_plot):
             "calc_mode": calc_mode,
         }
         strategy_handler_param = {
-            'date_from': '2010-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
+            'date_from': '2013-1-1',  # 策略回测历史数据，回测指定时间段的历史行情
             'date_to': '2018-10-18',
         }
 
