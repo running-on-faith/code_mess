@@ -86,6 +86,8 @@ def _test_agent():
             if done:
                 break
     print(len(agent.agent.cache))
+    reward_df = env.plot_data()
+    reward_df.to_csv('reward_df.csv')
 
 
 def train(md_df, batch_factors, round_n=None):
@@ -134,8 +136,8 @@ def train(md_df, batch_factors, round_n=None):
                     break
 
     import matplotlib.pyplot as plt
-    tmp = env.plot_data()
-    tmp.iloc[:, 0].plot(figsize=(16, 6))
+    reward_df = env.plot_data()
+    reward_df.iloc[:, 0].plot(figsize=(16, 6))
     import datetime
     from ibats_utils.mess import datetime_2_str
     plt.suptitle(datetime_2_str(datetime.datetime.now()))
@@ -152,7 +154,7 @@ def train(md_df, batch_factors, round_n=None):
     path = agent.save_model()
     print('model save to path:', path)
     agent.close()
-    return tmp
+    return reward_df
 
 
 def _test_agent2():
@@ -219,3 +221,4 @@ def _test_load_predict():
 if __name__ == '__main__':
     # _test_agent()
     _test_agent2()
+    # _test_load_predict()

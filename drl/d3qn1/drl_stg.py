@@ -11,11 +11,13 @@ import os
 import re
 from datetime import datetime, timedelta
 
-import numpy as np
-from ibats_utils.mess import copy_module_file_to, date_2_str, get_last, datetime_2_str, copy_file_to
 import ffn
+import numpy as np
+from ibats_utils.mess import copy_module_file_to, date_2_str, get_last, datetime_2_str, copy_file_to, \
+    get_module_file_path, copy_folder_to
+
 from ibats_common import module_root_path
-from ibats_common.analysis.plot import show_dl_accuracy, show_drl_accuracy
+from ibats_common.analysis.plot import show_drl_accuracy
 from ibats_common.analysis.summary import summary_release_2_docx
 from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
@@ -29,6 +31,7 @@ from ibats_local_trader.agent.td_agent import *
 
 logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)
+
 
 class DRLStg(StgBase):
 
@@ -52,8 +55,8 @@ class DRLStg(StgBase):
         self.target_step_size = 128
         self.train_step_size = 32
         self.show_log_pre_n_loop = 50
-        self.benchmark_cagr = 0.05              # 如果为空则不检查此项
-        self.benchmark_total_return = 0.00      # 如果为空则不检查此项
+        self.benchmark_cagr = None  # 0.05              # 如果为空则不检查此项
+        self.benchmark_total_return = 0.00  # 如果为空则不检查此项
         # 模型因子构建所需参数
         self.input_size = [None, 12, 93, 5]
         self.n_step = 60
@@ -71,8 +74,10 @@ class DRLStg(StgBase):
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
             self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
-        # 备份文件
-        file_path = copy_module_file_to(self.__class__, folder_path)
+        # 备份文件(将策略文件所在目录全部拷贝到备份目录下)
+        file_path = get_module_file_path(self.__class__)
+        source_folder_path = os.path.split(file_path)[0]
+        file_path = copy_folder_to(source_folder_path, folder_path)
         self.logger.debug('文件已经备份到：%s', file_path)
         # 设置模型备份目录
         self.model_folder_path = model_folder_path = os.path.join(folder_path, 'model_tfls')
@@ -338,23 +343,18 @@ class DRLStg(StgBase):
                     continue
                 cagr = stats.cagr
                 if self.benchmark_cagr is not None and (np.isnan(cagr) or cagr < self.benchmark_cagr):
-                    self.logger.warning('第 %d 次训练，cagr=%.2f，重新采样训练',
+                    self.logger.warning('第 %d 次训练，cagr=%.2f < %.2f，重新采样训练',
                                         num, cagr * 100, self.benchmark_cagr * 100)
                     continue
                 else:
+                    self.logger.debug('第 %d 次训练 rr=%.2f%%，cagr=%.2f，重新采样训练',
+                                      num, total_return * 100, cagr * 100)
                     break
 
             self.save_model(trade_date)
             self.trade_date_last_train = trade_date
         else:
             md_df, factor_df, batch_factors = self.get_factor(indexed_df)
-            # train_acc, val_acc = self.valid_model_acc(factor_df)
-
-        # enable_test 默认为 False
-        # self.valid_model_acc(factor_df) 以及完全取代 self.predict_test
-        # self.predict_test 仅用于内部测试使用
-        # if enable_predict_test:
-        #     self.predict_test(factor_df)
 
         return factor_df
 
@@ -437,7 +437,7 @@ class DRLStg(StgBase):
         reward_df = env.plot_data()
         return reward_df
 
-    def calc_real_label(self)->np.ndarray:
+    def calc_real_label(self) -> np.ndarray:
         close_s = self._env.A.data_close
         fee = self._env.A.fee
         rr = close_s.to_returns()

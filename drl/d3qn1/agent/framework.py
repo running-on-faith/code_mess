@@ -103,5 +103,7 @@ class Framework(object):
         action2 = action[is_not_nan]
         reward2 = reward[is_not_nan]
         mask2 = mask[is_not_nan]
+        # 2019-07-09 对算法做了一些调整
+        # target = mask2 * reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
         target = mask2 * reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
         sess.run(self._train_op, {self.inputs: state2, self.actions: action2, self.targets: target})
