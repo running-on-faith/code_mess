@@ -13,8 +13,7 @@ from datetime import datetime, timedelta
 
 import ffn
 import numpy as np
-from ibats_utils.mess import copy_module_file_to, date_2_str, get_last, datetime_2_str, copy_file_to, \
-    get_module_file_path, copy_folder_to
+from ibats_utils.mess import date_2_str, get_last, datetime_2_str, copy_file_to, get_module_file_path, copy_folder_to
 
 from ibats_common import module_root_path
 from ibats_common.analysis.plot import show_drl_accuracy
@@ -53,12 +52,12 @@ class DRLStg(StgBase):
         self._agent = None
         self.num_episodes = 500
         self.target_step_size = 128
-        self.train_step_size = 32
+        self.train_step_size = 64
         self.show_log_pre_n_loop = 50
         self.benchmark_cagr = None  # 0.05              # 如果为空则不检查此项
         self.benchmark_total_return = 0.00  # 如果为空则不检查此项
         # 模型因子构建所需参数
-        self.input_size = [None, 12, 93, 5]
+        self.input_shape = [None, 12, 93, 5]
         self.n_step = 60
         self.ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
         self.trade_date_series = get_trade_date_series()
@@ -100,7 +99,7 @@ class DRLStg(StgBase):
                     self._agent.close()
                 except:
                     self.logger.exception('agent.close() exception')
-            self._agent = Agent(input_shape=self.input_size)
+            self._agent = Agent(input_shape=self.input_shape)
         return self._agent
 
     def get_factor(self, md_df):
@@ -118,9 +117,9 @@ class DRLStg(StgBase):
             self._data_factors_latest_date = trade_date_latest
             self._factor_df = factors_df.loc[df_index, :]
             self._md_df = md_df.loc[df_index, :]
-            if self.input_size is None or self.input_size[1:] != self._batch_factors.shape[1:]:
-                self.input_size = self._batch_factors.shape
-                self.logger.warning("set input_size: %s", self.input_size)
+            if self.input_shape is None or self.input_shape[1:] != self._batch_factors.shape[1:]:
+                self.input_shape = self._batch_factors.shape
+                self.logger.warning("set input_size: %s", self.input_shape)
 
         return self._md_df, self._factor_df, self._batch_factors
 

@@ -4,6 +4,9 @@ from collections import deque
 import numpy as np
 import tensorflow as tf
 import logging
+
+from ibats_utils.mess import sample_weighted
+
 from ibats_common.example.drl.d3qn1.agent.forward import Forward
 
 _EPSILON = 1e-6  # avoid nan
@@ -56,18 +59,29 @@ class Framework(object):
 
         # cache for experience replay
         self.cache = deque(maxlen=memory_size)
+        self.weights = None     # 用于 _get_samples 基于权重提取数据
         self.logger = logging.getLogger(str(self.__class__))
 
     # get random sample from experience pool
     def _get_samples(self):
-        samples_count = len(self.cache) if len(self.cache) < self.batch_size else self.batch_size
-        samples = random.sample(self.cache, samples_count)
+        cache_len = len(self.cache)
+        samples_count = cache_len if len(self.cache) < self.batch_size else self.batch_size
+        # samples = random.sample(self.cache, samples_count)
+        if self.weights is None:
+            self.weights = np.ones(cache_len)
+        elif len(self.weights) < cache_len:
+            self.weights = np.concatenate([self.weights / 2, np.ones(cache_len - len(self.weights))])
+        samples = sample_weighted(self.cache, self.weights, samples_count)
         state = np.vstack([i[0] for i in samples])
         action = np.squeeze(np.vstack([i[1] for i in samples]))
         reward = np.squeeze(np.vstack([i[2] for i in samples]))
         next_state = np.vstack([i[3] for i in samples])
         done = [i[4] for i in samples]
         return state, action, reward, next_state, done
+
+    def get_deterministic_policy_batch(self, sess, inputs):
+        value_eval = sess.run(self.value_eval, {self.inputs: inputs})
+        return np.argmax(value_eval, axis=1)
 
     def get_deterministic_policy(self, sess, inputs):
         value_eval = sess.run(self.value_eval, {self.inputs: inputs})

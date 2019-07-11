@@ -97,8 +97,8 @@ def train(md_df, batch_factors, round_n=None):
     agent = Agent(input_shape=batch_factors.shape)
     num_episodes = 500
 
-    target_step_size = 128
-    train_step_size = 32
+    target_step_size = 512
+    train_step_size = 128
 
     episodes_train = []
     global_step = 0
@@ -186,16 +186,44 @@ def _test_agent2():
                 break
 
 
-def load_predict(md_df, data_factors, tail_n=1):
+def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="model/ddqn.ckpt"):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
-    latest_state = data_factors[-1:]
+    if tail_n is not None and tail_n > 0:
+        states = data_factors[-tail_n:]
+        md_df = md_df.iloc[-tail_n:]
+    else:
+        states = data_factors
+
     env = Account(md_df, data_factors=data_factors)
     agent = Agent(input_shape=data_factors.shape)
-    path = "model/ddqn.ckpt"
-    agent.restore_model(path=path)
-    action = agent.choose_action_deterministic(latest_state)
-    print('latest action', action)
+    agent.restore_model(path=model_path)
+    print("加载模型：%s 完成" % model_path)
+    actions = []
+    for num in range(states.shape[0]):
+        state = states[num:num + 1]
+        action = agent.choose_action_deterministic(state)
+        actions.append(action)
+        next_state, reward, done = env.step(action)
+        if done:
+            print('执行循环 %d 次' % num)
+            break
+
+    action_df = pd.DataFrame({'action': actions}, index=md_df.index[:states.shape[0]-1])
+    print('action_df', action_df)
+    if show_plot:
+        import matplotlib.pyplot as plt
+        reward_df = env.plot_data()
+        value_s = reward_df.iloc[:, 0]
+        value_s.plot()  # figsize=(16, 6)
+        from ibats_utils.mess import datetime_2_str
+        from datetime import datetime
+        plt.suptitle(datetime_2_str(datetime.now()))
+        plt.show()
+    else:
+        reward_df = env.plot_data()
+
+    return reward_df
 
 
 def _test_load_predict():
@@ -214,8 +242,8 @@ def _test_load_predict():
     data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     md_df = md_df.loc[df_index, :]
     print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
-
-    load_predict(md_df, data_factors, tail_n=1)
+    model_path = r'/home/mg/github/IBATS_Common/ibats_common/tf_saves_2019-07-08_18_00_57/model_tfls/2014-09-22/model_dqn_0.tfl'
+    load_predict(md_df, data_factors, tail_n=0, model_path=model_path)
 
 
 if __name__ == '__main__':
