@@ -181,10 +181,12 @@ def _test_agent2():
     # print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
     md_df = md_df.loc[df_index, :]
 
+    import tensorflow as tf
     success_count, success_max_count, round_n = 0, 10, 0
     while True:
         round_n += 1
-        df = train(md_df, batch_factors, round_n=round_n)
+        with tf.Graph().as_default():
+            df = train(md_df, batch_factors, round_n=round_n)
         logger.debug(df.iloc[-1, :])
         if df["value"].iloc[-1] > df["value"].iloc[0]:
             success_count += 1
