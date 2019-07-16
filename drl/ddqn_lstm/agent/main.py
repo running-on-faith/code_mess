@@ -148,6 +148,7 @@ def train(md_df, batch_factors, round_n=0):
     value_df = pd.DataFrame({num: df['value']
                              for num, df in enumerate(episodes_train, start=1)
                              if df.shape[0] > 0})
+    value_df["close"] = reward_df["close"]
     value_df.plot()
     title += ' all'
     plt.suptitle(title)
