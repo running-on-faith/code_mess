@@ -111,13 +111,15 @@ class Framework(object):
         if all(is_nan):
             self.logger.error('target_eval 长度 %d 全部为 NaN', target_eval.shape[0])
             return
-        is_not_nan = ~is_nan
-        target_eval2 = target_eval[is_not_nan]
-        state2 = state[is_not_nan]
-        action2 = action[is_not_nan]
-        reward2 = reward[is_not_nan]
-        mask2 = mask[is_not_nan]
-        # 2019-07-09 对算法做了一些调整
-        target = reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
-        # target = mask2 * reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
-        sess.run(self._train_op, {self.inputs: state2, self.actions: action2, self.targets: target})
+        target = reward + self.gamma * target_eval
+        sess.run(self._train_op, {self.inputs: state, self.actions: action, self.targets: target})
+        # is_not_nan = ~is_nan
+        # target_eval2 = target_eval[is_not_nan]
+        # state2 = state[is_not_nan]
+        # action2 = action[is_not_nan]
+        # reward2 = reward[is_not_nan]
+        # mask2 = mask[is_not_nan]
+        # # 2019-07-09 对算法做了一些调整
+        # target = reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
+        # # target = mask2 * reward2 + (1 - mask2) * (reward2 + self.gamma * target_eval2)
+        # sess.run(self._train_op, {self.inputs: state2, self.actions: action2, self.targets: target})

@@ -94,11 +94,11 @@ def train(md_df, batch_factors, round_n=None):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors)
-    agent = Agent(input_shape=batch_factors.shape)
-    num_episodes = 500
+    agent = Agent(input_shape=batch_factors.shape, gamma=0.3)
+    num_episodes, n_episode_pre_record = 1000, 150
 
     target_step_size = 512
-    train_step_size = 128
+    train_step_size = 32
 
     episodes_train = []
     global_step = 0
@@ -125,34 +125,37 @@ def train(md_df, batch_factors, round_n=None):
                 if done:
                     # print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
                     #     episode, env.A.data_observation.shape[0], env.A.total_value))
-                    if episode % 100 == 0 or episode == num_episodes - 1:
+                    if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         if round_n is None:
                             print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
                                 episode, env.A.data_observation.shape[0], env.A.total_value))
                         else:
-                            print("round=%d, episode=%d, env.A.total_value=%f" % (
+                            print("round=%d, episode=%3d, env.A.total_value=%f" % (
                                 round_n, episode, env.A.total_value))
                         episodes_train.append(env.plot_data())
                     break
 
     import matplotlib.pyplot as plt
     reward_df = env.plot_data()
-    reward_df.iloc[:, 0].plot(figsize=(16, 6))
+    reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
     import datetime
     from ibats_utils.mess import datetime_2_str
-    plt.suptitle(datetime_2_str(datetime.datetime.now()))
+    dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H_%M_%S')
+    title = f'd3qn1_gama_{agent.agent.gamma:.1f}_{dt_str}'
+    plt.suptitle(title)
     plt.show()
     value_df = pd.DataFrame({num: df['value']
                              for num, df in enumerate(episodes_train, start=1)
                              if df.shape[0] > 0})
     value_df.plot()
-    title = datetime_2_str(datetime.datetime.now())
+    title += ' all'
     plt.suptitle(title)
     from ibats_common.analysis.plot import plot_or_show
-    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_{title}')
+    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_{title}.png')
 
-    path = agent.save_model()
-    print('model save to path:', path)
+    if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
+        path = agent.save_model()
+        print('model save to path:', path)
     agent.close()
     return reward_df
 
