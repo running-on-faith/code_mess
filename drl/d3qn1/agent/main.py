@@ -131,11 +131,11 @@ def train(md_df, batch_factors, round_n=None):
                     #     episode, env.A.data_observation.shape[0], env.A.total_value))
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         if round_n is None:
-                            logger.debug("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
-                                episode, env.A.data_observation.shape[0], env.A.total_value))
+                            logger.debug("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f",
+                                         episode, env.A.data_observation.shape[0], env.A.total_value)
                         else:
-                            logger.debug("round=%d, episode=%3d, env.A.total_value=%f" % (
-                                round_n, episode, env.A.total_value))
+                            logger.debug("round=%d, episode=%3d, env.A.total_value=%f",
+                                         round_n, episode, env.A.total_value)
                         episodes_train.append(env.plot_data())
                     break
 
@@ -159,7 +159,7 @@ def train(md_df, batch_factors, round_n=None):
 
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = agent.save_model()
-    logger.debug('model save to path:', path)
+    logger.debug('model save to path: %s', path)
     agent.close()
     return reward_df
 
