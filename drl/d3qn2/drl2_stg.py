@@ -240,7 +240,7 @@ class DRLStg(StgBase):
         sess = get_session()
         set_session(sess)
         sess.run(tf.global_variables_initializer())
-        summary_writer = tf.summary.FileWriter(os.path.join(self.tensorboard_dir, date_2_str(trade_date)))
+        summary_writer = tf.summary.FileWriter(os.path.join(self.tensorboard_dir, f'{date_2_str(trade_date)}_{has_try_n_times}'))
         results = self._algorithm.train(env, self.args, summary_writer)
         if has_try_n_times is None or has_try_n_times == 1:
             self.logger.debug("data_observation.shape[0]=%d, env.A.total_value=%f",
@@ -259,6 +259,7 @@ class DRLStg(StgBase):
             value_df = pd.DataFrame({num: df['value']
                                      for num, df in enumerate(results, start=1)
                                      if df.shape[0] > 0})
+            value_df['close'] = reward_df['close']
             value_df.plot()
             plt.suptitle(datetime_2_str(datetime.now()))
             plt.show()

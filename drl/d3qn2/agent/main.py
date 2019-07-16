@@ -81,70 +81,38 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
-def train(md_df, batch_factors, round_n=None):
+def train(md_df, batch_factors, round_n=0):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors, expand_dims=False)
-    agent = Agent(input_shape=batch_factors.shape)
-    num_episodes = 500
+    from ibats_common.example.drl.d3qn2.agent.ddqn import DDQN
+    from ibats_common.example.drl.d3qn2.agent import parse_args
+    args = parse_args(['--nb_episodes', str(200)])
+    algorithm = DDQN(action_dim=3, state_dim=batch_factors.shape, args=args)
 
-    target_step_size = 128
-    train_step_size = 32
+    import os
+    from ibats_common.example.drl.d3qn2.utils.networks import get_session
+    from keras.backend.tensorflow_backend import set_session
+    sess = get_session()
+    set_session(sess)
+    sess.run(tf.global_variables_initializer())
+    summary_writer = tf.summary.FileWriter(os.path.join(os.path.abspath(os.path.pardir), f'log{round_n}'))
+    results = algorithm.train(env, args, summary_writer)
 
-    episodes_train = []
-    global_step = 0
-    for episode in range(num_episodes):
-        state = env.reset()
-        episode_step = 0
-        while True:
-            global_step += 1
-            episode_step += 1
-
-            action = agent.choose_action_stochastic(state)
-            next_state, reward, done = env.step(action)
-            agent.update_cache(state, action, reward, next_state, done)
-            state = next_state
-
-            if global_step % target_step_size == 0:
-                agent.update_target()
-                # print('global_step=%d, episode_step=%d, agent.update_target()' % (global_step, episode_step))
-
-            if episode_step % train_step_size == 0 or done:
-                agent.update_eval()
-                # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
-
-                if done:
-                    # print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
-                    #     episode, env.A.data_observation.shape[0], env.A.total_value))
-                    if episode % 100 == 0 or episode == num_episodes - 1:
-                        if round_n is None:
-                            print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
-                                episode, env.A.data_observation.shape[0], env.A.total_value))
-                        else:
-                            print("round=%d, episode=%d, env.A.total_value=%f" % (
-                                round_n, episode, env.A.total_value))
-                        episodes_train.append(env.plot_data())
-                    break
-
-    import matplotlib.pyplot as plt
-    reward_df = env.plot_data()
-    reward_df.iloc[:, 0].plot(figsize=(16, 6))
     import datetime
     from ibats_utils.mess import datetime_2_str
-    plt.suptitle(datetime_2_str(datetime.datetime.now()))
-    plt.show()
-    value_df = pd.DataFrame({num: df['value']
-                             for num, df in enumerate(episodes_train, start=1)
-                             if df.shape[0] > 0})
-    value_df.plot()
-    title = datetime_2_str(datetime.datetime.now())
-    plt.suptitle(title)
+    title = f'd3qn2_{datetime_2_str(datetime.datetime.now())}'
+
+    import matplotlib.pyplot as plt
     from ibats_common.analysis.plot import plot_or_show
+    plt.plot([_[1] for _ in results])
+    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_mean_{title}')
+
+    reward_df = env.plot_data()
+    reward_df.iloc[:, 0].plot(figsize=(16, 6))
+    plt.suptitle(title)
     plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_{title}')
 
-    path = agent.save_model()
-    print('model save to path:', path)
-    agent.close()
     return reward_df
 
 
