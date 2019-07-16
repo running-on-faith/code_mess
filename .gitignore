@@ -177,3 +177,5 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 *.bat
+checkpoint
+*.ckpt.*

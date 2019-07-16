@@ -11,6 +11,7 @@ pip install graphs dm-sonnet==1.19
 https://github.com/deepmind/sonnet
 dm-sonnet==1.19 对应 tensorflow==1.5.1
 """
+import logging
 
 import tensorflow as tf
 
@@ -61,6 +62,7 @@ class Agent(object):
 
 def _test_agent():
     import pandas as pd
+    logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -85,7 +87,8 @@ def _test_agent():
             state = next_state
             if done:
                 break
-    print(len(agent.agent.cache))
+    logger.debug("len(agent.agent.cache)=%d", len(agent.agent.cache))
+
     reward_df = env.plot_data()
     reward_df.to_csv('reward_df.csv')
 
@@ -93,6 +96,7 @@ def _test_agent():
 def train(md_df, batch_factors, round_n=None):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
+    logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors)
     agent = Agent(input_shape=batch_factors.shape, gamma=0.3)
     num_episodes, n_episode_pre_record = 1000, 150
@@ -127,10 +131,10 @@ def train(md_df, batch_factors, round_n=None):
                     #     episode, env.A.data_observation.shape[0], env.A.total_value))
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         if round_n is None:
-                            print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
+                            logger.debug("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
                                 episode, env.A.data_observation.shape[0], env.A.total_value))
                         else:
-                            print("round=%d, episode=%3d, env.A.total_value=%f" % (
+                            logger.debug("round=%d, episode=%3d, env.A.total_value=%f" % (
                                 round_n, episode, env.A.total_value))
                         episodes_train.append(env.plot_data())
                     break
@@ -153,9 +157,9 @@ def train(md_df, batch_factors, round_n=None):
     from ibats_common.analysis.plot import plot_or_show
     plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_{title}.png')
 
-    if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
-        path = agent.save_model()
-        print('model save to path:', path)
+    # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
+    path = agent.save_model()
+    logger.debug('model save to path:', path)
     agent.close()
     return reward_df
 
@@ -163,6 +167,7 @@ def train(md_df, batch_factors, round_n=None):
 def _test_agent2():
     import pandas as pd
     import numpy as np
+    logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 250
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -175,16 +180,16 @@ def _test_agent2():
     shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     batch_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     md_df = md_df.loc[df_index, :]
-    print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
+    logger.debug('%s -> %s -> %s', data_arr_batch.shape, shape, batch_factors.shape)
 
     success_count, success_max_count, round_n = 0, 10, 0
     while True:
         round_n += 1
         df = train(md_df, batch_factors, round_n=round_n)
-        print(df.iloc[-1, :])
+        logger.debug('%s', df.iloc[-1, :])
         if df["value"].iloc[-1] > df["value"].iloc[0]:
             success_count += 1
-            print('is win %d/%d' % (success_count, success_max_count))
+            logger.debug('is win %d/%d', success_count, success_max_count)
             if success_count >= success_max_count:
                 break
 
@@ -192,6 +197,7 @@ def _test_agent2():
 def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="model/ddqn.ckpt"):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
+    logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
         states = data_factors[-tail_n:]
         md_df = md_df.iloc[-tail_n:]
@@ -201,7 +207,7 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
     env = Account(md_df, data_factors=data_factors)
     agent = Agent(input_shape=data_factors.shape)
     agent.restore_model(path=model_path)
-    print("加载模型：%s 完成" % model_path)
+    logger.debug("加载模型：%s 完成", model_path)
     actions = []
     for num in range(states.shape[0]):
         state = states[num:num + 1]
@@ -209,11 +215,11 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
         actions.append(action)
         next_state, reward, done = env.step(action)
         if done:
-            print('执行循环 %d 次' % num)
+            logger.debug('执行循环 %d 次', num)
             break
 
-    action_df = pd.DataFrame({'action': actions}, index=md_df.index[:states.shape[0]-1])
-    print('action_df', action_df)
+    action_df = pd.DataFrame({'action': actions}, index=md_df.index[:states.shape[0] - 1])
+    logger.debug('action_df\n%s', action_df)
     if show_plot:
         import matplotlib.pyplot as plt
         reward_df = env.plot_data()
@@ -232,6 +238,7 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
 def _test_load_predict():
     import pandas as pd
     import numpy as np
+    logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 250
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -244,7 +251,7 @@ def _test_load_predict():
     shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     md_df = md_df.loc[df_index, :]
-    print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
+    logger.debug('%s -> %s -> %s', data_arr_batch.shape, shape, data_factors.shape)
     model_path = r'/home/mg/github/IBATS_Common/ibats_common/tf_saves_2019-07-08_18_00_57/model_tfls/2014-09-22/model_dqn_0.tfl'
     load_predict(md_df, data_factors, tail_n=0, model_path=model_path)
 
