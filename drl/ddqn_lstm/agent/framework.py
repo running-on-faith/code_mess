@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from ibats_utils.mess import sample_weighted
 from keras import backend as K
+from keras.callbacks import TensorBoard
 from keras.layers import Dense, LSTM, Dropout, Input
 from keras.models import Model
 from keras.optimizers import Adam
@@ -14,7 +15,7 @@ _EPSILON = 1e-6  # avoid nan
 
 class Framework(object):
     def __init__(self, memory_size=2048, input_shape=[None, 50, 58, 5], max_grad_norm=10, action_size=3, batch_size=128,
-                 gamma=0.95, learning_rate=0.001):
+                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log'):
 
         self.memory_size = memory_size
         self.input_shape = input_shape
@@ -22,6 +23,7 @@ class Framework(object):
         self.batch_size = batch_size
         self.gamma = gamma
         self.learning_rate = learning_rate
+        self.tensorboard_log_dir = tensorboard_log_dir
 
         # cache for experience replay
         self.cache = deque(maxlen=memory_size)
@@ -115,6 +117,6 @@ class Framework(object):
         #     t = self.target_model.predict([next_state, matrix])[0]
         #     target[0][action] = reward + self.gamma * np.amax(t)
         #     # target[0][action] = reward + self.gamma * t[np.argmax(a)]
-        self.model.fit(state, target, epochs=1, verbose=0)
+        self.model.fit(state, target, epochs=1, verbose=0, callbacks=[TensorBoard(log_dir='./tmp/log')])
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
