@@ -119,6 +119,6 @@ class Framework(object):
         #     t = self.target_model.predict([next_state, matrix])[0]
         #     target[0][action] = reward + self.gamma * np.amax(t)
         #     # target[0][action] = reward + self.gamma * t[np.argmax(a)]
-        self.model.fit(state, target, epochs=1, verbose=0, callbacks=[TensorBoard(log_dir='./tmp/log')])
+        self.model.fit(state, target, epochs=1)  # , verbose=0, callbacks=[TensorBoard(log_dir='./tmp/log')]
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay

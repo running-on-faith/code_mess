@@ -98,7 +98,7 @@ def train(md_df, batch_factors, round_n=None):
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors)
-    agent = Agent(input_shape=batch_factors.shape, gamma=0.3)
+    agent = Agent(input_shape=batch_factors.shape, gamma=0.3, memory_size=25000)
     num_episodes, n_episode_pre_record = 1000, 150
 
     target_step_size = 512

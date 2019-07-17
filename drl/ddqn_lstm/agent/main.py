@@ -34,6 +34,9 @@ class Agent(object):
     def choose_action_deterministic(self, inputs):
         return self.agent.get_deterministic_policy(inputs)
 
+    def choose_action_deterministic_batch(self, inputs):
+        return self.agent.get_deterministic_policy_batch(inputs)
+
     def choose_action_stochastic(self, inputs):
         return self.agent.get_stochastic_policy(inputs)
 
@@ -90,16 +93,16 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
-def train(md_df, batch_factors, round_n=0):
+def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_record=20):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors)
-    agent = Agent(input_shape=batch_factors.shape, gamma=0.3)
-    num_episodes, n_episode_pre_record = 200, 20
+    agent = Agent(input_shape=batch_factors.shape, gamma=0.3, memory_size=25000)
+    # num_episodes, n_episode_pre_record = 200, 20
 
     target_step_size = 512
-    train_step_size = 32
+    train_step_size = 64
 
     episodes_train = []
     global_step = 0
@@ -136,25 +139,21 @@ def train(md_df, batch_factors, round_n=0):
                         episodes_train.append(env.plot_data())
                     break
 
+    # 输出图表
     import matplotlib.pyplot as plt
     reward_df = env.plot_data()
     reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
     import datetime
     from ibats_utils.mess import datetime_2_str
     dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H_%M_%S')
-    title = f'd3qn3_gama_{agent.agent.gamma:.1f}_{dt_str}'
+    title = f'ddqn_lstm_round_n_{round_n}_{dt_str}'
     plt.suptitle(title)
     plt.show()
     value_df = pd.DataFrame({num: df['value']
                              for num, df in enumerate(episodes_train, start=1)
                              if df.shape[0] > 0})
-    value_df["close"] = reward_df["close"]
-    value_df.plot()
-    title += ' all'
-    plt.suptitle(title)
-    from ibats_common.analysis.plot import plot_or_show
-    plot_or_show(enable_save_plot=True, enable_show_plot=True, file_name=f'train_{title}.png')
-
+    from ibats_common.analysis.plot import plot_twin
+    plot_twin(value_df, reward_df["close"], name=title)
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}.h5"
     agent.save_model(path=path)
@@ -184,7 +183,9 @@ def _test_agent2():
     success_count, success_max_count, round_n = 0, 10, 0
     while True:
         round_n += 1
-        df = train(md_df, batch_factors, round_n=round_n)
+        # 执行训练
+        df = train(md_df, batch_factors, round_n=round_n,
+                   num_episodes=200, n_episode_pre_record=20)
         logger.debug(df.iloc[-1, :])
         if df["value"].iloc[-1] > df["value"].iloc[0]:
             success_count += 1
@@ -193,8 +194,7 @@ def _test_agent2():
                 break
 
 
-def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="model/weights_0.h5"):
-    import pandas as pd
+def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=True):
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
@@ -207,29 +207,36 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
     agent = Agent(input_shape=data_factors.shape)
     agent.restore_model(path=model_path)
     logger.debug("加载模型：%s 完成", model_path)
-    actions = []
-    for num in range(states.shape[0]):
-        state = states[num:num + 1]
-        action = agent.choose_action_deterministic(state)
-        actions.append(action)
-        next_state, reward, done = env.step(action)
-        if done:
-            logger.debug('执行循环 %d 次', num)
-            break
 
-    action_df = pd.DataFrame({'action': actions}, index=md_df.index[:states.shape[0] - 1])
-    logger.debug('action_df\n%s', action_df)
+    if batch:
+        # 批量作业
+        actions = agent.choose_action_deterministic_batch(states)
+        for num, action in enumerate(actions, start=1):
+            next_state, reward, done = env.step(action)
+            if done:
+                logger.debug('执行循环 %d 次', num)
+                break
+    else:
+        # 单步执行
+        done, state, num = False, env.reset(), 0
+        while not done:
+            num += 1
+            action = agent.choose_action_deterministic(state)
+            state, reward, done = env.step(action)
+            if done:
+                logger.debug('执行循环 %d 次', num)
+                break
+
+    reward_df = env.plot_data()
     if show_plot:
         import matplotlib.pyplot as plt
-        reward_df = env.plot_data()
         value_s = reward_df.iloc[:, 0]
-        value_s.plot()  # figsize=(16, 6)
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
-        plt.suptitle(datetime_2_str(datetime.now()))
-        plt.show()
-    else:
-        reward_df = env.plot_data()
+        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H_%M_%S')
+        title = f'ddqn_lstm_predict_{dt_str}'
+        from ibats_common.analysis.plot import plot_twin
+        plot_twin(value_s, reward_df["close"], name=title)
 
     return reward_df
 
@@ -250,8 +257,9 @@ def _test_load_predict():
     # data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     # print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     md_df = md_df.loc[df_index, :]
-    model_path = f"model/weights_0.h5"
-    load_predict(md_df, data_factors, tail_n=0, model_path=model_path)
+    model_path = f"model/weights_1.h5"
+    reward_df = load_predict(md_df, data_factors, tail_n=0, model_path=model_path)
+    reward_df.to_csv('reward_df.csv')
 
 
 if __name__ == '__main__':
