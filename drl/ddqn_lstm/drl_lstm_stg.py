@@ -22,7 +22,7 @@ from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.common import BacktestTradeMode, ContextKey, CalcMode
 from ibats_common.example import get_trade_date_series, get_delivery_date_series
-from ibats_common.example.drl.d3qn1.agent.main import Agent
+from ibats_common.example.drl.ddqn_lstm.agent.main import Agent
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
 from ibats_local_trader.agent.md_agent import *

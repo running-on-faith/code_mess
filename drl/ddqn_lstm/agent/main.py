@@ -98,7 +98,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_recor
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors)
-    agent = Agent(input_shape=batch_factors.shape, gamma=0.3, memory_size=25000)
+    agent = Agent(input_shape=batch_factors.shape, action_size=env.action_size, gamma=0.3, memory_size=25000)
     # num_episodes, n_episode_pre_record = 200, 20
 
     target_step_size = 512
@@ -122,7 +122,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_recor
                 agent.update_target()
                 # print('global_step=%d, episode_step=%d, agent.update_target()' % (global_step, episode_step))
 
-            if episode_step % train_step_size == 0 or done:
+            if (global_step >= train_step_size and episode_step % train_step_size == 0) or done:
                 agent.update_eval()
                 # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
 
@@ -153,7 +153,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_recor
                              for num, df in enumerate(episodes_train, start=1)
                              if df.shape[0] > 0})
     from ibats_common.analysis.plot import plot_twin
-    plot_twin(value_df, reward_df["close"], name=title)
+    plot_twin(value_df, md_df["close"], name=title)
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}.h5"
     agent.save_model(path=path)
@@ -236,7 +236,7 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H_%M_%S')
         title = f'ddqn_lstm_predict_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
-        plot_twin(value_s, reward_df["close"], name=title)
+        plot_twin(value_s, md_df["close"], name=title)
 
     return reward_df
 
@@ -257,12 +257,12 @@ def _test_load_predict():
     # data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     # print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     md_df = md_df.loc[df_index, :]
-    model_path = f"model/weights_1.h5"
+    model_path = f"model/weights_25.h5"
     reward_df = load_predict(md_df, data_factors, tail_n=0, model_path=model_path)
     reward_df.to_csv('reward_df.csv')
 
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2()
-    # _test_load_predict()
+    # _test_agent2()
+    _test_load_predict()

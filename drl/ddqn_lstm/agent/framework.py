@@ -53,13 +53,13 @@ class Framework(object):
         input = Input(batch_shape=self.input_shape)
         lstm = LSTM(80, return_sequences=True)(input)
         lstm = LSTM(40, return_sequences=False)(lstm)
-        merge = Dense(200)(lstm)
-        merge = Dropout(0.5)(merge)
-        merge = Dense(80)(merge)
-        merge = Dropout(0.5)(merge)
-        merge = Dense(self.action_size)(merge)
+        d1 = Dense(200)(lstm)
+        dr1 = Dropout(0.5)(d1)
+        d2 = Dense(80)(dr1)
+        dr2 = Dropout(0.5)(d2)
+        d3 = Dense(self.action_size)(dr2)
 
-        model = Model(input, outputs=merge)
+        model = Model(input, outputs=d3)
         model.summary()
         model.compile(Adam(self.learning_rate), loss=self._huber_loss)
         return model
@@ -119,6 +119,7 @@ class Framework(object):
         #     t = self.target_model.predict([next_state, matrix])[0]
         #     target[0][action] = reward + self.gamma * np.amax(t)
         #     # target[0][action] = reward + self.gamma * t[np.argmax(a)]
-        self.model.fit(state, target, epochs=1)  # , verbose=0, callbacks=[TensorBoard(log_dir='./tmp/log')]
+        # , verbose=0, callbacks=[TensorBoard(log_dir='./tmp/log')]
+        self.model.fit(state, target, batch_size=self.batch_size, epochs=1)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
