@@ -99,7 +99,7 @@ class DRLStg(StgBase):
                     self._agent.close()
                 except:
                     self.logger.exception('agent.close() exception')
-            self._agent = Agent(input_shape=self.input_shape)
+            self._agent = Agent(input_shape=self.input_shape, action_size=4)
         return self._agent
 
     def get_factor(self, md_df):
