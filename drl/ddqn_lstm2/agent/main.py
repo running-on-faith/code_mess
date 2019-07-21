@@ -94,17 +94,17 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
-def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_record=20):
+def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
     agent = Agent(input_shape=batch_factors.shape, action_size=env.action_size,
-                  gamma=0.3, batch_size=512, memory_size=25000)
+                  gamma=0.3, batch_size=512, memory_size=100000)
     # num_episodes, n_episode_pre_record = 200, 20
 
-    target_step_size = agent.update_eval_batch_size * 128
-    train_step_size = agent.update_eval_batch_size * 4
+    target_step_size = agent.update_eval_batch_size * 10
+    train_step_size = agent.update_eval_batch_size
 
     episodes_train = []
     global_step = 0
@@ -133,11 +133,13 @@ def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_recor
                     #     episode, env.A.data_observation.shape[0], env.A.total_value))
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         if round_n is None:
-                            logger.debug("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f",
-                                         episode, env.A.data_observation.shape[0], env.A.total_value)
+                            logger.debug("episode=%d, %4d/%4d, env.A.total_value=%f",
+                                         episode, episode_step, env.A.data_observation.shape[0],
+                                         env.A.total_value)
                         else:
-                            logger.debug("round=%d, episode=%3d, env.A.total_value=%f",
-                                         round_n, episode, env.A.total_value)
+                            logger.debug("round=%d, episode=%3d, %4d/%4d, env.A.total_value=%f",
+                                         round_n, episode, episode_step, env.A.data_observation.shape[0],
+                                         env.A.total_value)
                         episodes_train.append(env.plot_data())
                     break
 

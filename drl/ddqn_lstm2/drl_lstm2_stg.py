@@ -51,8 +51,8 @@ class DRL_LSTM_Stg(StgBase):
         self._env = None
         self._agent = None
         self.num_episodes = 500
-        self.target_step_size = 128
-        self.train_step_size = 64
+        self.target_step_size = 4096
+        self.train_step_size = 512
         self.show_log_pre_n_loop = 50
         self.benchmark_cagr = None  # 0.05              # 如果为空则不检查此项
         self.benchmark_total_return = 0.00  # 如果为空则不检查此项

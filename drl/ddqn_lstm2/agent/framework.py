@@ -139,3 +139,17 @@ class Framework(object):
             self.has_logged = True
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+
+def _test():
+    from keras.utils import plot_model
+    agent = Framework(input_shape=[None, 250, 78], action_size=4,
+                  gamma=0.3, batch_size=512, memory_size=100000)
+    file_path = 'model.png'
+    plot_model(agent.model, to_file=file_path, show_shapes=True)
+    from ibats_utils.mess import open_file_with_system_app
+    open_file_with_system_app(file_path)
+
+
+if __name__ == '__main__':
+    _test()
