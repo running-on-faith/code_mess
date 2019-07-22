@@ -52,11 +52,11 @@ class Agent(object):
 
     def save_model(self, path="model/weights.h5"):
         # return self.saver.save(self.sess, path)
-        self.agent.model.save_weights(path)
+        self.agent.model_eval.save_weights(path)
 
     def restore_model(self, path="model/weights.h5"):
         # self.saver.restore(self.sess, path)
-        self.agent.model.load_weights(path)
+        self.agent.model_eval.load_weights(path)
 
     def close(self):
         # self.sess.close()
@@ -103,10 +103,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                   gamma=0.3, batch_size=512, memory_size=100000)
     # num_episodes, n_episode_pre_record = 200, 20
 
-    target_step_size = agent.update_eval_batch_size * 10
+    target_step_size = agent.update_eval_batch_size * 4
     train_step_size = agent.update_eval_batch_size
 
-    episodes_train = []
+    episodes_train = {}
     global_step = 0
     for episode in range(num_episodes):
         state = env.reset()
@@ -132,32 +132,32 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                     # print("episode=%d, data_observation.shape[0]=%d, env.A.total_value=%f" % (
                     #     episode, env.A.data_observation.shape[0], env.A.total_value))
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
-                        if round_n is None:
-                            logger.debug("episode=%d, %4d/%4d, env.A.total_value=%f",
-                                         episode, episode_step, env.A.data_observation.shape[0],
-                                         env.A.total_value)
-                        else:
-                            logger.debug("round=%d, episode=%3d, %4d/%4d, env.A.total_value=%f",
-                                         round_n, episode, episode_step, env.A.data_observation.shape[0],
-                                         env.A.total_value)
-                        episodes_train.append(env.plot_data())
+                        logger.debug("round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
+                                     round_n, episode + 1, num_episodes, episode_step + 1, env.A.data_observation.shape[0],
+                                     env.A.total_value/env.A.init_cash, agent.agent.epsilon)
+                        episodes_train[episode] = env.plot_data()
                     break
 
     # 输出图表
-    import matplotlib.pyplot as plt
-    reward_df = env.plot_data()
-    reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
+    from ibats_common.analysis.plot import plot_twin
     import datetime
     from ibats_utils.mess import datetime_2_str
     dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H_%M_%S')
-    title = f'ddqn_lstm_round_{round_n}_episodes_{num_episodes}_{dt_str}'
-    plt.suptitle(title)
-    plt.show()
-    value_df = pd.DataFrame({num: df['value']
-                             for num, df in enumerate(episodes_train, start=1)
+    reward_df = env.plot_data()
+    # 展示训练结果——最后一个
+    # reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
+    # value_df = reward_df[['value', 'value_fee0']] / env.A.init_cash
+    # title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_last'
+    # plot_twin(value_df, md_df['close'], name=title)
+    # 展示训练结果——历史
+    title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_list'
+    value_df = pd.DataFrame({f'{num}_v': df['value']
+                             for num, df in episodes_train.items()
                              if df.shape[0] > 0})
-    from ibats_common.analysis.plot import plot_twin
-    plot_twin(value_df, md_df['close'], name=title)
+    value_fee0_df = pd.DataFrame({f'{num}_0': df['value_fee0']
+                             for num, df in episodes_train.items()
+                             if df.shape[0] > 0})
+    plot_twin([value_df, value_fee0_df], md_df['close'], name=title)
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}_{num_episodes}.h5"
     agent.save_model(path=path)
@@ -167,6 +167,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
 
 def _test_agent2():
+    """测试模型训练过程"""
     import pandas as pd
     logger = logging.getLogger(__name__)
     # 建立相关数据
@@ -185,15 +186,15 @@ def _test_agent2():
     md_df = md_df.loc[df_index, :]
 
     # success_count, success_max_count, round_n = 0, 10, 0
-    round_max, round_n, increase = 50, 0, 50
+    round_max, round_n, increase = 40, 0, 50
     while True:
         round_n += 1
         # 执行训练
-        num_episodes = 200 + round_n * increase
+        num_episodes = round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
-                         n_episode_pre_record=int(num_episodes / 10))
-        logger.debug(df.iloc[-1, :])
+                         n_episode_pre_record=int(num_episodes / 6))
+        logger.debug('final status:\n%s', df.iloc[-1, :])
         reward_df = load_predict(md_df, batch_factors, tail_n=0, model_path=path, key=num_episodes)
         reward_df.to_csv(f'reward_df_{num_episodes}.csv')
         if round_n >= round_max:
@@ -206,6 +207,7 @@ def _test_agent2():
 
 
 def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False, key=None):
+    """加载模型，进行样本内训练"""
     import numpy as np
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
@@ -218,17 +220,17 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
     env = Account(md_df, data_factors=data_factors, state_with_flag=True)
     agent = Agent(input_shape=data_factors.shape)
     agent.restore_model(path=model_path)
-    logger.debug("加载模型：%s 完成", model_path)
+    logger.debug("加载模型：%s 完成，开始执行样本内测是，batch=%s", model_path, batch)
 
     if batch:
-        # 批量作业
+        # 批量作业，批量执行速度快，但还四可能与实际清空所有偏差
         # 伪 flag
         flags = np.zeros((states.shape[0], 1))
         actions = agent.choose_action_deterministic_batch((states, flags))
         for num, action in enumerate(actions, start=1):
             next_state, reward, done = env.step(action)
             if done:
-                logger.debug('执行循环 %d 次', num)
+                logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
                 break
     else:
         # 单步执行
@@ -238,18 +240,18 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
             action = agent.choose_action_deterministic(state)
             state, reward, done = env.step(action)
             if done:
-                logger.debug('执行循环 %d 次', num)
+                logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
                 break
 
     reward_df = env.plot_data()
     if show_plot:
-        value_s = reward_df.iloc[:, 0]
+        value_df = reward_df[['value', 'value_fee0']] / env.A.init_cash
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H_%M_%S')
-        title = f'ddqn_lstm_{dt_str}' if key is None else f'ddqn_lstm_{dt_str}_{key}'
+        title = f'ddqn_lstm2_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
-        plot_twin(value_s, md_df["close"], name=title)
+        plot_twin(value_df, md_df["close"], name=title)
 
     return reward_df
 

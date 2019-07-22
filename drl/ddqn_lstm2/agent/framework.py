@@ -36,8 +36,8 @@ class Framework(object):
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.3
         self.epsilon_decay = 0.9998
-        self.model = self._build_model()
-        self.target_model = self._build_model()
+        self.model_eval = self._build_model()
+        self.model_target = self._build_model()
         self.update_target_net()
         self.has_logged = False
 
@@ -88,23 +88,23 @@ class Framework(object):
         return state, action, reward, next_state, done
 
     def get_deterministic_policy_batch(self, inputs):
-        act_values = self.model.predict(x={'state': inputs[0], 'flag': inputs[1]})
+        act_values = self.model_eval.predict(x={'state': inputs[0], 'flag': inputs[1]})
         return np.argmax(act_values, axis=1)
 
     def get_deterministic_policy(self, inputs):
-        act_values = self.model.predict(x={'state': inputs[0], 'flag': inputs[1]})
+        act_values = self.model_eval.predict(x={'state': inputs[0], 'flag': inputs[1]})
         return np.argmax(act_values[0])  # returns action
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
-        act_values = self.model.predict(x={'state': inputs[0], 'flag': inputs[1]})
+        act_values = self.model_eval.predict(x={'state': inputs[0], 'flag': inputs[1]})
         return np.argmax(act_values[0])  # returns action
 
     # update target network params
     def update_target_net(self):
         # copy weights from model to target_model
-        self.target_model.set_weights(self.model.get_weights())
+        self.model_target.set_weights(self.model_eval.get_weights())
 
     # update experience replay pool
     def update_cache(self, state, action, reward, next_state, done):
@@ -113,29 +113,23 @@ class Framework(object):
     # train, update value network params
     def update_value_net(self):
         state, action, reward, next_state, done = self._get_samples()
-        inputs = {'state': state[0], 'flag': state[1]}
-        target = self.model.predict(x=inputs)
-        t = self.target_model.predict(x=inputs)
+        inputs = {'state': next_state[0], 'flag': next_state[1]}
+        q_eval_next = self.model_eval.predict(x=inputs)
+        q_target_next = self.model_target.predict(x=inputs)
+        q_target = self.model_target.predict(x={'state': state[0], 'flag': state[1]})
         done_arr = 1 - np.array(done).astype('int')
-        target[np.arange(target.shape[0]), action] = reward + done_arr * self.gamma * np.amax(t, axis=1)
+        index = np.arange(q_target_next.shape[0])
+        q_target[index, action] = reward + done_arr * self.gamma * q_target_next[index, np.argmax(q_eval_next, axis=1)]
 
-        # if done:
-        #     target[0][action] = reward
-        # else:
-        #     # a = self.model.predict([next_state,matrix])[0]
-        #     t = self.target_model.predict([next_state, matrix])[0]
-        #     target[0][action] = reward + self.gamma * np.amax(t)
-        #     # target[0][action] = reward + self.gamma * t[np.argmax(a)]
-        # , verbose=0, callbacks=[TensorBoard(log_dir='./tmp/log')]
         if self.has_logged:
-            self.model.fit(inputs, target, batch_size=self.batch_size, epochs=1,
-                           verbose=0,
-                           )
+            self.model_eval.fit(inputs, q_target_next, batch_size=self.batch_size, epochs=1,
+                                verbose=0,
+                                )
         else:
-            self.model.fit(inputs, target, batch_size=self.batch_size, epochs=1,
-                           verbose=0,
-                           callbacks=[TensorBoard(log_dir='./tmp/log')],
-                           )
+            self.model_eval.fit(inputs, q_target_next, batch_size=self.batch_size, epochs=1,
+                                verbose=0,
+                                callbacks=[TensorBoard(log_dir='./tensorboard_log')],
+                                )
             self.has_logged = True
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -146,7 +140,7 @@ def _test():
     agent = Framework(input_shape=[None, 250, 78], action_size=4,
                   gamma=0.3, batch_size=512, memory_size=100000)
     file_path = 'model.png'
-    plot_model(agent.model, to_file=file_path, show_shapes=True)
+    plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
     open_file_with_system_app(file_path)
 
