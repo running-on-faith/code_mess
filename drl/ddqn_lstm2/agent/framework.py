@@ -7,7 +7,7 @@ import tensorflow as tf
 from ibats_utils.mess import sample_weighted
 from keras import backend as K
 from keras.callbacks import TensorBoard
-from keras.layers import Dense, LSTM, Dropout, Input, concatenate
+from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Reshape
 from keras.models import Model
 from keras.optimizers import Adam
 
@@ -15,7 +15,7 @@ _EPSILON = 1e-6  # avoid nan
 
 
 class Framework(object):
-    def __init__(self, memory_size=2048, input_shape=[None, 50, 58, 5], max_grad_norm=10, action_size=4, batch_size=512,
+    def __init__(self, memory_size=2048, input_shape=[None, 50, 58, 5], dueling=False, action_size=4, batch_size=512,
                  gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log'):
 
         self.memory_size = memory_size
@@ -25,6 +25,7 @@ class Framework(object):
         self.gamma = gamma
         self.learning_rate = learning_rate
         self.tensorboard_log_dir = tensorboard_log_dir
+        self.dueling = dueling
 
         # cache for experience replay
         self.cache = deque(maxlen=memory_size)
@@ -61,8 +62,14 @@ class Framework(object):
         dr2 = Dropout(0.4)(d2)
         d3 = Dense(self.action_size * 2, activation='relu')(dr2)
         input2 = Input(batch_shape=[None, 1], name=f'flag')
+        # flag_hot = Reshape((3,))(K.one_hot(input2, 3))
         concat = concatenate([d3, input2])
-        d4 = Dense(self.action_size, activation='relu')(concat)
+        if self.dueling:
+            d41 = Dense(self.action_size + 1, activation='linear')(concat)
+            d4 = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                        output_shape=(self.action_size,))(d41)
+        else:
+            d4 = Dense(self.action_size, activation='relu')(concat)
 
         model = Model(inputs=[input, input2], outputs=d4)
         model.summary()
@@ -137,8 +144,8 @@ class Framework(object):
 
 def _test():
     from keras.utils import plot_model
-    agent = Framework(input_shape=[None, 250, 78], action_size=4,
-                  gamma=0.3, batch_size=512, memory_size=100000)
+    agent = Framework(input_shape=[None, 250, 78], action_size=4, dueling=True,
+                      gamma=0.3, batch_size=512, memory_size=100000)
     file_path = 'model.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app

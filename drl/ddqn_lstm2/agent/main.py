@@ -73,12 +73,13 @@ def _test_agent():
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
     factors_df = get_factor(md_df, dropna=True)
-    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
 
     from ibats_common.backend.rl.emulator.account import Account
-    env = Account(md_df, data_arr_batch)
-    agent = Agent()
+    env = Account(md_df, batch_factors)
+    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
+                  gamma=0.3, batch_size=512, memory_size=100000)
     # fill cache
     for episode in range(2):
         state = env.reset()
@@ -99,9 +100,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
-    agent = Agent(input_shape=batch_factors.shape, action_size=3,
+    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
                   gamma=0.3, batch_size=512, memory_size=100000)
     # num_episodes, n_episode_pre_record = 200, 20
+    predict_result_dic = {}
 
     target_step_size = agent.update_eval_batch_size * 4
     train_step_size = agent.update_eval_batch_size
@@ -122,10 +124,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
             if global_step % target_step_size == 0:
                 agent.update_target()
-                logger.debug("update_target round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
-                             round_n, episode + 1, num_episodes, episode_step + 1,
-                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                             agent.agent.epsilon)
+                # logger.debug("update_target round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
+                #              round_n, episode + 1, num_episodes, episode_step + 1,
+                #              env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                #              agent.agent.epsilon)
 
             if (global_step >= train_step_size and episode_step % train_step_size == 0) or done:
                 agent.update_eval()
@@ -139,26 +141,37 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                                      agent.agent.epsilon)
                         episodes_train[episode] = env.plot_data()
 
-                    if do_predict and episode > 0 and episode % 100 == 0:
-                        # 每 100 轮，进行一次样本内测试
+                    if do_predict and episode > 0 and episode % 50 == 0:
+                        # 每 50 轮，进行一次样本内测试
                         logger.debug("样本内测试 round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
                                      round_n, episode + 1, num_episodes, episode_step + 1,
                                      env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                                      agent.agent.epsilon)
-                        path = f"model/weights_{round_n}_{num_episodes}.h5"
+                        path = f"model/weights_{round_n}_{episode}.h5"
                         agent.save_model(path=path)
                         logger.debug('model save to path: %s', path)
-                        reward_df = load_predict(md_df, batch_factors, tail_n=0, model_path=path, key=num_episodes)
-                        reward_df.to_csv(f'reward_{round_n}_{num_episodes}.csv')
+                        reward_df = load_predict(md_df, batch_factors, tail_n=0, model_path=path, key=episode)
+                        reward_df.to_csv(f'reward_{round_n}_{episode}.csv')
+                        predict_result_dic[episode] = reward_df.iloc[-1, :]
 
                     break
 
+    reward_df = env.plot_data()
+
     # 输出图表
-    from ibats_common.analysis.plot import plot_twin
+    from ibats_common.analysis.plot import plot_twin, plot_or_show
     import datetime
     from ibats_utils.mess import datetime_2_str
+    import matplotlib.pyplot as plt
     dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H_%M_%S')
-    reward_df = env.plot_data()
+    # 输出历史训练曲线
+    predict_result_df = pd.DataFrame(predict_result_dic).T
+    predict_result_df[['value', 'value_fee0', 'fee_tot']].plot()
+    title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_trend'
+    plt.suptitle(title)
+    file_path = f'{title}.png'
+    plot_or_show(file_name=file_path)
+    # 输出最后一次训练结果
     # 展示训练结果——最后一个
     # reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
     # value_df = reward_df[['value', 'value_fee0']] / env.A.init_cash
@@ -221,7 +234,8 @@ def _test_agent2():
         #         break
 
 
-def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False, key=None):
+def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False,
+                 key=None):
     """加载模型，进行样本内训练"""
     import numpy as np
     from ibats_common.backend.rl.emulator.account import Account
@@ -233,7 +247,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         states = batch_factors
 
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
-    agent = Agent(input_shape=batch_factors.shape, action_size=3,
+    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
                   gamma=0.3, batch_size=512, memory_size=100000)
     agent.restore_model(path=model_path)
     logger.debug("加载模型：%s 完成，开始执行样本内测是，batch=%s", model_path, batch)
