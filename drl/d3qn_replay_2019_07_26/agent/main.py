@@ -15,7 +15,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 
-from ibats_common.example.drl.ddqn_lstm2.agent.framework import Framework
+from ibats_common.example.drl.d3qn_replay_2019_07_26.agent.framework import Framework
 
 
 class Agent(object):
@@ -46,9 +46,6 @@ class Agent(object):
 
     def update_eval(self):
         return self.agent.update_value_net()
-
-    def update_target(self):
-        self.agent.update_target_net()
 
     def save_model(self, path="model/weights.h5"):
         # return self.saver.save(self.sess, path)
@@ -90,12 +87,13 @@ def _test_agent():
             state = next_state
             if done:
                 break
-    print(len(agent.agent.cache))
+    print(len(agent.agent.cache_action))
     reward_df = env.plot_data()
     reward_df.to_csv('reward_df.csv')
 
 
 def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, action_size=3):
+    model_name = 'd3qn_reply'
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
@@ -105,16 +103,11 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     # num_episodes, n_episode_pre_record = 200, 20
     acc_list, loss_list = [], []
 
-    target_step_size = agent.update_eval_batch_size * 4
-    train_step_size = agent.update_eval_batch_size
-
     episodes_train = {}
-    global_step = 0
     for episode in range(num_episodes):
         state = env.reset()
         episode_step = 0
         while True:
-            global_step += 1
             episode_step += 1
 
             action = agent.choose_action_stochastic(state)
@@ -122,32 +115,24 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
             agent.update_cache(state, action, reward, next_state, done)
             state = next_state
 
-            if global_step % target_step_size == 0:
-                agent.update_target()
-                # logger.debug("update_target round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
-                #              round_n, episode + 1, num_episodes, episode_step + 1,
-                #              env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                #              agent.agent.epsilon)
-
-            if (global_step >= train_step_size and episode_step % train_step_size == 0) or done:
+            if done:
                 acc_list, loss_list = agent.update_eval()
                 # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
 
-                if done:
-                    if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
-                        logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
-                                     round_n, episode + 1, num_episodes, episode_step + 1,
-                                     env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                                     agent.agent.epsilon)
-                        episodes_train[episode] = env.plot_data()
+                if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
+                    logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
+                                 round_n, episode + 1, num_episodes, episode_step + 1,
+                                 env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                                 agent.agent.epsilon)
+                    episodes_train[episode] = env.plot_data()
 
-                    if episode > 0 and episode % 50 == 0:
-                        # 每 50 轮，进行一次样本内测试
-                        path = f"model/weights_{round_n}_{episode}.h5"
-                        agent.save_model(path=path)
-                        logger.debug('model save to path: %s', path)
+                if episode > 0 and episode % 50 == 0:
+                    # 每 50 轮，进行一次样本内测试
+                    path = f"model/weights_{round_n}_{episode}.h5"
+                    agent.save_model(path=path)
+                    logger.debug('model save to path: %s', path)
 
-                    break
+                break
 
     reward_df = env.plot_data()
 
@@ -159,7 +144,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     # 输出历史训练曲线
     if len(acc_list) > 0:
         acc_loss_df = pd.DataFrame({'acc': acc_list, 'log(loss)': np.log(loss_list)}).ffill()
-        title = f'ddqn_lstm2_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
+        title = f'{model_name}_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
         plot_twin(acc_loss_df['acc'], acc_loss_df['log(loss)'], name=title)
 
     # 输出最后一次训练结果
@@ -169,7 +154,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     # title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_last'
     # plot_twin(value_df, md_df['close'], name=title)
     # 展示训练结果——历史
-    title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_list'
+    title = f'{model_name}_r{round_n}_epi{num_episodes}_{dt_str}_list'
     value_df = pd.DataFrame({f'{num}_v': df['value']
                              for num, df in episodes_train.items()
                              if df.shape[0] > 0})

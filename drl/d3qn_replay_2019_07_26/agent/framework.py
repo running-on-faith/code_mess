@@ -1,10 +1,9 @@
 import logging
 import random
-from collections import deque
 
 import numpy as np
 import tensorflow as tf
-from ibats_utils.mess import sample_weighted
+from ibats_utils.mess import iter_2_range
 from keras import metrics, backend as K
 from keras.callbacks import TensorBoard, Callback
 from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
@@ -45,7 +44,9 @@ class Framework(object):
         self.fit_callback = LogFit()
 
         # cache for experience replay
-        self.cache = deque(maxlen=memory_size)
+        # cache for state, action, reward, next_state, done
+        self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
+            [], [], [], [], []
         self.weights = None  # 用于 _get_samples 基于权重提取数据
         self.logger = logging.getLogger(str(self.__class__))
         K.clear_session()
@@ -56,8 +57,6 @@ class Framework(object):
         self.epsilon_decay = 0.9998
         self.flag_size = 3
         self.model_eval = self._build_model()
-        self.model_target = self._build_model()
-        self.update_target_net()
         self.has_logged = False
 
     @property
@@ -101,61 +100,44 @@ class Framework(object):
                       metrics=[metrics.mae, metrics.categorical_accuracy])
         return model
 
-    # get random sample from experience pool
-    def _get_samples(self):
-        cache_len = len(self.cache)
-        samples_count = cache_len if len(self.cache) < self.batch_size else self.batch_size
-        # samples = random.sample(self.cache, samples_count)
-        if self.weights is None:
-            self.weights = np.ones(cache_len)
-        elif len(self.weights) < cache_len:
-            self.weights = np.concatenate([self.weights / 2, np.ones(cache_len - len(self.weights))])
-        samples = sample_weighted(self.cache, self.weights, samples_count)
-        # samples[0] == state == (observation, flags)
-        state = (np.vstack([i[0][0] for i in samples]), np.vstack([i[0][1] for i in samples]))
-        action = np.squeeze(np.vstack([i[1] for i in samples]))
-        reward = np.squeeze(np.vstack([i[2] for i in samples]))
-        next_state = (np.vstack([i[3][0] for i in samples]), np.vstack([i[3][1] for i in samples]))
-        done = [i[4] for i in samples]
-        return state, action, reward, next_state, done
-
     def get_deterministic_policy_batch(self, inputs):
-        act_values = self.model_eval.predict(x={'state': inputs[0],
+        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
         return np.argmax(act_values, axis=1)
 
     def get_deterministic_policy(self, inputs):
-        act_values = self.model_eval.predict(x={'state': inputs[0],
+        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
         return np.argmax(act_values[0])  # returns action
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
-        act_values = self.model_eval.predict(x={'state': inputs[0],
+        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
         return np.argmax(act_values[0])  # returns action
 
-    # update target network params
-    def update_target_net(self):
-        # copy weights from model to target_model
-        self.model_target.set_weights(self.model_eval.get_weights())
-
     # update experience replay pool
     def update_cache(self, state, action, reward, next_state, done):
-        self.cache.append((state, action, reward, next_state, done))
+        self.cache_state.append(state)
+        self.cache_action.append(action)
+        self.cache_reward.append(reward)
+        self.cache_next_state.append(next_state)
+        self.cache_done.append(done)
 
     # train, update value network params
     def update_value_net(self):
-        state, action, reward, next_state, done = self._get_samples()
-        inputs = {'state': next_state[0], 'flag': to_categorical(next_state[1] + 1, self.flag_size)}
-        q_eval_next = self.model_eval.predict(x=inputs)
-        q_target_next = self.model_target.predict(x=inputs)
-        q_target = self.model_target.predict(
-            x={'state': state[0], 'flag': to_categorical(state[1] + 1, self.flag_size)})
-        done_arr = 1 - np.array(done).astype('int')
-        index = np.arange(q_target_next.shape[0])
-        q_target[index, action] = reward + done_arr * self.gamma * q_target_next[index, np.argmax(q_eval_next, axis=1)]
+
+        # 以平仓动作为标识，将持仓期间的收益进行反向传递
+        # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
+        reward_tot = calc_tot_reward(self.cache_action, self.cache_reward)
+        # 以 reward_tot 为奖励进行训练
+
+        inputs = {'state': np.concatenate([_[0] for _ in self.cache_state]),
+                  'flag': to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)}
+        q_target = self.model_eval.predict(x=inputs)
+        index = np.arange(q_target.shape[0])
+        q_target[index, self.cache_action] = reward_tot
 
         if self.has_logged:
             self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=1,
@@ -172,7 +154,37 @@ class Framework(object):
         return self.acc_loss_lists
 
 
-def _test():
+def calc_tot_reward(action, reward):
+    index_list = [num for num, _ in enumerate(action) if _ == 0]
+    if index_list[0] != 0:
+        index_list.insert(0, 0)
+    if index_list[-1] != (len(action) - 1):
+        index_list.append(len(action) - 1)
+    range_iter = iter_2_range(index_list, has_right_outer=False, has_left_outer=False)
+    reward_tot = np.array(reward, dtype='float32')
+    for idx_start, idx_end in range_iter:
+        # 下边接 + 1 因为 [idx_start, idx_end)
+        for idx in range(idx_start, idx_end):
+            data_num = idx_end - idx
+            weights = np.logspace(1, data_num, num=data_num, base=0.5)
+            reward_tot[idx] += sum(reward_tot[(idx + 1):(idx_end + 1)] * weights)
+
+    return reward_tot
+
+
+def _test_calc_tot_reward():
+    """验证 calc_tot_reward 函数"""
+    actions = [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
+    rewards = [1 for _ in range(len(actions))]
+    reward_tot = calc_tot_reward(actions, rewards)
+    target_reward = np.array([1.984375, 1.96875, 1.9375, 1.875, 1.75, 1.5,
+                              1.9375, 1.875, 1.75, 1.5, 1.5, 1.875,
+                              1.75, 1.5, 1.])
+
+    assert all(target_reward == reward_tot)
+
+
+def _test_show_model():
     from keras.utils import plot_model
     agent = Framework(input_shape=[None, 250, 78], action_size=3, dueling=True,
                       gamma=0.3, batch_size=512, memory_size=100000)
@@ -183,4 +195,5 @@ def _test():
 
 
 if __name__ == '__main__':
-    _test()
+    # _test_calc_tot_reward()
+    _test_show_model()

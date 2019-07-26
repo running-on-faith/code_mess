@@ -144,7 +144,7 @@ def train(md_df, batch_factors, round_n=None):
     reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
     import datetime
     from ibats_utils.mess import datetime_2_str
-    dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H_%M_%S')
+    dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H%M%S')
     title = f'd3qn1_gama_{agent.agent.gamma:.1f}_{dt_str}'
     plt.suptitle(title)
     plt.show()

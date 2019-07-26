@@ -145,7 +145,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=200, n_episode_pre_recor
     reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
     import datetime
     from ibats_utils.mess import datetime_2_str
-    dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H_%M_%S')
+    dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H%M%S')
     title = f'ddqn_lstm_round_n_{round_n}_{dt_str}'
     plt.suptitle(title)
     plt.show()
@@ -233,7 +233,7 @@ def load_predict(md_df, data_factors, tail_n=1, show_plot=True, model_path="mode
         value_s = reward_df.iloc[:, 0]
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
-        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H_%M_%S')
+        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'ddqn_lstm_predict_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
         plot_twin(value_s, md_df["close"], name=title)

@@ -5,12 +5,11 @@ from collections import deque
 import numpy as np
 import tensorflow as tf
 from ibats_utils.mess import sample_weighted
-from keras import metrics, backend as K
+from keras import backend as K
 from keras.callbacks import TensorBoard, Callback
-from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Reshape
 from keras.models import Model
 from keras.optimizers import Adam
-from keras.utils import to_categorical
 
 _EPSILON = 1e-6  # avoid nan
 
@@ -54,7 +53,6 @@ class Framework(object):
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.3
         self.epsilon_decay = 0.9998
-        self.flag_size = 3
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
         self.update_target_net()
@@ -77,28 +75,26 @@ class Framework(object):
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
-        net = LSTM(self.input_shape[-1] * 2, return_sequences=True, activation='relu')(input)
-        net = LSTM(self.input_shape[-1], return_sequences=False, activation='relu')(net)
-        net = Dense(self.input_shape[-1] // 2)(net)
-        net = Dropout(0.4)(net)
-        # net = Dense(self.input_shape[-1])(net)    # 减少一层，降低网络复杂度
-        # net = Dropout(0.4)(net)
-        # net = Dense(self.action_size * 4, activation='relu')(net)
-        input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
-        net = concatenate([net, input2])
-        net = Dense(self.action_size * 2 + self.flag_size, activation='relu')(net)
-        net = Dropout(0.4)(net)
+        lstm = LSTM(self.input_shape[-1] * 2, return_sequences=True, activation='relu')(input)
+        lstm = LSTM(self.input_shape[-1], return_sequences=False, activation='relu')(lstm)
+        d1 = Dense(self.input_shape[-1] * 2)(lstm)
+        dr1 = Dropout(0.4)(d1)
+        d2 = Dense(self.input_shape[-1])(dr1)
+        dr2 = Dropout(0.4)(d2)
+        d3 = Dense(self.action_size * 2, activation='relu')(dr2)
+        input2 = Input(batch_shape=[None, 1], name=f'flag')
+        # flag_hot = Reshape((3,))(K.one_hot(input2, 3))
+        concat = concatenate([d3, input2])
         if self.dueling:
-            net = Dense(self.action_size + 1, activation='linear')(net)
-            net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
-                         output_shape=(self.action_size,))(net)
+            d41 = Dense(self.action_size + 1, activation='linear')(concat)
+            d4 = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                        output_shape=(self.action_size,))(d41)
         else:
-            net = Dense(self.action_size, activation='relu')(net)
+            d4 = Dense(self.action_size, activation='relu')(concat)
 
-        model = Model(inputs=[input, input2], outputs=net)
+        model = Model(inputs=[input, input2], outputs=d4)
         model.summary()
-        model.compile(Adam(self.learning_rate), loss=self._huber_loss,
-                      metrics=[metrics.mae, metrics.categorical_accuracy])
+        model.compile(Adam(self.learning_rate), loss=self._huber_loss, metrics=['accuracy'])
         return model
 
     # get random sample from experience pool
@@ -120,20 +116,17 @@ class Framework(object):
         return state, action, reward, next_state, done
 
     def get_deterministic_policy_batch(self, inputs):
-        act_values = self.model_eval.predict(x={'state': inputs[0],
-                                                'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+        act_values = self.model_eval.predict(x={'state': inputs[0], 'flag': inputs[1]})
         return np.argmax(act_values, axis=1)
 
     def get_deterministic_policy(self, inputs):
-        act_values = self.model_eval.predict(x={'state': inputs[0],
-                                                'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+        act_values = self.model_eval.predict(x={'state': inputs[0], 'flag': inputs[1]})
         return np.argmax(act_values[0])  # returns action
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
-        act_values = self.model_eval.predict(x={'state': inputs[0],
-                                                'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+        act_values = self.model_eval.predict(x={'state': inputs[0], 'flag': inputs[1]})
         return np.argmax(act_values[0])  # returns action
 
     # update target network params
@@ -148,22 +141,22 @@ class Framework(object):
     # train, update value network params
     def update_value_net(self):
         state, action, reward, next_state, done = self._get_samples()
-        inputs = {'state': next_state[0], 'flag': to_categorical(next_state[1] + 1, self.flag_size)}
+        inputs = {'state': next_state[0], 'flag': next_state[1]}
         q_eval_next = self.model_eval.predict(x=inputs)
         q_target_next = self.model_target.predict(x=inputs)
-        q_target = self.model_target.predict(
-            x={'state': state[0], 'flag': to_categorical(state[1] + 1, self.flag_size)})
+        q_target = self.model_target.predict(x={'state': state[0], 'flag': state[1]})
         done_arr = 1 - np.array(done).astype('int')
         index = np.arange(q_target_next.shape[0])
         q_target[index, action] = reward + done_arr * self.gamma * q_target_next[index, np.argmax(q_eval_next, axis=1)]
 
         if self.has_logged:
-            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=1,
+            self.model_eval.fit(inputs, q_target_next, batch_size=self.batch_size, epochs=1,
                                 verbose=0, callbacks=[self.fit_callback],
                                 )
         else:
-            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=1,
-                                verbose=0, callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
+            self.model_eval.fit(inputs, q_target_next, batch_size=self.batch_size, epochs=1,
+                                verbose=0,
+                                callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
                                 )
             self.has_logged = True
         if self.epsilon > self.epsilon_min:
@@ -174,7 +167,7 @@ class Framework(object):
 
 def _test():
     from keras.utils import plot_model
-    agent = Framework(input_shape=[None, 250, 78], action_size=3, dueling=True,
+    agent = Framework(input_shape=[None, 250, 78], action_size=4, dueling=True,
                       gamma=0.3, batch_size=512, memory_size=100000)
     file_path = 'model.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
