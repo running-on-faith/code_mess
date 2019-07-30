@@ -209,7 +209,7 @@ def _test_agent2():
     for round_n in range(round_n, round_max):
         round_n += 1
         # 执行训练
-        num_episodes = 200 + round_n * increase
+        num_episodes = 1000 + round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
                          n_episode_pre_record=int(num_episodes / 6))
