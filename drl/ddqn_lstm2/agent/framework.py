@@ -52,8 +52,8 @@ class Framework(object):
         tf.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.3
-        self.epsilon_decay = 0.9998
+        self.epsilon_min = 0.2
+        self.epsilon_decay = 0.9990
         self.flag_size = 3
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
