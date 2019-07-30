@@ -37,6 +37,10 @@ class Framework(object):
         self.memory_size = memory_size
         self.input_shape = input_shape
         self.action_size = action_size
+        self.actions = list(range(action_size))
+        # [0.1, 0.1, 0.1, 0.7] 有 50% 概率 4步之内保持同一动作
+        # [0.15, 0.15, 0.15, 0.55] 有 50% 概率 3步之内保持同一动作
+        self.p = [0.10, 0.2, 0.2, 0.50] if action_size == 4 else [0.1, 0.45, 0.45]
         self.batch_size = batch_size
         self.gamma = gamma
         self.learning_rate = learning_rate
@@ -132,7 +136,8 @@ class Framework(object):
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
+            # return random.randrange(self.action_size)
+            return np.random.choice(self.actions, p=self.p)
         act_values = self.model_eval.predict(x={'state': inputs[0],
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
         return np.argmax(act_values[0])  # returns action
