@@ -74,7 +74,7 @@ def _test_agent():
     md_df = md_df.loc[df_index, :]
 
     from ibats_common.backend.rl.emulator.account import Account
-    env = Account(md_df, batch_factors)
+    env = Account(md_df, batch_factors, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
                   gamma=0.3, batch_size=512, memory_size=100000)
     # fill cache
