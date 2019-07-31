@@ -97,7 +97,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
-    env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
+    env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
                   gamma=0.3, batch_size=512, memory_size=10000)
     # num_episodes, n_episode_pre_record = 200, 20
@@ -117,7 +117,8 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
             if done:
                 acc_list, loss_list = agent.update_eval()
-                # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
+                logger.debug('round=%d, episode=%d, episode_step=%d, agent.update_eval()',
+                             round_n,  episode + 1, episode_step)
 
                 if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                     logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
@@ -126,7 +127,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                                  agent.agent.epsilon)
                     episodes_train[episode] = env.plot_data()
 
-                if episode > 0 and episode % 50 == 0:
+                if episode > 0 and episode % 10 == 0:
                     # 每 50 轮，进行一次样本内测试
                     path = f"model/weights_{round_n}_{episode}.h5"
                     agent.save_model(path=path)
