@@ -1,5 +1,4 @@
 import logging
-import random
 from collections import deque
 
 import numpy as np
@@ -19,25 +18,29 @@ class LogFit(Callback):
 
     def __init__(self):
         super().__init__()
-        self.loss_list = []
+        self.logs_list = []
         self.acc_list = []
         self.logger = logging.getLogger(str(self.__class__))
 
     def on_epoch_end(self, epoch, logs=None):
         if logs is not None:
             # self.logger.debug('%s', logs)
-            self.loss_list.append(logs['loss'] if 'loss' in logs else np.nan)
-            self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
+            # self.loss_list.append(logs['loss'] if 'loss' in logs else np.nan)
+            # self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
+            # self.acc_list.append(logs['categorical_accuracy'] if 'categorical_accuracy' in logs else np.nan)
+            # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
+            self.logs_list.append(logs)
 
 
 class Framework(object):
     def __init__(self, memory_size=2048, input_shape=[None, 50, 58, 5], dueling=False, action_size=4, batch_size=512,
-                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log'):
+                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log', epsilon_decay=0.9990, epsilon_min=0.2):
 
         self.memory_size = memory_size
         self.input_shape = input_shape
         self.action_size = action_size
         self.actions = list(range(action_size))
+        # 2019-07-30
         # [0.1, 0.1, 0.1, 0.7] 有 50% 概率 4步之内保持同一动作
         # [0.15, 0.15, 0.15, 0.55] 有 50% 概率 3步之内保持同一动作
         self.p = [0.10, 0.2, 0.2, 0.50] if action_size == 4 else [0.1, 0.45, 0.45]
@@ -56,8 +59,8 @@ class Framework(object):
         tf.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.2
-        self.epsilon_decay = 0.9990
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
         self.flag_size = 3
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
@@ -65,9 +68,9 @@ class Framework(object):
         self.has_logged = False
 
     @property
-    def acc_loss_lists(self):
+    def fit_logs_list(self):
         """return acc_list, loss_list"""
-        return self.fit_callback.acc_list, self.fit_callback.loss_list
+        return self.fit_callback.logs_list
 
     def _huber_loss(self, y_true, y_pred, clip_delta=1.0):
         error = y_true - y_pred
@@ -175,7 +178,7 @@ class Framework(object):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-        return self.acc_loss_lists
+        return self.fit_logs_list
 
 
 def _test():

@@ -12,6 +12,7 @@ https://github.com/deepmind/sonnet
 dm-sonnet==1.19 对应 tensorflow==1.5.1
 """
 import logging
+
 import numpy as np
 import tensorflow as tf
 
@@ -99,16 +100,18 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
-    env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
+    # 2019-08-01
+    # 降低手续费率 0.003-> 0.001
+    env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
-                  gamma=0.3, batch_size=512, memory_size=10000)
+                  gamma=0.3, batch_size=512, memory_size=20000, epsilon_min=0.1, epsilon_decay=0.9990)
     # num_episodes, n_episode_pre_record = 200, 20
-    acc_list, loss_list = [], []
+    logs_list = []
 
     target_step_size = agent.update_eval_batch_size * 4
     train_step_size = agent.update_eval_batch_size
 
-    episodes_train = {}
+    episodes_reward_df_dic = {}
     global_step = 0
     for episode in range(num_episodes):
         state = env.reset()
@@ -130,53 +133,88 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                 #              agent.agent.epsilon)
 
             if (global_step >= train_step_size and episode_step % train_step_size == 0) or done:
-                acc_list, loss_list = agent.update_eval()
+                logs_list = agent.update_eval()
                 # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
 
                 if done:
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
-                        logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f",
-                                     round_n, episode + 1, num_episodes, episode_step + 1,
-                                     env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                                     agent.agent.epsilon)
-                        episodes_train[episode] = env.plot_data()
+                        # logger.debug("episodes_train.append round=%d, episode=%4d/%4d,"
+                        #              " %4d/%4d, 净值=%.4f, epsilon=%.5f",
+                        #              round_n, episode + 1, num_episodes, episode_step + 1,
+                        #              env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                        #              agent.agent.epsilon)
+                        episodes_reward_df_dic[episode] = env.plot_data()
+                        log_str1 = f", is append to episodes_reward_df_dic[{episode}] len {len(episodes_reward_df_dic)}"
+                    else:
+                        log_str1 = ""
 
                     if episode > 0 and episode % 50 == 0:
                         # 每 50 轮，进行一次样本内测试
                         path = f"model/weights_{round_n}_{episode}.h5"
                         agent.save_model(path=path)
-                        logger.debug('model save to path: %s', path)
+                        log_str2 = f", model save to path: {path}"
+                    else:
+                        log_str2 = ""
+
+                    if episode > 0 and episode % 50 == 0:
+                        logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f" +
+                                     log_str1 + log_str2,
+                                     round_n, episode + 1, num_episodes, episode_step + 1,
+                                     env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                                     agent.agent.epsilon)
 
                     break
 
     reward_df = env.plot_data()
 
     # 输出图表
-    from ibats_common.analysis.plot import plot_twin, plot_or_show
+    import matplotlib.pyplot as plt
+    from ibats_common.analysis.plot import plot_twin
     import datetime
     from ibats_utils.mess import datetime_2_str
+
     dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H%M%S')
     # 输出历史训练曲线
-    if len(acc_list) > 0:
-        acc_loss_df = pd.DataFrame({'acc': acc_list, 'log(loss)': np.log(loss_list)}).ffill()
+    if len(logs_list) > 0:
+        # acc_loss_df = pd.DataFrame({'acc': acc_list, 'log(loss)': np.log(loss_list)}).ffill()
+        acc_loss_df = pd.DataFrame(logs_list).ffill()
+        # 对 loss 数值取 log
+        acc_names, loss_names = [], []
+        for col_name in list(acc_loss_df.columns):
+            if col_name == 'loss' or col_name.endswith('error'):
+                new_col_name = f'log({col_name})'
+                acc_loss_df[new_col_name] = np.log(acc_loss_df[col_name])
+                acc_loss_df.drop(col_name, axis=1, inplace=True)
+                loss_names.append(new_col_name)
+            else:
+                acc_names.append(col_name)
         title = f'ddqn_lstm2_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
-        plot_twin(acc_loss_df['acc'], acc_loss_df['log(loss)'], name=title)
+        fig = plt.figure(figsize=(8, 16))
+        ax = fig.add_subplot(211)
+        if len(acc_names) == 0 or len(loss_names) == 0:
+            logger.error('acc_names=%s, loss_names=%s', acc_names, loss_names)
+            plot_twin(acc_loss_df, None, name=title,
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False)
+        else:
+            plot_twin(acc_loss_df[acc_names], acc_loss_df[loss_names], name=title,
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False)
+    else:
+        fig = None
+        ax = None
 
-    # 输出最后一次训练结果
-    # 展示训练结果——最后一个
-    # reward_df.iloc[:, 0].plot()  # figsize=(16, 6)
-    # value_df = reward_df[['value', 'value_fee0']] / env.A.init_cash
-    # title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_last'
-    # plot_twin(value_df, md_df['close'], name=title)
     # 展示训练结果——历史
     title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_list'
     value_df = pd.DataFrame({f'{num}_v': df['value']
-                             for num, df in episodes_train.items()
+                             for num, df in episodes_reward_df_dic.items()
                              if df.shape[0] > 0})
     value_fee0_df = pd.DataFrame({f'{num}_0': df['value_fee0']
-                                  for num, df in episodes_train.items()
+                                  for num, df in episodes_reward_df_dic.items()
                                   if df.shape[0] > 0})
-    plot_twin([value_df, value_fee0_df], md_df['close'], name=title)
+    if ax is not None:
+        # 说明上面“历史训练曲线” 有输出图像， 因此使用 ax = fig.add_subplot(212)
+        ax = fig.add_subplot(211)
+
+    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax)
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}_{num_episodes}.h5"
     agent.save_model(path=path)
@@ -205,14 +243,18 @@ def _test_agent2():
     md_df = md_df.loc[df_index, :]
 
     # success_count, success_max_count, round_n = 0, 10, 0
-    round_max, round_n, increase = 40, 0, 100
+    round_max, round_n, increase = 40, 13, 100
     for round_n in range(round_n, round_max):
         round_n += 1
         # 执行训练
         num_episodes = 1000 + round_n * increase
+        # 2019-08-01
+        # action_size 3 -> 4
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
-                         n_episode_pre_record=int(num_episodes / 6))
+                         n_episode_pre_record=int(num_episodes / 6),
+                         action_size=4,
+                         )
         logger.debug('round_n=%d, final status:\n%s', round_n, df.iloc[-1, :])
 
 
