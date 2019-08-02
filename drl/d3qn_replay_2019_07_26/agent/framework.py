@@ -18,15 +18,18 @@ class LogFit(Callback):
 
     def __init__(self):
         super().__init__()
-        self.loss_list = []
+        self.logs_list = []
         self.acc_list = []
         self.logger = logging.getLogger(str(self.__class__))
 
     def on_epoch_end(self, epoch, logs=None):
         if logs is not None:
             # self.logger.debug('%s', logs)
-            self.loss_list.append(logs['loss'] if 'loss' in logs else np.nan)
-            self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
+            # self.loss_list.append(logs['loss'] if 'loss' in logs else np.nan)
+            # self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
+            # self.acc_list.append(logs['categorical_accuracy'] if 'categorical_accuracy' in logs else np.nan)
+            # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
+            self.logs_list.append(logs)
 
 
 class Framework(object):
@@ -62,7 +65,7 @@ class Framework(object):
     @property
     def acc_loss_lists(self):
         """return acc_list, loss_list"""
-        return self.fit_callback.acc_list, self.fit_callback.loss_list
+        return self.fit_callback.logs_list
 
     def _huber_loss(self, y_true, y_pred, clip_delta=1.0):
         error = y_true - y_pred
