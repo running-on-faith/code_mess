@@ -33,10 +33,9 @@ class LogFit(Callback):
 
 
 class Framework(object):
-    def __init__(self, memory_size=2048, input_shape=[None, 50, 58, 5], dueling=False, action_size=4, batch_size=512,
-                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log'):
+    def __init__(self, input_shape=[None, 50, 58, 5], dueling=False, action_size=4, batch_size=512,
+                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log', epochs=1):
 
-        self.memory_size = memory_size
         self.input_shape = input_shape
         self.action_size = action_size
         self.batch_size = batch_size
@@ -61,6 +60,7 @@ class Framework(object):
         self.flag_size = 3
         self.model_eval = self._build_model()
         self.has_logged = False
+        self.epochs = epochs
 
     @property
     def acc_loss_lists(self):
@@ -143,21 +143,25 @@ class Framework(object):
         q_target[index, self.cache_action] = reward_tot
 
         if self.has_logged:
-            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=1,
+            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=3,
                                 verbose=0, callbacks=[self.fit_callback],
                                 )
         else:
-            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=1,
+            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=3,
                                 verbose=0, callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
                                 )
             self.has_logged = True
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
+        self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
+            [], [], [], [], []
+
         return self.acc_loss_lists
 
 
 def calc_tot_reward(action, reward):
+    """计算 reward 值，以每次空仓为界限，将收益以log递减形式向前传导"""
     index_list = [num for num, _ in enumerate(action) if _ == 0]
     if index_list[0] != 0:
         index_list.insert(0, 0)
@@ -190,7 +194,7 @@ def _test_calc_tot_reward():
 def _test_show_model():
     from keras.utils import plot_model
     agent = Framework(input_shape=[None, 250, 78], action_size=3, dueling=True,
-                      gamma=0.3, batch_size=512, memory_size=100000)
+                      gamma=0.3, batch_size=512)
     file_path = 'model.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app

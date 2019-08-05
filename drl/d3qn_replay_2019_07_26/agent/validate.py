@@ -9,6 +9,7 @@
 """
 import logging
 from ibats_common.example.drl.ddqn_lstm2.agent.main import Agent
+MODEL_NAME = 'd3qn_reply'
 
 
 def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False,
@@ -56,7 +57,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'ddqn_lstm2_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
+        title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
         plot_twin(value_df, md_df["close"], name=title)
 
@@ -64,18 +65,21 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
     return reward_df
 
 
-def _test_load_predict(model_folder='model', target_round_n=1):
+def _test_load_predict(model_folder='model', target_round_n=1, show_plot_together=True):
     import pandas as pd
     import os
-    import matplotlib.pyplot as plt
+    from ibats_common.example.data import load_data
+    from ibats_common.backend.factor import get_factor, transfer_2_batch
+    from ibats_utils.mess import datetime_2_str
+    from datetime import datetime
+    from ibats_common.analysis.plot import plot_twin
     logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 250
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
-    from ibats_common.example.data import load_data
+
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
-    from ibats_common.backend.factor import get_factor, transfer_2_batch
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     data_factors, shape = data_arr_batch, data_arr_batch.shape
@@ -83,10 +87,9 @@ def _test_load_predict(model_folder='model', target_round_n=1):
     # data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     # print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     md_df = md_df.loc[df_index, :]
-    predict_result_dic = {}
+    predict_result_dic, episode_model_path_dic, episode_list = {}, {}, []
     for file_name in os.listdir(model_folder):
         file_path = os.path.join(model_folder, file_name)
-        logger.debug(file_path)
         if os.path.isdir(file_path):
             continue
         file_name_no_extension, extension = os.path.splitext(file_name)
@@ -97,22 +100,50 @@ def _test_load_predict(model_folder='model', target_round_n=1):
         _, round_n, episode = file_name_no_extension.split('_')
         if int(round_n) != target_round_n:
             continue
-        reward_df = load_predict(md_df, data_factors, tail_n=0, model_path=file_path, key=episode)
-        reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
+        episode = int(episode)
+        episode_model_path_dic[episode] = file_path
+        episode_list.append(episode)
+
+    if len(episode_list) == 0:
+        logger.info('target_round_n=%d 没有可加载的模型', target_round_n)
+        return
+
+    episode_reward_df_dic = {}
+    episode_list.sort()
+    for num, episode in enumerate(episode_list, start=1):
+        file_path = episode_model_path_dic[episode]
+        logger.debug('%2d ) %4d -> %s', num, episode, file_path)
+        reward_df = load_predict(md_df, data_factors, tail_n=0, model_path=file_path, key=episode,
+                                 show_plot=False)
+        # reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
         predict_result_dic[episode] = reward_df.iloc[-1, :]
+        episode_reward_df_dic[episode] = reward_df
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.figure(figsize=(8, 12)), None  #
+    if show_plot_together:
+        ax = fig.add_subplot(211)
+        value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
+                                 for num, episode in enumerate(episode_list)
+                                 if episode_reward_df_dic[episode].shape[0] > 0 and num % 2 == 0})
+        value_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['value_fee0']
+                                      for num, episode in enumerate(episode_list)
+                                      if episode_reward_df_dic[episode].shape[0] > 0 and num % 2 == 0})
+
+        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
+        title = f'{MODEL_NAME}_validation_r{target_round_n}_{dt_str}'
+        plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
+                  enable_save_plot=False, enable_show_plot=False, do_clr=False)
 
     # 展示训练曲线
     if len(predict_result_dic) > 0:
-        predict_result_df = pd.DataFrame(predict_result_dic).T
-        predict_result_df[['value', 'value_fee0', 'fee_tot']].plot()
-        from ibats_utils.mess import datetime_2_str
-        from datetime import datetime
+        if ax is not None:
+            ax = fig.add_subplot(212)
+        predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'ddqn_lstm2_summary_r{target_round_n}_{dt_str}_trend'
-        plt.suptitle(title)
-        file_path = f'{title}.png'
-        from ibats_common.analysis.plot import plot_or_show
-        plot_or_show(file_name=file_path)
+        title = f'{MODEL_NAME}_summary_r{target_round_n}_{dt_str}_trend'
+        plot_twin(predict_result_df[['value', 'value_fee0', 'fee_tot']], predict_result_df['action_count'],
+                  ax=ax, name=title, y_scales_log=[True, True])
 
 
 if __name__ == "__main__":

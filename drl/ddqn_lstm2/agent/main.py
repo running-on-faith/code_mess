@@ -17,6 +17,7 @@ import numpy as np
 import tensorflow as tf
 
 from ibats_common.example.drl.ddqn_lstm2.agent.framework import Framework
+MODEL_NAME = 'ddqn_lstm2'
 
 
 class Agent(object):
@@ -143,7 +144,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                         #              round_n, episode + 1, num_episodes, episode_step + 1,
                         #              env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                         #              agent.agent.epsilon)
-                        episodes_reward_df_dic[episode] = env.plot_data()
+                        episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
                         log_str1 = f", is append to episodes_reward_df_dic[{episode}] len {len(episodes_reward_df_dic)}"
                     else:
                         log_str1 = ""
@@ -188,7 +189,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                 loss_names.append(new_col_name)
             else:
                 acc_names.append(col_name)
-        title = f'ddqn_lstm2_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
+        title = f'{MODEL_NAME}_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
         fig = plt.figure(figsize=(8, 16))
         ax = fig.add_subplot(211)
         if len(acc_names) == 0 or len(loss_names) == 0:
@@ -203,7 +204,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         ax = None
 
     # 展示训练结果——历史
-    title = f'ddqn_lstm2_r{round_n}_epi{num_episodes}_{dt_str}_list'
+    title = f'{MODEL_NAME}_r{round_n}_epi{num_episodes}_{dt_str}_list'
     value_df = pd.DataFrame({f'{num}_v': df['value']
                              for num, df in episodes_reward_df_dic.items()
                              if df.shape[0] > 0})

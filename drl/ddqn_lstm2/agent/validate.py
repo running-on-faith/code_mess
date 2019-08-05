@@ -25,7 +25,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         states = batch_factors
 
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
-    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
+    agent = Agent(input_shape=batch_factors.shape, action_size=4, dueling=True,
                   gamma=0.3, batch_size=512, memory_size=100000)
     agent.restore_model(path=model_path)
     logger.debug("模型：%s 加载完成，样本内测试[batch=%s]开始", model_path, batch)
@@ -120,7 +120,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         episode_reward_df_dic[episode] = reward_df
 
     import matplotlib.pyplot as plt
-    fig, ax = plt.figure(), None  # figsize=(8, 16)
+    fig, ax = plt.figure(figsize=(8, 12)), None  # figsize=(8, 16)
     if show_plot_together:
         ax = fig.add_subplot(211)
         value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
@@ -148,5 +148,5 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
 
 if __name__ == "__main__":
     # _test_load_predict(target_round_n=4)
-    for _ in range(1, 13):
+    for _ in range(14, 15):
         _test_load_predict(target_round_n=_)
