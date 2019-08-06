@@ -191,9 +191,13 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                                   if df.shape[0] > 0})
     if ax is not None:
         # 说明上面“历史训练曲线” 有输出图像， 因此使用 ax = fig.add_subplot(212)
-        ax = fig.add_subplot(211)
+        ax = fig.add_subplot(212)
 
-    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax)
+    try:
+        plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax)
+    except ValueError:
+        logger.exception('plot_twin error')
+
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}_{num_episodes}.h5"
     agent.save_model(path=path)
@@ -222,7 +226,7 @@ def _test_agent2():
     md_df = md_df.loc[df_index, :]
 
     # success_count, success_max_count, round_n = 0, 10, 0
-    round_max, round_n, increase = 40, 0, 100
+    round_n, round_max, increase = 1, 40, 100
     for round_n in range(round_n, round_max):
         round_n += 1
         # 执行训练

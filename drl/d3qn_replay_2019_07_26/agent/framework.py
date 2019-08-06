@@ -98,7 +98,7 @@ class Framework(object):
             net = Dense(self.action_size, activation='relu')(net)
 
         model = Model(inputs=[input, input2], outputs=net)
-        model.summary()
+        # model.summary()
         model.compile(Adam(self.learning_rate), loss=self._huber_loss,
                       metrics=[metrics.mae, metrics.categorical_accuracy])
         return model
