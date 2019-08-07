@@ -34,10 +34,16 @@ class LogFit(Callback):
 
 class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=False, action_size=4, batch_size=512,
-                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log', epochs=1):
+                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log',
+                 epochs=1, epsilon_decay=0.9990, epsilon_min=0.2):
 
         self.input_shape = input_shape
         self.action_size = action_size
+        self.actions = list(range(action_size))
+        # 2019-07-30
+        # [0.1, 0.1, 0.1, 0.7] 有 50% 概率 4步之内保持同一动作
+        # [0.15, 0.15, 0.15, 0.55] 有 50% 概率 3步之内保持同一动作
+        self.p = [0.10, 0.2, 0.2, 0.50] if action_size == 4 else [0.1, 0.45, 0.45]
         self.batch_size = batch_size
         self.gamma = gamma
         self.learning_rate = learning_rate
@@ -55,8 +61,8 @@ class Framework(object):
         tf.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.3
-        self.epsilon_decay = 0.9998
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
         self.flag_size = 3
         self.model_eval = self._build_model()
         self.has_logged = False
@@ -115,7 +121,8 @@ class Framework(object):
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
+            # return random.randrange(self.action_size)
+            return np.random.choice(self.actions, p=self.p)
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
         return np.argmax(act_values[0])  # returns action
@@ -143,11 +150,11 @@ class Framework(object):
         q_target[index, self.cache_action] = reward_tot
 
         if self.has_logged:
-            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=3,
+            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=self.epochs,
                                 verbose=0, callbacks=[self.fit_callback],
                                 )
         else:
-            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=3,
+            self.model_eval.fit(inputs, q_target, batch_size=self.batch_size, epochs=self.epochs,
                                 verbose=0, callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
                                 )
             self.has_logged = True

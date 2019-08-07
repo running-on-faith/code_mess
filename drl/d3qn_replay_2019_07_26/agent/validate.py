@@ -8,8 +8,8 @@
 @desc    : 
 """
 import logging
-from ibats_common.example.drl.ddqn_lstm2.agent.main import Agent
-MODEL_NAME = 'd3qn_reply'
+
+from ibats_common.example.drl.d3qn_replay_2019_08_07.agent.main import Agent, MODEL_NAME
 
 
 def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False,
@@ -26,7 +26,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
 
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
     agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
-                  gamma=0.3, batch_size=512, memory_size=100000)
+                  gamma=0.3, batch_size=512)
     agent.restore_model(path=model_path)
     logger.debug("模型：%s 加载完成，样本内测试[batch=%s]开始", model_path, batch)
 
@@ -57,7 +57,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
+        title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'{MODEL_NAME}_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
         plot_twin(value_df, md_df["close"], name=title)
 
@@ -110,9 +110,10 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
 
     episode_reward_df_dic = {}
     episode_list.sort()
+    episode_count = len(episode_list)
     for num, episode in enumerate(episode_list, start=1):
         file_path = episode_model_path_dic[episode]
-        logger.debug('%2d ) %4d -> %s', num, episode, file_path)
+        logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
         reward_df = load_predict(md_df, data_factors, tail_n=0, model_path=file_path, key=episode,
                                  show_plot=False)
         # reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
@@ -123,12 +124,16 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
     fig, ax = plt.figure(figsize=(8, 12)), None  #
     if show_plot_together:
         ax = fig.add_subplot(211)
+        # 前两个以及最后一个输出，其他的能整除才输出
+        mod = int(episode_count / 5)
         value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
                                  for num, episode in enumerate(episode_list)
-                                 if episode_reward_df_dic[episode].shape[0] > 0 and num % 2 == 0})
+                                 if episode_reward_df_dic[episode].shape[0] > 0 and (
+                                              num % mod == 0 or num in (1, episode_count - 1))})
         value_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['value_fee0']
                                       for num, episode in enumerate(episode_list)
-                                      if episode_reward_df_dic[episode].shape[0] > 0 and num % 2 == 0})
+                                      if episode_reward_df_dic[episode].shape[0] > 0 and (
+                                              num % mod == 0 or num in (1, episode_count - 1))})
 
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'{MODEL_NAME}_validation_r{target_round_n}_{dt_str}'
@@ -147,4 +152,6 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
 
 
 if __name__ == "__main__":
-    _test_load_predict()
+    # _test_load_predict(target_round_n=9)
+    for _ in range(1, 9):
+        _test_load_predict(target_round_n=_)

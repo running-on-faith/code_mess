@@ -12,10 +12,12 @@ https://github.com/deepmind/sonnet
 dm-sonnet==1.19 对应 tensorflow==1.5.1
 """
 import logging
+
 import numpy as np
 import tensorflow as tf
 
 from ibats_common.example.drl.d3qn_replay_2019_07_26.agent.framework import Framework
+
 MODEL_NAME = 'd3qn_reply'
 
 
@@ -99,7 +101,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
-                  gamma=0.3, batch_size=512, epochs=3)
+                  gamma=0.3, batch_size=512, epochs=3, epsilon_decay=0.998, epsilon_min=0.1)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
 
@@ -127,7 +129,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                 else:
                     log_str1 = ""
 
-                if episode > 0 and episode % 10 == 0:
+                if episode > 0 and episode % 30 == 0:
                     # 每 50 轮，进行一次样本内测试
                     path = f"model/weights_{round_n}_{episode}.h5"
                     agent.save_model(path=path)
@@ -158,13 +160,17 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         # acc_loss_df = pd.DataFrame({'acc': acc_list, 'log(loss)': np.log(loss_list)}).ffill()
         acc_loss_df = pd.DataFrame(logs_list).ffill()
         # 对 loss 数值取 log
+        do_log = False
         acc_names, loss_names = [], []
         for col_name in list(acc_loss_df.columns):
             if col_name == 'loss' or col_name.endswith('error'):
-                new_col_name = f'log({col_name})'
-                acc_loss_df[new_col_name] = np.log(acc_loss_df[col_name])
-                acc_loss_df.drop(col_name, axis=1, inplace=True)
-                loss_names.append(new_col_name)
+                if do_log:
+                    new_col_name = f'log({col_name})'
+                    acc_loss_df[new_col_name] = np.log(acc_loss_df[col_name])
+                    acc_loss_df.drop(col_name, axis=1, inplace=True)
+                    loss_names.append(new_col_name)
+                else:
+                    loss_names.append(col_name)
             else:
                 acc_names.append(col_name)
         title = f'{MODEL_NAME}_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
@@ -173,10 +179,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         if len(acc_names) == 0 or len(loss_names) == 0:
             logger.error('acc_names=%s, loss_names=%s', acc_names, loss_names)
             plot_twin(acc_loss_df, None, name=title,
-                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False)
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[True, True])
         else:
             plot_twin(acc_loss_df[acc_names], acc_loss_df[loss_names], name=title,
-                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False)
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[False, True])
     else:
         fig = None
         ax = None
@@ -206,7 +212,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     return reward_df, path
 
 
-def _test_agent2():
+def _test_agent2(round_from=1, round_max=40, increase=100):
     """测试模型训练过程"""
     import pandas as pd
     logger = logging.getLogger(__name__)
@@ -225,9 +231,7 @@ def _test_agent2():
     # print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
     md_df = md_df.loc[df_index, :]
 
-    # success_count, success_max_count, round_n = 0, 10, 0
-    round_n, round_max, increase = 1, 40, 100
-    for round_n in range(round_n, round_max):
+    for round_n in range(round_from, round_max):
         round_n += 1
         # 执行训练
         num_episodes = 400 + round_n * increase
@@ -239,4 +243,4 @@ def _test_agent2():
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2()
+    _test_agent2(round_from=2, increase=200)
