@@ -19,7 +19,7 @@ class LogFit(Callback):
     def __init__(self):
         super().__init__()
         self.logs_list = []
-        self.acc_list = []
+        self.epsilon = 1.
         self.logger = logging.getLogger(str(self.__class__))
 
     def on_epoch_end(self, epoch, logs=None):
@@ -29,6 +29,7 @@ class LogFit(Callback):
             # self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
             # self.acc_list.append(logs['categorical_accuracy'] if 'categorical_accuracy' in logs else np.nan)
             # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
+            logs['epsilon'] = self.epsilon
             self.logs_list.append(logs)
 
 
@@ -177,6 +178,7 @@ class Framework(object):
             self.has_logged = True
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+            self.fit_callback.epsilon = self.epsilon
 
         return self.fit_logs_list
 

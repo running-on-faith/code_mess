@@ -249,7 +249,6 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
     # success_count, success_max_count, round_n = 0, 10, 0
     for round_n in range(round_from, round_max):
-        round_n += 1
         # 执行训练
         num_episodes = 500 + round_n * increase
         # 2019-08-01
@@ -264,4 +263,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2()
+    _test_agent2(round_from=0)

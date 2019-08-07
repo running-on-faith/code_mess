@@ -232,7 +232,6 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
     md_df = md_df.loc[df_index, :]
 
     for round_n in range(round_from, round_max):
-        round_n += 1
         # 执行训练
         num_episodes = 400 + round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,

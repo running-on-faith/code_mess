@@ -101,7 +101,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
-                  gamma=0.3, batch_size=512, epochs=3, epsilon_decay=0.998, epsilon_min=0.1)
+                  gamma=0.3, batch_size=512, epochs=1, epsilon_decay=0.998, epsilon_min=0.1)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
 
@@ -230,7 +230,6 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
     # success_count, success_max_count, round_n = 0, 10, 0
     for round_n in range(round_from, round_max):
-        round_n += 1
         # 执行训练
         num_episodes = 400 + round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,
@@ -241,4 +240,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2()
+    _test_agent2(round_from=2)
