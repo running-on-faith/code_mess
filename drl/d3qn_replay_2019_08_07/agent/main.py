@@ -160,13 +160,13 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         # acc_loss_df = pd.DataFrame({'acc': acc_list, 'log(loss)': np.log(loss_list)}).ffill()
         acc_loss_df = pd.DataFrame(logs_list).ffill()
         # 对 loss 数值取 log
-        do_log = False
+        do_log = True
         acc_names, loss_names = [], []
         for col_name in list(acc_loss_df.columns):
             if col_name == 'loss' or col_name.endswith('error'):
                 if do_log:
                     new_col_name = f'log({col_name})'
-                    acc_loss_df[new_col_name] = np.log(acc_loss_df[col_name])
+                    acc_loss_df[new_col_name] = np.log(acc_loss_df[col_name] + 1)
                     acc_loss_df.drop(col_name, axis=1, inplace=True)
                     loss_names.append(new_col_name)
                 else:
