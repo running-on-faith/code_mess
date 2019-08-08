@@ -18,6 +18,7 @@ import tensorflow as tf
 
 from ibats_common.example.drl.ddqn_lstm2.agent.framework import Framework
 MODEL_NAME = 'ddqn_lstm2'
+logger = logging.getLogger(__name__)
 
 
 class Agent(object):
@@ -100,7 +101,7 @@ def _test_agent():
 def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, action_size=3):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
-    logger = logging.getLogger(__name__)
+
     # 2019-08-01
     # 降低手续费率 0.003-> 0.001
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
@@ -228,10 +229,15 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     return reward_df, path
 
 
-def _test_agent2(round_from=1, round_max=40, increase=100):
+def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
     """测试模型训练过程"""
+    if cpu_only:
+        from ibats_common.backend.rl.utils import show_device, use_cup_only
+        devices = show_device()
+        logger.debug("%s devices len:%s", type(devices), len(devices))
+        use_cup_only()
+
     import pandas as pd
-    logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 250
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]

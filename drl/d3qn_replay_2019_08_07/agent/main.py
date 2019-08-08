@@ -19,6 +19,7 @@ import tensorflow as tf
 from ibats_common.example.drl.d3qn_replay_2019_08_07.agent.framework import Framework
 
 MODEL_NAME = 'd3qn_reply2'
+logger = logging.getLogger(__name__)
 
 
 class Agent(object):
@@ -98,7 +99,6 @@ def _test_agent():
 def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, action_size=3):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
-    logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
                   gamma=0.3, batch_size=512, epochs=1, epsilon_decay=0.998, epsilon_min=0.1)
@@ -199,7 +199,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         # 说明上面“历史训练曲线” 有输出图像， 因此使用 ax = fig.add_subplot(212)
         ax = fig.add_subplot(212)
 
-    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax)
+    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path='images')
 
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}_{num_episodes}.h5"
@@ -209,10 +209,15 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     return reward_df, path
 
 
-def _test_agent2(round_from=1, round_max=40, increase=100):
+def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
     """测试模型训练过程"""
+    if cpu_only:
+        from ibats_common.backend.rl.utils import show_device, use_cup_only
+        devices = show_device()
+        logger.debug("%s devices len:%s", type(devices), len(devices))
+        use_cup_only()
+
     import pandas as pd
-    logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -240,4 +245,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=2)
+    _test_agent2(round_from=7)

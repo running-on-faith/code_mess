@@ -19,6 +19,7 @@ import tensorflow as tf
 from ibats_common.example.drl.d3qn_replay_2019_07_26.agent.framework import Framework
 
 MODEL_NAME = 'd3qn_reply'
+logger = logging.getLogger(__name__)
 
 
 class Agent(object):
@@ -98,7 +99,6 @@ def _test_agent():
 def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, action_size=3):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
-    logger = logging.getLogger(__name__)
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
     agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
                   gamma=0.3, batch_size=512, epochs=3, epsilon_decay=0.998, epsilon_min=0.1)
@@ -212,10 +212,15 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     return reward_df, path
 
 
-def _test_agent2(round_from=1, round_max=40, increase=100):
+def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
     """测试模型训练过程"""
+    if cpu_only:
+        from ibats_common.backend.rl.utils import show_device, use_cup_only
+        devices = show_device()
+        logger.debug("%s devices len:%s", type(devices), len(devices))
+        use_cup_only()
+
     import pandas as pd
-    logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
