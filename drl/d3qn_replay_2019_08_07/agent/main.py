@@ -255,4 +255,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=7)
+    _test_agent2(round_from=0)
