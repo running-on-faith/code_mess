@@ -9,7 +9,7 @@
 """
 import logging
 
-from ibats_common.example.drl.ddqn_lstm2.agent.main import Agent
+from ibats_common.example.drl.ddqn_lstm2.agent.main import Agent, MODEL_NAME
 
 
 def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False,
@@ -25,7 +25,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         states = batch_factors
 
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
-    agent = Agent(input_shape=batch_factors.shape, action_size=4, dueling=True,
+    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
                   gamma=0.3, batch_size=512, memory_size=100000)
     agent.restore_model(path=model_path)
     logger.debug("模型：%s 加载完成，样本内测试[batch=%s]开始", model_path, batch)
@@ -57,9 +57,9 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'ddqn_lstm2_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
+        title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
-        plot_twin(value_df, md_df["close"], name=title)
+        plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
     logger.debug("模型：%s，样本内测试[batch=%s]完成", model_path, batch)
     return reward_df
@@ -131,7 +131,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
                                       if episode_reward_df_dic[episode].shape[0] > 0 and num % 2 == 0})
 
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'ddqn_lstm2_validation_r{target_round_n}_{dt_str}'
+        title = f'{MODEL_NAME}_validation_r{target_round_n}_{dt_str}'
         plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
                   enable_save_plot=False, enable_show_plot=False, do_clr=False)
 
@@ -141,12 +141,12 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
             ax = fig.add_subplot(212)
         predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'ddqn_lstm2_summary_r{target_round_n}_{dt_str}_trend'
-        plot_twin(predict_result_df[['value', 'value_fee0', 'fee_tot']], predict_result_df['action_count'],
-                  ax=ax, name=title)
+        title = f'{MODEL_NAME}_summary_r{target_round_n}_{dt_str}_trend'
+        plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
+                  ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
 
 
 if __name__ == "__main__":
     # _test_load_predict(target_round_n=4)
-    for _ in range(14, 15):
+    for _ in range(4, 16):
         _test_load_predict(target_round_n=_)

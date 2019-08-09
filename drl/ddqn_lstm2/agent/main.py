@@ -200,10 +200,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         if len(acc_names) == 0 or len(loss_names) == 0:
             logger.error('acc_names=%s, loss_names=%s', acc_names, loss_names)
             plot_twin(acc_loss_df, None, name=title,
-                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[True, True])
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[True, False])
         else:
             plot_twin(acc_loss_df[acc_names], acc_loss_df[loss_names], name=title,
-                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[False, True])
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[False, False])
     else:
         fig = None
         ax = None
@@ -220,7 +220,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         # 说明上面“历史训练曲线” 有输出图像， 因此使用 ax = fig.add_subplot(212)
         ax = fig.add_subplot(212)
 
-    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax)
+    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path='images')
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}_{num_episodes}.h5"
     agent.save_model(path=path)

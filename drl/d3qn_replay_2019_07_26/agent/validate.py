@@ -59,7 +59,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'{MODEL_NAME}_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
-        plot_twin(value_df, md_df["close"], name=title)
+        plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
     logger.debug("模型：%s，样本内测试[batch=%s]完成", model_path, batch)
     return reward_df
@@ -138,7 +138,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'{MODEL_NAME}_validation_r{target_round_n}_{dt_str}'
         plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
-                  enable_save_plot=False, enable_show_plot=False, do_clr=False)
+                  enable_save_plot=False, enable_show_plot=False, do_clr=False, y_scales_log=[True, True])
 
     # 展示训练曲线
     if len(predict_result_dic) > 0:
@@ -147,11 +147,11 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'{MODEL_NAME}_summary_r{target_round_n}_{dt_str}_trend'
-        plot_twin(predict_result_df[['value', 'value_fee0', 'fee_tot']], predict_result_df['action_count'],
-                  ax=ax, name=title, y_scales_log=[True, True])
+        plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
+                  ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
 
 
 if __name__ == "__main__":
     # _test_load_predict(target_round_n=9)
-    for _ in range(1, 9):
+    for _ in range(1, 8):
         _test_load_predict(target_round_n=_)

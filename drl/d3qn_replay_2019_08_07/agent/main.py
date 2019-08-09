@@ -179,10 +179,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         if len(acc_names) == 0 or len(loss_names) == 0:
             logger.error('acc_names=%s, loss_names=%s', acc_names, loss_names)
             plot_twin(acc_loss_df, None, name=title,
-                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[True, True])
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[True, False])
         else:
             plot_twin(acc_loss_df[acc_names], acc_loss_df[loss_names], name=title,
-                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[False, True])
+                      ax=ax, enable_show_plot=False, enable_save_plot=False, do_clr=False, y_scales_log=[False, False])
     else:
         fig = None
         ax = None
