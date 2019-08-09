@@ -9,7 +9,7 @@
 """
 import logging
 
-from ibats_common.example.drl.d3qn_replay_2019_08_07.agent.main import Agent, MODEL_NAME
+from ibats_common.example.drl.d3qn_replay_2019_08_07.agent.main import get_agent, MODEL_NAME
 
 
 def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False,
@@ -25,8 +25,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         states = batch_factors
 
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
-    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
-                  gamma=0.3, batch_size=512)
+    agent = get_agent(input_shape=batch_factors.shape)
     agent.restore_model(path=model_path)
     logger.debug("模型：%s 加载完成，样本内测试[batch=%s]开始", model_path, batch)
 

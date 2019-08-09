@@ -10,6 +10,12 @@
 pip install graphs dm-sonnet==1.19
 https://github.com/deepmind/sonnet
 dm-sonnet==1.19 对应 tensorflow==1.5.1
+
+2019-08-01
+action_size 3 -> 4
+
+2019-08-08
+action_size 4 -> 2 多空 only
 """
 import logging
 
@@ -17,7 +23,8 @@ import numpy as np
 import tensorflow as tf
 
 from ibats_common.example.drl.ddqn_lstm2.agent.framework import Framework
-MODEL_NAME = 'ddqn_lstm2'
+
+MODEL_NAME = 'd3qn_lstm_actoin2'
 logger = logging.getLogger(__name__)
 
 
@@ -98,15 +105,33 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
-def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, action_size=3):
+def get_agent(action_size=2, dueling=True, gamma=0.3, batch_size=512, memory_size=20000, epsilon_min=0.1,
+              epsilon_decay=0.9990, **kwargs):
+    """
+    2019-08-08 尝试使用 action_size=2 多空only进行训练
+    :param action_size:
+    :param dueling:
+    :param gamma:
+    :param batch_size:
+    :param memory_size:
+    :param epsilon_min:
+    :param epsilon_decay:
+    :param kwargs:
+    :return:
+    """
+    agent = Agent(action_size=action_size, dueling=dueling, gamma=gamma, batch_size=batch_size, memory_size=memory_size,
+                  epsilon_min=epsilon_min, epsilon_decay=epsilon_decay, **kwargs)
+    return agent
+
+
+def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
 
     # 2019-08-01
     # 降低手续费率 0.003-> 0.001
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
-    agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
-                  gamma=0.3, batch_size=512, memory_size=20000, epsilon_min=0.1, epsilon_decay=0.9990)
+    agent = get_agent(input_shape=batch_factors.shape)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
 
@@ -139,13 +164,15 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                 # print('global_step=%d, episode_step=%d, agent.update_eval()' % (global_step, episode_step))
 
                 if done:
+                    reward_df = env.plot_data()
+
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         # logger.debug("episodes_train.append round=%d, episode=%4d/%4d,"
                         #              " %4d/%4d, 净值=%.4f, epsilon=%.5f",
                         #              round_n, episode + 1, num_episodes, episode_step + 1,
                         #              env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                         #              agent.agent.epsilon)
-                        episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
+                        episodes_reward_df_dic[episode] = reward_df[['value', 'value_fee0']]
                         log_str1 = f", is append to episodes_reward_df_dic[{episode}] len {len(episodes_reward_df_dic)}"
                     else:
                         log_str1 = ""
@@ -164,6 +191,10 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                                      round_n, episode + 1, num_episodes, episode_step + 1,
                                      env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                                      agent.agent.epsilon)
+
+                    if reward_df.iloc[-1, :]['value'] == reward_df.iloc[-1, :]['value_fee0'] == env.A.init_cash:
+                        logger.warning('算法优化陷入0操作陷阱，退出此轮优化')
+                        break
 
                     break
 
@@ -257,16 +288,14 @@ def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = 500 + round_n * increase
-        # 2019-08-01
-        # action_size 3 -> 4
+
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
-                         n_episode_pre_record=int(num_episodes / 6),
-                         action_size=4,
+                         n_episode_pre_record=int(num_episodes / 6)
                          )
         logger.debug('round_n=%d, final status:\n%s', round_n, df.iloc[-1, :])
 
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=16)
+    _test_agent2(round_from=0)

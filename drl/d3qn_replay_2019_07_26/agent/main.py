@@ -10,6 +10,10 @@
 pip install graphs dm-sonnet==1.19
 https://github.com/deepmind/sonnet
 dm-sonnet==1.19 对应 tensorflow==1.5.1
+
+2019-08-08
+action_size 4 -> 2 多空 only
+
 """
 import logging
 
@@ -18,7 +22,7 @@ import tensorflow as tf
 
 from ibats_common.example.drl.d3qn_replay_2019_07_26.agent.framework import Framework
 
-MODEL_NAME = 'd3qn_reply'
+MODEL_NAME = 'd3qn_reply_action2'
 logger = logging.getLogger(__name__)
 
 
@@ -96,12 +100,18 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
+def get_agent(action_size=2, dueling=True, gamma=0.3, batch_size=512, epochs=3, epsilon_decay=0.998, epsilon_min=0.1,
+              **kwargs):
+    agent = Agent(action_size=action_size, dueling=dueling, gamma=gamma, batch_size=batch_size,
+                  epsilon_min=epsilon_min, epochs=epochs, epsilon_decay=epsilon_decay, **kwargs)
+    return agent
+
+
 def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, action_size=3):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
-    agent = Agent(input_shape=batch_factors.shape, action_size=action_size, dueling=True,
-                  gamma=0.3, batch_size=512, epochs=3, epsilon_decay=0.998, epsilon_min=0.1)
+    agent = get_agent(input_shape=batch_factors.shape)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
 

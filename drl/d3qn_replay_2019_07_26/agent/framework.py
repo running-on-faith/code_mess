@@ -40,11 +40,21 @@ class Framework(object):
 
         self.input_shape = input_shape
         self.action_size = action_size
-        self.actions = list(range(action_size))
+        if action_size == 2:
+            self.actions = [1, 2]
+        else:
+            self.actions = list(range(action_size))
         # 2019-07-30
         # [0.1, 0.1, 0.1, 0.7] 有 50% 概率 4步之内保持同一动作
         # [0.15, 0.15, 0.15, 0.55] 有 50% 概率 3步之内保持同一动作
-        self.p = [0.10, 0.2, 0.2, 0.50] if action_size == 4 else [0.1, 0.45, 0.45]
+        # 2019-08-08
+        # 增加 action_size == 2 多空操作 (1/2)，无空仓
+        if action_size == 4:
+            self.p = [0.10, 0.2, 0.2, 0.50]
+        elif action_size == 3:
+            self.p = [0.1, 0.45, 0.45]
+        else:
+            self.p = [1/action_size for _ in range(action_size)]
         self.batch_size = batch_size
         self.gamma = gamma
         self.learning_rate = learning_rate
@@ -86,8 +96,8 @@ class Framework(object):
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
-        net = LSTM(self.input_shape[-1] * 2, return_sequences=True, activation='relu')(input)
-        net = LSTM(self.input_shape[-1], return_sequences=False, activation='relu')(net)
+        net = LSTM(self.input_shape[-1] * 2, return_sequences=True, activation='linear')(input)
+        net = LSTM(self.input_shape[-1], return_sequences=False, activation='linear')(net)
         net = Dense(self.input_shape[-1] // 2)(net)
         net = Dropout(0.4)(net)
         # net = Dense(self.input_shape[-1])(net)    # 减少一层，降低网络复杂度
@@ -95,30 +105,37 @@ class Framework(object):
         # net = Dense(self.action_size * 4, activation='relu')(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
         net = concatenate([net, input2])
-        net = Dense(self.action_size * 2 + self.flag_size, activation='relu')(net)
+        net = Dense((self.input_shape[-1] // 2 + self.flag_size) // 2, activation='linear')(net)
         net = Dropout(0.4)(net)
         if self.dueling:
             net = Dense(self.action_size + 1, activation='linear')(net)
             net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
                          output_shape=(self.action_size,))(net)
         else:
-            net = Dense(self.action_size, activation='relu')(net)
+            net = Dense(self.action_size, activation='linear')(net)
 
         model = Model(inputs=[input, input2], outputs=net)
-        # model.summary()
         model.compile(Adam(self.learning_rate), loss=self._huber_loss,
-                      metrics=[metrics.mae, metrics.categorical_accuracy])
+                      metrics=[metrics.mae, metrics.categorical_accuracy]
+                      )
+        # model.summary()
         return model
 
     def get_deterministic_policy_batch(self, inputs):
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
-        return np.argmax(act_values, axis=1)
+        if self.action_size == 2:
+            return np.argmax(act_values, axis=1) + 1
+        else:
+            return np.argmax(act_values, axis=1)
 
     def get_deterministic_policy(self, inputs):
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
-        return np.argmax(act_values[0])  # returns action
+        if self.action_size == 2:
+            return np.argmax(act_values[0]) + 1  # returns action
+        else:
+            return np.argmax(act_values[0])  # returns action
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
@@ -126,12 +143,19 @@ class Framework(object):
             return np.random.choice(self.actions, p=self.p)
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
-        return np.argmax(act_values[0])  # returns action
+        if self.action_size == 2:
+            return np.argmax(act_values[0]) + 1  # returns action
+        else:
+            return np.argmax(act_values[0])  # returns action
 
     # update experience replay pool
     def update_cache(self, state, action, reward, next_state, done):
         self.cache_state.append(state)
-        self.cache_action.append(action)
+        # 由于 self.action_size == 2 的情况下 action 只有 0,1 两种状态，而参数action 是 1,2 因此需要 - 1 操作
+        if self.action_size == 2:
+            self.cache_action.append(action - 1)
+        else:
+            self.cache_action.append(action)
         self.cache_reward.append(reward)
         self.cache_next_state.append(next_state)
         self.cache_done.append(done)
@@ -202,9 +226,10 @@ def _test_calc_tot_reward():
 
 def _test_show_model():
     from keras.utils import plot_model
-    agent = Framework(input_shape=[None, 250, 78], action_size=3, dueling=True,
+    action_size = 2
+    agent = Framework(input_shape=[None, 250, 78], action_size=action_size, dueling=True,
                       gamma=0.3, batch_size=512)
-    file_path = 'model.png'
+    file_path = f'model action_size_{action_size}.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
     open_file_with_system_app(file_path)
