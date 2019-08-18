@@ -264,8 +264,10 @@ def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
     """测试模型训练过程"""
     if cpu_only:
         from ibats_common.backend.rl.utils import show_device, use_cup_only
-        devices = show_device()
-        logger.debug("%s devices len:%s", type(devices), len(devices))
+        # devices = show_device()
+        # logger.debug("%s devices len:%s", type(devices), len(devices))
+        # for num, d in enumerate(devices):
+        #     logger.debug("%d) %s", num, d)
         use_cup_only()
 
     import pandas as pd
@@ -298,4 +300,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=0)
+    _test_agent2(round_from=0, cpu_only=True)

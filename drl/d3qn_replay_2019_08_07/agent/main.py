@@ -15,6 +15,12 @@ dm-sonnet==1.19 对应 tensorflow==1.5.1
 action_size 4 -> 2 多空 only
 
 """
+from ibats_common.backend.rl.utils import show_device, use_cup_only
+
+# devices = show_device()
+# logger.debug("%s devices len:%s", type(devices), len(devices))
+use_cup_only()
+
 import logging
 
 import numpy as np
@@ -43,8 +49,8 @@ class Agent(object):
     def choose_action_deterministic(self, inputs):
         return self.agent.get_deterministic_policy(inputs)
 
-    def choose_action_deterministic_batch(self, inputs):
-        return self.agent.get_deterministic_policy_batch(inputs)
+    def choose_action_deterministic_batch(self, inputs, flag_size=None):
+        return self.agent.get_deterministic_policy_batch(inputs, flag_size)
 
     def choose_action_stochastic(self, inputs):
         return self.agent.get_stochastic_policy(inputs)
@@ -100,18 +106,18 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
-def get_agent(action_size=3, dueling=True, gamma=0.3, batch_size=512, epochs=1, epsilon_decay=0.998, epsilon_min=0.1,
+def get_agent(action_size=3, dueling=True, gamma=0.3, batch_size=512, epochs=1, epsilon_decay=0.998, epsilon_min=0.05,
               **kwargs):
     agent = Agent(action_size=action_size, dueling=dueling, gamma=gamma, batch_size=batch_size,
                   epsilon_min=epsilon_min, epochs=epochs, epsilon_decay=epsilon_decay, **kwargs)
     return agent
 
 
-def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40):
+def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, env_kwargs={}, agent_kwargs={}):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
-    env = Account(md_df, data_factors=batch_factors, state_with_flag=True, fee_rate=0.001)
-    agent = Agent(input_shape=batch_factors.shape)
+    env = Account(md_df, data_factors=batch_factors, **env_kwargs)
+    agent = Agent(input_shape=batch_factors.shape, **agent_kwargs)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
 
@@ -219,17 +225,11 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     return reward_df, path
 
 
-def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
+def _test_agent2(round_from=1, round_max=40, increase=100):
     """测试模型训练过程"""
-    if cpu_only:
-        from ibats_common.backend.rl.utils import show_device, use_cup_only
-        devices = show_device()
-        logger.debug("%s devices len:%s", type(devices), len(devices))
-        use_cup_only()
-
     import pandas as pd
     # 建立相关数据
-    n_step = 60
+    n_step = 120
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
@@ -243,16 +243,18 @@ def _test_agent2(round_from=1, round_max=40, increase=100, cpu_only=False):
     # print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
     md_df = md_df.loc[df_index, :]
 
+    env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
+    agent_kwargs = dict(batch_size=4096)
     # success_count, success_max_count, round_n = 0, 10, 0
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = 400 + round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
-                         n_episode_pre_record=int(num_episodes / 6))
+                         n_episode_pre_record=int(num_episodes / 6), env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
         logger.debug('round_n=%d, final status:\n%s', round_n, df.iloc[-1, :])
 
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=0)
+    _test_agent2(round_from=0, increase=500)
