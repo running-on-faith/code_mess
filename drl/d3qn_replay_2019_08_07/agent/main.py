@@ -3,7 +3,7 @@
 """
 @author  : MG
 @Time    : 2019/6/28 17:19
-@File    : __init__.py.py
+@File    : main.py
 @contact : mmmaaaggg@163.com
 @desc    :
 需要安装相关包
