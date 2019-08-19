@@ -3,7 +3,7 @@
 """
 @author  : MG
 @Time    : 2019/6/28 17:19
-@File    : __init__.py.py
+@File    : main.py
 @contact : mmmaaaggg@163.com
 @desc    :
 需要安装相关包
@@ -229,7 +229,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
     """测试模型训练过程"""
     import pandas as pd
     # 建立相关数据
-    n_step = 120
+    n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
@@ -245,10 +245,10 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
     # success_count, success_max_count, round_n = 0, 10, 0
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-    agent_kwargs = dict(batch_size=16384)
+    agent_kwargs = dict(batch_size=4096)
     for round_n in range(round_from, round_max):
         # 执行训练
-        num_episodes = 1600 + round_n * increase
+        num_episodes = 2000 + round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
                          n_episode_pre_record=int(num_episodes / 6),

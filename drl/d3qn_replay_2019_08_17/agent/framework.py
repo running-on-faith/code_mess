@@ -11,7 +11,7 @@
 # 选取正向奖励与负向奖励 50：50的方式(以后再实现）
 在 ibats_common/example/drl/d3qn_replay_2019_08_07/agent/framework.py 基础上增加对 reward 进行调整
 1）将最近的 max_epsilon_num_4_train 轮训练集作为训练集（而不是仅用当前训练结果作为训练集）
-2）为了提高训练速度，直接进行批量预测
+2）训练集超过 max_epsilon_num_4_train 时，将 tot_reward 最低者淘汰，不断保留高 tot_reward 训练集
 """
 import logging
 
@@ -61,6 +61,7 @@ class Framework(object):
         self.cum_reward_back_step = cum_reward_back_step
         self.max_epsilon_num_4_train = max_epsilon_num_4_train
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
+        self.cache_list_tot_reward = []
         # 2019-07-30
         # [0.1, 0.1, 0.1, 0.7] 有 50% 概率 4步之内保持同一动作
         # [0.15, 0.15, 0.15, 0.55] 有 50% 概率 3步之内保持同一动作
@@ -185,6 +186,13 @@ class Framework(object):
         # 以平仓动作为标识，将持仓期间的收益进行反向传递
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
         reward_tot = calc_cum_reward(self.cache_reward, self.cum_reward_back_step)
+        tot_reward = np.sum(self.cache_reward)
+        self.cache_list_tot_reward.append(tot_reward)
+        if len(self.cache_list_tot_reward) > self.max_epsilon_num_4_train:
+            pop_index = int(np.argmin(self.cache_list_tot_reward))
+            self.cache_list_tot_reward.pop(pop_index)
+        else:
+            pop_index = None
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
         _flag = to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)
@@ -195,14 +203,12 @@ class Framework(object):
         q_target[index, self.cache_action] = reward_tot
         # 加入缓存，整理缓存
         self.cache_list_state.append(_state)
-        if len(self.cache_list_state) > self.max_epsilon_num_4_train:
-            self.cache_list_state = self.cache_list_state[-self.max_epsilon_num_4_train:]
         self.cache_list_flag.append(_flag)
-        if len(self.cache_list_flag) > self.max_epsilon_num_4_train:
-            self.cache_list_flag = self.cache_list_flag[-self.max_epsilon_num_4_train:]
         self.cache_list_q_target.append(q_target)
-        if len(self.cache_list_q_target) > self.max_epsilon_num_4_train:
-            self.cache_list_q_target = self.cache_list_q_target[-self.max_epsilon_num_4_train:]
+        if pop_index is not None:
+            self.cache_list_state.pop(pop_index)
+            self.cache_list_flag.pop(pop_index)
+            self.cache_list_q_target.pop(pop_index)
 
         _state = np.concatenate(self.cache_list_state)
         _flag = np.concatenate(self.cache_list_flag)
