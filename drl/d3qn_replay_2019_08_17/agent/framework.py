@@ -12,6 +12,7 @@
 在 ibats_common/example/drl/d3qn_replay_2019_08_07/agent/framework.py 基础上增加对 reward 进行调整
 1）将最近的 max_epsilon_num_4_train 轮训练集作为训练集（而不是仅用当前训练结果作为训练集）
 2）训练集超过 max_epsilon_num_4_train 时，将 tot_reward 最低者淘汰，不断保留高 tot_reward 训练集
+3) 修改优化器为 Nadam： Nesterov Adam optimizer: Adam本质上像是带有动量项的RMSprop，Nadam就是带有Nesterov 动量的Adam RMSprop
 """
 import logging
 
@@ -22,7 +23,7 @@ from keras import metrics, backend as K
 from keras.callbacks import TensorBoard, Callback
 from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
 from keras.models import Model
-from keras.optimizers import Adam
+from keras.optimizers import Adam, Nadam
 from keras.utils import to_categorical
 
 _EPSILON = 1e-6  # avoid nan
@@ -102,15 +103,6 @@ class Framework(object):
         """return acc_list, loss_list"""
         return self.fit_callback.logs_list
 
-    def _huber_loss(self, y_true, y_pred, clip_delta=1.0):
-        error = y_true - y_pred
-        cond = K.abs(error) <= clip_delta
-
-        squared_loss = 0.5 * K.square(error)
-        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
-
-        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
-
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
@@ -133,7 +125,17 @@ class Framework(object):
             net = Dense(self.action_size, activation='linear')(net)
 
         model = Model(inputs=[input, input2], outputs=net)
-        model.compile(Adam(self.learning_rate), loss=self._huber_loss,
+
+        def _huber_loss(y_true, y_pred, clip_delta=1.0):
+            error = y_true - y_pred
+            cond = K.abs(error) <= clip_delta
+
+            squared_loss = 0.5 * K.square(error)
+            quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+            return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+        model.compile(Nadam(self.learning_rate), loss=_huber_loss,
                       metrics=[metrics.mae, metrics.categorical_accuracy]
                       )
         # model.summary()

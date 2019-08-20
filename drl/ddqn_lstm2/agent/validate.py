@@ -119,7 +119,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         episode_reward_df_dic[episode] = reward_df
 
     import matplotlib.pyplot as plt
-    fig, ax = plt.figure(figsize=(8, 12)), None  # figsize=(8, 16)
+    fig, ax = plt.figure(figsize=(12, 16)), None  # figsize=(8, 16)
     if show_plot_together:
         ax = fig.add_subplot(211)
         value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']

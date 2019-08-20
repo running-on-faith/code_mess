@@ -106,7 +106,7 @@ def _test_agent():
     reward_df.to_csv('reward_df.csv')
 
 
-def get_agent(action_size=3, dueling=True, gamma=0.3, batch_size=512, epochs=1, epsilon_decay=0.998, epsilon_min=0.05,
+def get_agent(action_size=3, dueling=True, gamma=0.3, batch_size=512, epochs=1, epsilon_decay=0.995, epsilon_min=0.03,
               **kwargs):
     agent = Agent(action_size=action_size, dueling=dueling, gamma=gamma, batch_size=batch_size,
                   epsilon_min=epsilon_min, epochs=epochs, epsilon_decay=epsilon_decay, **kwargs)
@@ -145,7 +145,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                 else:
                     log_str1 = ""
 
-                if episode > 0 and episode % 30 == 0:
+                if episode > 0 and episode % 50 == 0:
                     # 每 50 轮，进行一次样本内测试
                     path = f"model/weights_{round_n}_{episode}.h5"
                     agent.save_model(path=path)
@@ -190,7 +190,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
             else:
                 acc_names.append(col_name)
         title = f'{MODEL_NAME}_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
-        fig = plt.figure(figsize=(8, 16))
+        fig = plt.figure(figsize=(12, 16))
         ax = fig.add_subplot(211)
         if len(acc_names) == 0 or len(loss_names) == 0:
             logger.error('acc_names=%s, loss_names=%s', acc_names, loss_names)
@@ -229,7 +229,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
     """测试模型训练过程"""
     import pandas as pd
     # 建立相关数据
-    n_step = 120
+    n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
@@ -244,11 +244,11 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
     md_df = md_df.loc[df_index, :]
 
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-    agent_kwargs = dict(batch_size=4096)
+    agent_kwargs = dict(batch_size=4096, cum_reward_back_step=10)
     # success_count, success_max_count, round_n = 0, 10, 0
     for round_n in range(round_from, round_max):
         # 执行训练
-        num_episodes = 400 + round_n * increase
+        num_episodes = -4800 + round_n * increase
         df, path = train(md_df, batch_factors, round_n=round_n,
                          num_episodes=num_episodes,
                          n_episode_pre_record=int(num_episodes / 6), env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
@@ -257,4 +257,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=0, increase=500)
+    _test_agent2(round_from=26, increase=300)

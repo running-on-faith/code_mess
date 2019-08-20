@@ -226,7 +226,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
             else:
                 acc_names.append(col_name)
         title = f'{MODEL_NAME}_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
-        fig = plt.figure(figsize=(8, 16))
+        fig = plt.figure(figsize=(12, 16))
         ax = fig.add_subplot(211)
         if len(acc_names) == 0 or len(loss_names) == 0:
             logger.error('acc_names=%s, loss_names=%s', acc_names, loss_names)
