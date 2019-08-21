@@ -120,7 +120,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         episode_reward_df_dic[episode] = reward_df
 
     import matplotlib.pyplot as plt
-    fig, ax = plt.figure(figsize=(8, 12)), None  #
+    fig, ax = plt.figure(figsize=(10, 16)), None  #
     if show_plot_together:
         ax = fig.add_subplot(211)
         # 前两个以及最后一个输出，其他的能整除才输出
@@ -151,6 +151,6 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
 
 
 if __name__ == "__main__":
-    # _test_load_predict(target_round_n=9)
-    for _ in range(1, 11):
-        _test_load_predict(target_round_n=_)
+    _test_load_predict(target_round_n=0)
+    # for _ in range(1, 11):
+    #     _test_load_predict(target_round_n=_)

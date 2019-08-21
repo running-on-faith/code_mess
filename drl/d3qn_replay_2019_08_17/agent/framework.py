@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 """
 @author  : MG
-@Time    : 2019/8/7 10:19
+@Time    : 2019/8/17 10:19
 @File    : framework.py
 @contact : mmmaaaggg@163.com
 @desc    :
@@ -13,6 +13,7 @@
 1）将最近的 max_epsilon_num_4_train 轮训练集作为训练集（而不是仅用当前训练结果作为训练集）
 2）训练集超过 max_epsilon_num_4_train 时，将 tot_reward 最低者淘汰，不断保留高 tot_reward 训练集
 3) 修改优化器为 Nadam： Nesterov Adam optimizer: Adam本质上像是带有动量项的RMSprop，Nadam就是带有Nesterov 动量的Adam RMSprop
+2019-08-21
 4) 有 random_drop_best_cache_rate 的几率 随机丢弃 cache 防止最好的用例不断累积造成过度优化
 5) EpsilonMaker 提供衰减的sin波动学习曲线
 """
@@ -27,8 +28,6 @@ from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
 from keras.models import Model
 from keras.optimizers import Adam, Nadam
 from keras.utils import to_categorical
-
-_EPSILON = 1e-6  # avoid nan
 
 
 class LogFit(Callback):
@@ -103,7 +102,7 @@ class Framework(object):
         elif action_size == 3:
             self.p = [0.1, 0.45, 0.45]
         else:
-            self.p = [1/action_size for _ in range(action_size)]
+            self.p = None
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.tensorboard_log_dir = tensorboard_log_dir
@@ -119,9 +118,7 @@ class Framework(object):
         K.clear_session()
         tf.reset_default_graph()
 
-        self.sin_step = sin_step
-        self.sin_step_tot = 0
-        self.epsilon = self.epsilon_init = 1.0  # exploration rate
+        self.epsilon = 1.0  # exploration rate
         # self.epsilon_min = epsilon_min
         # self.epsilon_decay = epsilon_decay
         self.epsilon_maker = EpsilonMaker(epsilon_decay, sin_step, epsilon_min,
@@ -170,7 +167,7 @@ class Framework(object):
             return K.mean(tf.where(cond, squared_loss, quadratic_loss))
 
         model.compile(Nadam(self.learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.categorical_accuracy]
+                      metrics=[metrics.mae, metrics.mean_squared_error, metrics.categorical_accuracy]
                       )
         # model.summary()
         return model
@@ -223,8 +220,7 @@ class Framework(object):
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
         reward_tot = calc_cum_reward(self.cache_reward, self.cum_reward_back_step)
         tot_reward = np.sum(self.cache_reward)
-        self.cache_list_tot_reward.append(tot_reward)
-        if len(self.cache_list_tot_reward) > self.max_epsilon_num_4_train:
+        if len(self.cache_list_tot_reward) >= self.max_epsilon_num_4_train:
             if np.random.random() < self.random_drop_best_cache_rate:
                 # 有一定几率随机drop
                 pop_index = np.random.randint(0, self.max_epsilon_num_4_train)
@@ -233,6 +229,7 @@ class Framework(object):
             self.cache_list_tot_reward.pop(pop_index)
         else:
             pop_index = None
+        self.cache_list_tot_reward.append(tot_reward)
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
         _flag = to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)
@@ -336,7 +333,7 @@ def _test_show_model():
     from keras.utils import plot_model
     action_size = 2
     agent = Framework(input_shape=[None, 250, 78], action_size=action_size, dueling=True,
-                      gamma=0.3, batch_size=16384)
+                      batch_size=16384)
     file_path = f'model action_size_{action_size}.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
