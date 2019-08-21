@@ -13,6 +13,8 @@
 1）将最近的 max_epsilon_num_4_train 轮训练集作为训练集（而不是仅用当前训练结果作为训练集）
 2）训练集超过 max_epsilon_num_4_train 时，将 tot_reward 最低者淘汰，不断保留高 tot_reward 训练集
 3) 修改优化器为 Nadam： Nesterov Adam optimizer: Adam本质上像是带有动量项的RMSprop，Nadam就是带有Nesterov 动量的Adam RMSprop
+4) 有 random_drop_best_cache_rate 的几率 随机丢弃 cache 防止最好的用例不断累积造成过度优化
+5) EpsilonMaker 提供衰减的sin波动学习曲线
 """
 import logging
 
@@ -48,10 +50,38 @@ class LogFit(Callback):
             self.logs_list.append(logs)
 
 
+class EpsilonMaker:
+    def __init__(self, epsilon_decay=0.996, sin_step=0.05, epsilon_min=0.05, epsilon_sin_max=0.2):
+        self.sin_step = sin_step
+        self.sin_step_tot = 0
+        self.epsilon = self.epsilon_init = 1.0  # exploration rate
+        self.epsilon_sin_max = epsilon_sin_max
+        self.epsilon_min = epsilon_min
+        self.epsilon_down = self.epsilon  # self.epsilon_down *= self.epsilon_decay
+        self.epsilon_sin = 0
+        self.sin_height = self.epsilon_sin_max - self.epsilon_min
+        self.epsilon_decay = epsilon_decay
+
+    @property
+    def epsilon_next(self):
+        if self.epsilon_down > self.epsilon_min:
+            self.epsilon_down *= self.epsilon_decay
+        self.epsilon_sin = (np.sin(self.sin_step_tot * self.sin_step) + 1) / 2 * self.sin_height
+        self.sin_step_tot += 1
+        self.epsilon = self.epsilon_down + self.epsilon_sin
+        if self.epsilon > self.epsilon_init:
+            self.epsilon = self.epsilon_init
+        elif self.epsilon < self.epsilon_min:
+            self.epsilon = self.epsilon_min
+
+        return self.epsilon
+
+
 class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
-                 gamma=0.95, learning_rate=0.001, tensorboard_log_dir='./log',
-                 epochs=1, epsilon_decay=0.9990, epsilon_min=0.2, cum_reward_back_step=5, max_epsilon_num_4_train=5):
+                 learning_rate=0.001, tensorboard_log_dir='./log',
+                 epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05,
+                 cum_reward_back_step=5, max_epsilon_num_4_train=5):
 
         self.input_shape = input_shape
         self.action_size = action_size
@@ -75,7 +105,6 @@ class Framework(object):
         else:
             self.p = [1/action_size for _ in range(action_size)]
         self.batch_size = batch_size
-        self.gamma = gamma
         self.learning_rate = learning_rate
         self.tensorboard_log_dir = tensorboard_log_dir
         self.dueling = dueling
@@ -90,9 +119,14 @@ class Framework(object):
         K.clear_session()
         tf.reset_default_graph()
 
-        self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = epsilon_min
-        self.epsilon_decay = epsilon_decay
+        self.sin_step = sin_step
+        self.sin_step_tot = 0
+        self.epsilon = self.epsilon_init = 1.0  # exploration rate
+        # self.epsilon_min = epsilon_min
+        # self.epsilon_decay = epsilon_decay
+        self.epsilon_maker = EpsilonMaker(epsilon_decay, sin_step, epsilon_min,
+                                          epsilon_sin_max=1 / (cum_reward_back_step * 2))
+        self.random_drop_best_cache_rate = 0.01
         self.flag_size = 3
         self.model_eval = self._build_model()
         self.has_logged = False
@@ -191,7 +225,11 @@ class Framework(object):
         tot_reward = np.sum(self.cache_reward)
         self.cache_list_tot_reward.append(tot_reward)
         if len(self.cache_list_tot_reward) > self.max_epsilon_num_4_train:
-            pop_index = int(np.argmin(self.cache_list_tot_reward))
+            if np.random.random() < self.random_drop_best_cache_rate:
+                # 有一定几率随机drop
+                pop_index = np.random.randint(0, self.max_epsilon_num_4_train)
+            else:
+                pop_index = int(np.argmin(self.cache_list_tot_reward))
             self.cache_list_tot_reward.pop(pop_index)
         else:
             pop_index = None
@@ -225,9 +263,14 @@ class Framework(object):
                                 verbose=0, callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
                                 )
             self.has_logged = True
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-            self.fit_callback.epsilon = self.epsilon
+
+        # 计算 epsilon
+        # 2019-8-21 用衰减的sin函数作为学习曲线
+        self.fit_callback.epsilon = self.epsilon = self.epsilon_maker.epsilon_next
+        # 原来的 epsilon 计算函数
+        # if self.epsilon > self.epsilon_min:
+        #     self.epsilon *= self.epsilon_decay
+        #     self.fit_callback.epsilon = self.epsilon
 
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
@@ -300,7 +343,17 @@ def _test_show_model():
     open_file_with_system_app(file_path)
 
 
+def _test_epsilon_maker():
+    import matplotlib.pyplot as plt
+    epsilon_maker = EpsilonMaker(sin_step=0.05, epsilon_decay=0.996, epsilon_min=0.05)
+    epsilon_list = [epsilon_maker.epsilon_next for _ in range(2000)]
+    plt.plot(epsilon_list)
+    plt.suptitle(f'epsilon_decay={epsilon_maker.epsilon_decay:.3f} sin_step={epsilon_maker.sin_step:.2f}, epsilon_min={epsilon_maker.epsilon_min:.2f}')
+    plt.show()
+
+
 if __name__ == '__main__':
     # _test_calc_tot_reward()
-    _test_show_model()
+    # _test_show_model()
     # _test_calc_cum_reward()
+    _test_epsilon_maker()
