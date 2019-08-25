@@ -12,7 +12,7 @@ import logging
 from ibats_common.example.drl.d3qn_replay_2019_08_17.agent.main import get_agent, MODEL_NAME
 
 
-def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5", batch=False,
+def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5",
                  key=None):
     """加载模型，进行样本内训练"""
     import numpy as np
@@ -27,28 +27,17 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
     env = Account(md_df, data_factors=batch_factors, state_with_flag=True)
     agent = get_agent(input_shape=batch_factors.shape)
     agent.restore_model(path=model_path)
-    logger.debug("模型：%s 加载完成，样本内测试[batch=%s]开始", model_path, batch)
+    logger.debug("模型：%s 加载完成，样本内测试开始", model_path)
 
-    if batch:
-        # 批量作业，批量执行速度快，但还四可能与实际清空所有偏差
-        # 伪 flag
-        flags = np.zeros((states.shape[0], 1))
-        actions = agent.choose_action_deterministic_batch((states, flags))
-        for num, action in enumerate(actions, start=1):
-            next_state, reward, done = env.step(action)
-            if done:
-                logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
-                break
-    else:
-        # 单步执行
-        done, state, num = False, env.reset(), 0
-        while not done:
-            num += 1
-            action = agent.choose_action_deterministic(state)
-            state, reward, done = env.step(action)
-            if done:
-                logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
-                break
+    # 单步执行
+    done, state, num = False, env.reset(), 0
+    while not done:
+        num += 1
+        action = agent.choose_action_deterministic(state)
+        state, reward, done = env.step(action)
+        if done:
+            logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
+            break
 
     reward_df = env.plot_data()
     if show_plot:
@@ -60,7 +49,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         from ibats_common.analysis.plot import plot_twin
         plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
-    logger.debug("模型：%s，样本内测试[batch=%s]完成", model_path, batch)
+    logger.debug("模型：%s，样本内测试完成", model_path)
     return reward_df
 
 
