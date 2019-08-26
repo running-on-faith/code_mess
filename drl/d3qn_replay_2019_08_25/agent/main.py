@@ -15,7 +15,7 @@ dm-sonnet==1.19 对应 tensorflow==1.5.1
 action_size 4 -> 2 多空 only
 
 """
-from ibats_common.backend.rl.utils import show_device, use_cup_only
+from ibats_common.backend.rl.utils import use_cup_only
 
 # devices = show_device()
 # logger.debug("%s devices len:%s", type(devices), len(devices))
@@ -26,9 +26,9 @@ import logging
 import numpy as np
 import tensorflow as tf
 
-from ibats_common.example.drl.d3qn_replay_2019_08_17.agent.framework import Framework
+from drl.d3qn_replay_2019_08_25.agent.framework import Framework
 
-MODEL_NAME = 'd3qn_reply3_actoin2'
+MODEL_NAME = 'd3qn_reply4_actoin2'
 logger = logging.getLogger(__name__)
 
 
@@ -49,9 +49,6 @@ class Agent(object):
     def choose_action_deterministic(self, inputs):
         return self.agent.get_deterministic_policy(inputs)
 
-    def choose_action_deterministic_batch(self, inputs):
-        return self.agent.get_deterministic_policy_batch(inputs)
-
     def choose_action_stochastic(self, inputs):
         return self.agent.get_stochastic_policy(inputs)
 
@@ -61,6 +58,9 @@ class Agent(object):
     def update_eval(self):
         return self.agent.update_value_net()
 
+    def update_target(self):
+        self.agent.update_target_net()
+
     def save_model(self, path="model/weights.h5"):
         # return self.saver.save(self.sess, path)
         self.agent.model_eval.save_weights(path)
@@ -68,16 +68,16 @@ class Agent(object):
     def restore_model(self, path="model/weights.h5"):
         # self.saver.restore(self.sess, path)
         self.agent.model_eval.load_weights(path)
+        self.update_target()
 
     def close(self):
         # self.sess.close()
         pass
 
 
-def _test_agent():
+def _test_agent(n_step=60):
     import pandas as pd
     # 建立相关数据
-    n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
@@ -115,11 +115,13 @@ def get_agent(action_size=2, dueling=True, batch_size=512, epochs=1, epsilon_dec
     return agent
 
 
-def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, env_kwargs={}, agent_kwargs={}):
+def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, target_episode_size=20,
+          env_kwargs={}, agent_kwargs={}):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors, **env_kwargs)
     agent = get_agent(input_shape=batch_factors.shape, **agent_kwargs)
+    logger.info('train params env_kwargs=%s, agent_kwargs=%s', env_kwargs, agent_kwargs)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
 
@@ -136,6 +138,13 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
             state = next_state
 
             if done:
+
+                if episode % target_episode_size == 0:
+                    agent.update_target()
+                    log_str0 = ', update_target'
+                else:
+                    log_str0 = ""
+
                 # logger.debug('agent.update_eval()')
                 logs_list = agent.update_eval()
                 # logger.debug('round=%d, episode=%d, episode_step=%d, agent.update_eval()',
@@ -151,17 +160,19 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                     # 每 50 轮，进行一次样本内测试
                     path = f"model/weights_{round_n}_{episode}.h5"
                     agent.save_model(path=path)
+                    # 输出 csv文件
+                    reward_df = env.plot_data()
+                    reward_df.to_csv(f'rewards/reward_{round_n}_{episode}.csv')
                     # logger.debug('model save to path: %s', path)
                     log_str2 = f", model save to path: {path}"
                 else:
                     log_str2 = ""
 
-                if log_str1 != "" or log_str2 != "":
-                    logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f" +
-                                 log_str1 + log_str2,
+                if log_str0 != "" or log_str1 != "" or log_str2 != "":
+                    logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%s%s%s",
                                  round_n, episode + 1, num_episodes, episode_step + 1,
                                  env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                                 agent.agent.epsilon)
+                                 agent.agent.epsilon, log_str0, log_str1, log_str2)
 
                 break
 
@@ -227,14 +238,15 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     return reward_df, path
 
 
-def _test_agent2(round_from=1, round_max=40, increase=100):
+def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_step=120):
     """测试模型训练过程"""
     import pandas as pd
     # 建立相关数据
-    n_step = 60
+
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
+    md_df = load_data('RB.csv', folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data'
+                      ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
     factors_df = get_factor(md_df, dropna=True)
@@ -247,7 +259,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
     # success_count, success_max_count, round_n = 0, 10, 0
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-    agent_kwargs = dict(batch_size=4096, max_epsilon_num_4_train=20)
+    agent_kwargs = dict(batch_size=batch_size, max_epsilon_num_4_train=20)
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = 2000 + round_n * increase
@@ -260,4 +272,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=2, increase=500)
+    _test_agent2(round_from=1, increase=500, batch_size=1024)

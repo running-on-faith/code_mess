@@ -16,8 +16,7 @@
 2019-08-21
 4) 有 random_drop_best_cache_rate 的几率 随机丢弃 cache 防止最好的用例不断累积造成过度优化
 5) EpsilonMaker 提供衰减的sin波动学习曲线
-2019-8-23
-6）增加了一层网络
+7) 当 epsilon 的概率选择随机动作时，有 keep_last_action 的概率，选择延续上一个动作
 """
 import logging
 
@@ -82,35 +81,27 @@ class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05,
-                 cum_reward_back_step=5, max_epsilon_num_4_train=5):
-
+                 cum_reward_back_step=5, max_epsilon_num_4_train=5, keep_last_action=0.84):
         self.input_shape = input_shape
         self.action_size = action_size
         if action_size == 2:
             self.actions = [1, 2]
         else:
             self.actions = list(range(action_size))
+        self.last_action = None
+        # 延续上一执行动作的概率
+        # keep_last_action=0.84     math.pow(0.5, 0.25) = 0.84089
+        # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
+        self.keep_last_action = keep_last_action
         self.cum_reward_back_step = cum_reward_back_step
         self.max_epsilon_num_4_train = max_epsilon_num_4_train
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
         self.cache_list_tot_reward = []
-        # 2019-07-30
-        # [0.1, 0.1, 0.1, 0.7] 有 50% 概率 4步之内保持同一动作
-        # [0.15, 0.15, 0.15, 0.55] 有 50% 概率 3步之内保持同一动作
-        # 2019-08-08
-        # 增加 action_size == 2 多空操作 (1/2)，无空仓
-        if action_size == 4:
-            self.p = [0.10, 0.2, 0.2, 0.50]
-        elif action_size == 3:
-            self.p = [0.1, 0.45, 0.45]
-        else:
-            self.p = None
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.tensorboard_log_dir = tensorboard_log_dir
         self.dueling = dueling
         self.fit_callback = LogFit()
-
         # cache for experience replay
         # cache for state, action, reward, next_state, done
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
@@ -174,16 +165,6 @@ class Framework(object):
         # model.summary()
         return model
 
-    def get_deterministic_policy_batch(self, inputs, flag_size=None):
-        if flag_size is None:
-            flag_size = self.flag_size
-        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                'flag': to_categorical(inputs[1] + 1, flag_size)})
-        if self.action_size == 2:
-            return np.argmax(act_values, axis=1) + 1
-        else:
-            return np.argmax(act_values, axis=1)
-
     def get_deterministic_policy(self, inputs):
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
@@ -194,7 +175,13 @@ class Framework(object):
 
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
-            return np.random.choice(self.actions, p=self.p)
+            if self.last_action is None:
+                self.last_action = np.random.choice(self.actions)
+            else:
+                if np.random.rand() > self.keep_last_action:
+                    self.last_action = np.random.choice(self.actions)
+
+            return self.last_action
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
         if self.action_size == 2:
