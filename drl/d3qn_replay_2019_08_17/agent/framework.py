@@ -16,6 +16,8 @@
 2019-08-21
 4) 有 random_drop_best_cache_rate 的几率 随机丢弃 cache 防止最好的用例不断累积造成过度优化
 5) EpsilonMaker 提供衰减的sin波动学习曲线
+2019-8-23
+6）增加了一层网络
 """
 import logging
 
@@ -141,12 +143,12 @@ class Framework(object):
         net = LSTM(self.input_shape[-1], return_sequences=False, activation='linear')(net)
         net = Dense(self.input_shape[-1] // 2)(net)
         net = Dropout(0.4)(net)
-        # net = Dense(self.input_shape[-1])(net)    # 减少一层，降低网络复杂度
-        # net = Dropout(0.4)(net)
+        net = Dense(self.input_shape[-1] // 4)(net)    # 减少一层，降低网络复杂度
+        net = Dropout(0.4)(net)
         # net = Dense(self.action_size * 4, activation='relu')(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
         net = concatenate([net, input2])
-        net = Dense((self.input_shape[-1] // 2 + self.flag_size) // 2, activation='linear')(net)
+        net = Dense((self.input_shape[-1] // 4 + self.flag_size) // 2, activation='linear')(net)
         net = Dropout(0.4)(net)
         if self.dueling:
             net = Dense(self.action_size + 1, activation='linear')(net)

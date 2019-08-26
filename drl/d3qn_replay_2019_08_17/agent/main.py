@@ -231,7 +231,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
     """测试模型训练过程"""
     import pandas as pd
     # 建立相关数据
-    n_step = 60
+    n_step = 120
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
@@ -247,7 +247,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
     # success_count, success_max_count, round_n = 0, 10, 0
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-    agent_kwargs = dict(batch_size=4096, max_epsilon_num_4_train=20)
+    agent_kwargs = dict(batch_size=1024, max_epsilon_num_4_train=20)
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = 2000 + round_n * increase
@@ -260,4 +260,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=2, increase=500)
+    _test_agent2(round_from=3, increase=500)

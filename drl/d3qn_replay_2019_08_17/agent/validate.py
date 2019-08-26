@@ -74,7 +74,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
     from ibats_common.analysis.plot import plot_twin
     logger = logging.getLogger(__name__)
     # 建立相关数据
-    n_step = 250
+    n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
     md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
@@ -151,6 +151,6 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
 
 
 if __name__ == "__main__":
-    _test_load_predict(target_round_n=0)
-    # for _ in range(1, 11):
-    #     _test_load_predict(target_round_n=_)
+    _test_load_predict(target_round_n=2)
+    for _ in range(0, 3):
+        _test_load_predict(target_round_n=_)
