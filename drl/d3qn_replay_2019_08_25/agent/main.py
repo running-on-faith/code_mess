@@ -169,12 +169,22 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                     log_str2 = ""
 
                 if log_str0 != "" or log_str1 != "" or log_str2 != "":
-                    logger.debug("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%s%s%s",
-                                 round_n, episode + 1, num_episodes, episode_step + 1,
-                                 env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                                 agent.agent.epsilon, log_str0, log_str1, log_str2)
+                    logger.debug(
+                        "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%s%s%s",
+                        round_n, episode + 1, num_episodes, episode_step + 1,
+                        env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                        agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str0, log_str1, log_str2)
 
                 break
+
+        # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
+        if env.buffer_action_count[-1] < 10:
+            logger.warning(
+                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d < 10，退出本次训练",
+                round_n, episode + 1, num_episodes, episode_step + 1,
+                env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                agent.agent.epsilon * 100, env.buffer_action_count[-1])
+            break
 
     reward_df = env.plot_data()
 
@@ -245,7 +255,9 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
 
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv', folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data'
+    md_df = load_data('RB.csv',
+                      # folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data',
+                      folder_path=r'/home/mg/github/IBATS_Common/ibats_common/example/data',
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
