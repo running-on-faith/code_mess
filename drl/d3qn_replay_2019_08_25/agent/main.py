@@ -251,8 +251,12 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_step=120):
     """测试模型训练过程"""
     import pandas as pd
+    import os
+    if not os.path.exists('./model'):
+        os.makedirs('./model')
+    if not os.path.exists('./images'):
+        os.makedirs('./images')
     # 建立相关数据
-
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv',
