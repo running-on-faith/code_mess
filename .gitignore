@@ -177,5 +177,7 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 *.bat
+events.out.tfevents.*
 checkpoint
 *.ckpt.*
+*.tfl.*
