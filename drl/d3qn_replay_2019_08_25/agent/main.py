@@ -256,6 +256,8 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
         os.makedirs('./model')
     if not os.path.exists('./images'):
         os.makedirs('./images')
+    if not os.path.exists('./rewards'):
+        os.makedirs('./rewards')
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
