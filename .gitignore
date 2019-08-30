@@ -181,3 +181,5 @@ events.out.tfevents.*
 checkpoint
 *.ckpt.*
 *.tfl.*
+*.png
+*.h5
