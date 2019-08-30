@@ -129,61 +129,68 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     for episode in range(num_episodes):
         state = env.reset()
         episode_step = 0
-        while True:
-            episode_step += 1
+        try:
+            while True:
+                episode_step += 1
 
-            action = agent.choose_action_stochastic(state)
-            next_state, reward, done = env.step(action)
-            agent.update_cache(state, action, reward, next_state, done)
-            state = next_state
+                action = agent.choose_action_stochastic(state)
+                next_state, reward, done = env.step(action)
+                agent.update_cache(state, action, reward, next_state, done)
+                state = next_state
 
-            if done:
+                if done:
 
-                if episode % target_episode_size == 0:
-                    agent.update_target()
-                    log_str0 = ', update_target'
-                else:
-                    log_str0 = ""
+                    if episode % target_episode_size == 0:
+                        agent.update_target()
+                        log_str0 = ', update_target'
+                    else:
+                        log_str0 = ""
 
-                # logger.debug('agent.update_eval()')
-                logs_list = agent.update_eval()
-                # logger.debug('round=%d, episode=%d, episode_step=%d, agent.update_eval()',
-                #              round_n,  episode + 1, episode_step)
+                    # logger.debug('agent.update_eval()')
+                    logs_list = agent.update_eval()
+                    # logger.debug('round=%d, episode=%d, episode_step=%d, agent.update_eval()',
+                    #              round_n,  episode + 1, episode_step)
 
-                if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
-                    episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
-                    log_str1 = f", append to episodes_reward_df_dic[{episode}] len {len(episodes_reward_df_dic)}"
-                else:
-                    log_str1 = ""
+                    if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
+                        episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
+                        log_str1 = f", append to episodes_reward_df_dic[{episode}] len {len(episodes_reward_df_dic)}"
+                    else:
+                        log_str1 = ""
 
-                if episode > 0 and episode % 50 == 0:
-                    # 每 50 轮，进行一次样本内测试
-                    path = f"model/weights_{round_n}_{episode}.h5"
-                    agent.save_model(path=path)
-                    # 输出 csv文件
-                    reward_df = env.plot_data()
-                    reward_df.to_csv(f'rewards/reward_{round_n}_{episode}.csv')
-                    # logger.debug('model save to path: %s', path)
-                    log_str2 = f", model save to path: {path}"
-                else:
-                    log_str2 = ""
+                    if episode > 0 and episode % 50 == 0:
+                        # 每 50 轮，进行一次样本内测试
+                        path = f"model/weights_{round_n}_{episode}.h5"
+                        agent.save_model(path=path)
+                        # 输出 csv文件
+                        reward_df = env.plot_data()
+                        reward_df.to_csv(f'rewards/reward_{round_n}_{episode}.csv')
+                        # logger.debug('model save to path: %s', path)
+                        log_str2 = f", model save to path: {path}"
+                    else:
+                        log_str2 = ""
 
-                if log_str0 != "" or log_str1 != "" or log_str2 != "":
-                    logger.debug(
-                        "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%s%s%s",
-                        round_n, episode + 1, num_episodes, episode_step + 1,
-                        env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                        agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str0, log_str1, log_str2)
+                    if log_str0 != "" or log_str1 != "" or log_str2 != "":
+                        logger.debug(
+                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%",
+                            round_n, episode + 1, num_episodes, episode_step + 1,
+                            env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                            agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str0, log_str1,
+                            log_str2)
 
-                break
-
+                    break
+        except Exception as exp:
+            logger.exception("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d",
+                             round_n, episode + 1, num_episodes, episode_step + 1,
+                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                             agent.agent.epsilon * 100, env.buffer_action_count[-1])
+            raise exp from exp
         # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
         if env.buffer_action_count[-1] < 10:
             logger.warning(
                 "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d < 10，退出本次训练",
                 round_n, episode + 1, num_episodes, episode_step + 1,
                 env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                agent.agent.epsilon * 100, env.buffer_action_count[-1])
+                         agent.agent.epsilon * 100, env.buffer_action_count[-1])
             break
 
     reward_df = env.plot_data()
@@ -281,13 +288,16 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = 2000 + round_n * increase
-        df, path = train(md_df, batch_factors, round_n=round_n,
-                         num_episodes=num_episodes,
-                         n_episode_pre_record=int(num_episodes / 6),
-                         env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
-        logger.debug('round_n=%d, final status:\n%s', round_n, df.iloc[-1, :])
+        try:
+            df, path = train(md_df, batch_factors, round_n=round_n,
+                             num_episodes=num_episodes,
+                             n_episode_pre_record=int(num_episodes / 6),
+                             env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
+            logger.debug('round_n=%d, final status:\n%s', round_n, df.iloc[-1, :])
+        except:
+            pass
 
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=1, increase=500, batch_size=1024)
+    _test_agent2(round_from=1, increase=500, batch_size=1024, n_step=60)
