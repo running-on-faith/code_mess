@@ -171,7 +171,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
                     if log_str0 != "" or log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%",
+                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%s%s%s",
                             round_n, episode + 1, num_episodes, episode_step + 1,
                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                             agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str0, log_str1,
