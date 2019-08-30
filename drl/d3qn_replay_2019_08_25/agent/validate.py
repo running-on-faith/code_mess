@@ -9,13 +9,12 @@
 """
 import logging
 
-from ibats_common.example.drl.d3qn_replay_2019_08_17.agent.main import get_agent, MODEL_NAME
+from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
 
 
 def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5",
                  key=None):
     """加载模型，进行样本内训练"""
-    import numpy as np
     from ibats_common.backend.rl.emulator.account import Account
     logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
@@ -49,7 +48,8 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         from ibats_common.analysis.plot import plot_twin
         plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
-    logger.debug("模型：%s，样本内测试完成", model_path)
+    logger.debug("模型：%s，样本内测试完成, 累计操作 %d 次, 净值：%.4f",
+                 model_path, reward_df['action_count'].iloc[-1], reward_df['value'].iloc[-1] / env.A.init_cash)
     return reward_df
 
 
@@ -63,10 +63,13 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
     from ibats_common.analysis.plot import plot_twin
     logger = logging.getLogger(__name__)
     # 建立相关数据
-    n_step = 250
+    n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
-    md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
+    md_df = load_data('RB.csv',
+                      # folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data',
+                      folder_path=r'/home/mg/github/IBATS_Common/ibats_common/example/data',
+                      ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
@@ -117,7 +120,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
                                  for num, episode in enumerate(episode_list)
                                  if episode_reward_df_dic[episode].shape[0] > 0 and (
-                                              num % mod == 0 or num in (1, episode_count - 1))})
+                                         num % mod == 0 or num in (1, episode_count - 1))})
         value_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['value_fee0']
                                       for num, episode in enumerate(episode_list)
                                       if episode_reward_df_dic[episode].shape[0] > 0 and (
@@ -140,6 +143,6 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
 
 
 if __name__ == "__main__":
-    _test_load_predict(target_round_n=0)
+    _test_load_predict(target_round_n=1)
     # for _ in range(1, 11):
     #     _test_load_predict(target_round_n=_)
