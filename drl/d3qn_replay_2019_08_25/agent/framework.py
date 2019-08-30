@@ -133,12 +133,11 @@ class Framework(object):
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
-        net = LSTM(self.input_shape[-1] * 2, return_sequences=True, activation='linear')(input)
-        net = LSTM(self.input_shape[-1], return_sequences=False, activation='linear')(net)
+        net = LSTM(self.input_shape[-1] * 2)(input)
         net = Dense(self.input_shape[-1] // 2)(net)
-        net = Dropout(0.4)(net)
+        net = Dropout(0.2)(net)
         net = Dense(self.input_shape[-1] // 4)(net)    # 减少一层，降低网络复杂度
-        net = Dropout(0.4)(net)
+        net = Dropout(0.2)(net)
         # net = Dense(self.action_size * 4, activation='relu')(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
         net = concatenate([net, input2])
@@ -171,6 +170,9 @@ class Framework(object):
     def get_deterministic_policy(self, inputs):
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+        if np.any(np.isnan(act_values)):
+            self.logger.error("predict error act_values=%s", act_values)
+            raise ZeroDivisionError("predict error act_values=%s" % act_values)
         if self.action_size == 2:
             return np.argmax(act_values[0]) + 1  # returns action
         else:
@@ -187,6 +189,9 @@ class Framework(object):
             return self.last_action
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+        if np.any(np.isnan(act_values)):
+            self.logger.error("predict error act_values=%s", act_values)
+            raise ZeroDivisionError("predict error act_values=%s" % act_values)
         if self.action_size == 2:
             return np.argmax(act_values[0]) + 1  # returns action
         else:
