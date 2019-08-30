@@ -77,7 +77,10 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
     n_step = 60  # 此处要与main 保持一致
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
-    md_df = load_data('RB.csv').set_index('trade_date')[ohlcav_col_name_list]
+    md_df = load_data('RB.csv',
+                      # folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data',
+                      folder_path=r'/home/mg/github/IBATS_Common/ibats_common/example/data',
+                      ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
