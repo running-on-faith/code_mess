@@ -26,7 +26,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 
-from ibats_common.example.drl.d3qn_replay_2019_08_07.agent.framework import Framework
+from drl.d3qn_replay_2019_08_07.agent.framework import Framework
 
 MODEL_NAME = 'd3qn_reply2_actoin2'
 logger = logging.getLogger(__name__)

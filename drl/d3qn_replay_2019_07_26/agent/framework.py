@@ -96,8 +96,7 @@ class Framework(object):
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
-        net = LSTM(self.input_shape[-1] * 2, return_sequences=True, activation='linear')(input)
-        net = LSTM(self.input_shape[-1], return_sequences=False, activation='linear')(net)
+        net = LSTM(self.input_shape[-1] * 2)(input)
         net = Dense(self.input_shape[-1] // 2)(net)
         net = Dropout(0.4)(net)
         # net = Dense(self.input_shape[-1])(net)    # 减少一层，降低网络复杂度
