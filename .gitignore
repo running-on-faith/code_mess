@@ -183,3 +183,4 @@ checkpoint
 *.tfl.*
 *.png
 *.h5
+*.csv
