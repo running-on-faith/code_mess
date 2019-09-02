@@ -259,6 +259,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
     """测试模型训练过程"""
     import pandas as pd
     import os
+    from drl import DATA_FOLDER_PATH
     if not os.path.exists('./model'):
         os.makedirs('./model')
     if not os.path.exists('./images'):
@@ -269,8 +270,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
     md_df = load_data('RB.csv',
-                      # folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data',
-                      folder_path=r'/home/mg/github/IBATS_Common/ibats_common/example/data',
+                      folder_path=DATA_FOLDER_PATH,
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
@@ -300,4 +300,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=1, increase=500, batch_size=1024, n_step=60)
+    _test_agent2(round_from=0, increase=500, batch_size=2048, n_step=120)

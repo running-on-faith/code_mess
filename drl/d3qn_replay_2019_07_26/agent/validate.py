@@ -72,14 +72,14 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
     from ibats_utils.mess import datetime_2_str
     from datetime import datetime
     from ibats_common.analysis.plot import plot_twin
+    from drl import DATA_FOLDER_PATH
     logger = logging.getLogger(__name__)
     # 建立相关数据
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
     md_df = load_data('RB.csv',
-                      # folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data',
-                      folder_path=r'/home/mg/github/IBATS_Common/ibats_common/example/data',
+                      folder_path=DATA_FOLDER_PATH,
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     factors_df = get_factor(md_df, dropna=True)

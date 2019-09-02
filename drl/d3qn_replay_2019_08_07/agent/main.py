@@ -232,9 +232,9 @@ def _test_agent2(round_from=1, round_max=40, increase=100):
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
+    from drl import DATA_FOLDER_PATH
     md_df = load_data('RB.csv',
-                      # folder_path=r'D:\WSPych\IBATSCommon\ibats_common\example\data',
-                      folder_path=r'/home/mg/github/IBATS_Common/ibats_common/example/data',
+                      folder_path=DATA_FOLDER_PATH,
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
