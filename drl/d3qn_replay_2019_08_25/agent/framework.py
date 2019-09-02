@@ -10,8 +10,8 @@
 将未来5步的reward，递减反向加到当期reward上面
 # 选取正向奖励与负向奖励 50：50的方式(以后再实现）
 在 ibats_common/example/drl/d3qn_replay_2019_08_07/agent/framework.py 基础上增加对 reward 进行调整
-1）将最近的 max_epsilon_num_4_train 轮训练集作为训练集（而不是仅用当前训练结果作为训练集）
-2）训练集超过 max_epsilon_num_4_train 时，将 tot_reward 最低者淘汰，不断保留高 tot_reward 训练集
+1）将最近的 epsilon_memory_size 轮训练集作为训练集（而不是仅用当前训练结果作为训练集）
+2）训练集超过 epsilon_memory_size 时，将 tot_reward 最低者淘汰，不断保留高 tot_reward 训练集
 3) 修改优化器为 Nadam： Nesterov Adam optimizer: Adam本质上像是带有动量项的RMSprop，Nadam就是带有Nesterov 动量的Adam RMSprop
 2019-08-21
 4) 有 random_drop_best_cache_rate 的几率 随机丢弃 cache 防止最好的用例不断累积造成过度优化
@@ -83,7 +83,7 @@ class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05,
-                 cum_reward_back_step=5, max_epsilon_num_4_train=5, keep_last_action=0.84):
+                 cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.84):
         self.input_shape = input_shape
         self.action_size = action_size
         if action_size == 2:
@@ -96,7 +96,7 @@ class Framework(object):
         # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
         self.keep_last_action = keep_last_action
         self.cum_reward_back_step = cum_reward_back_step
-        self.max_epsilon_num_4_train = max_epsilon_num_4_train
+        self.epsilon_memory_size = epsilon_memory_size
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
         self.cache_list_tot_reward = []
         self.batch_size = batch_size
@@ -220,10 +220,10 @@ class Framework(object):
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
         reward_tot = calc_cum_reward(self.cache_reward, self.cum_reward_back_step)
         tot_reward = np.sum(self.cache_reward)
-        if len(self.cache_list_tot_reward) >= self.max_epsilon_num_4_train:
+        if len(self.cache_list_tot_reward) >= self.epsilon_memory_size:
             if np.random.random() < self.random_drop_best_cache_rate:
                 # 有一定几率随机drop
-                pop_index = np.random.randint(0, self.max_epsilon_num_4_train)
+                pop_index = np.random.randint(0, self.epsilon_memory_size)
             else:
                 pop_index = int(np.argmin(self.cache_list_tot_reward))
             self.cache_list_tot_reward.pop(pop_index)

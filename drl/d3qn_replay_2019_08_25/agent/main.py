@@ -284,7 +284,7 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
 
     # success_count, success_max_count, round_n = 0, 10, 0
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-    agent_kwargs = dict(batch_size=batch_size, max_epsilon_num_4_train=20)
+    agent_kwargs = dict(batch_size=batch_size, epsilon_memory_size=20)
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = 2000 + round_n * increase
