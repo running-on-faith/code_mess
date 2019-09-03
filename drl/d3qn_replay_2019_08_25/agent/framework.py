@@ -91,6 +91,7 @@ class Framework(object):
         else:
             self.actions = list(range(action_size))
         self.last_action = None
+        self.last_action_same_count = 0
         # 延续上一执行动作的概率
         # keep_last_action=0.84     math.pow(0.5, 0.25) = 0.84089
         # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
@@ -183,21 +184,27 @@ class Framework(object):
     def get_stochastic_policy(self, inputs):
         if np.random.rand() <= self.epsilon:
             if self.last_action is None:
-                self.last_action = np.random.choice(self.actions)
+                action = np.random.choice(self.actions)
             else:
-                if np.random.rand() > self.keep_last_action:
-                    self.last_action = np.random.choice(self.actions)
-
-            return self.last_action
-        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                'flag': to_categorical(inputs[1] + 1, self.flag_size)})
-        if np.any(np.isnan(act_values)):
-            self.logger.error("predict error act_values=%s", act_values)
-            raise ZeroDivisionError("predict error act_values=%s" % act_values)
-        if self.action_size == 2:
-            return np.argmax(act_values[0]) + 1  # returns action
+                # 随着连续相同动作的数量增加，持续同一动作的概率越来越小
+                if np.random.rand() > self.keep_last_action ** self.last_action_same_count:
+                    action = np.random.choice(self.actions)
+                else:
+                    action = self.last_action
         else:
-            return np.argmax(act_values[0])  # returns action
+            act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
+                                                    'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+            if np.any(np.isnan(act_values)):
+                self.logger.error("predict error act_values=%s", act_values)
+                raise ZeroDivisionError("predict error act_values=%s" % act_values)
+            action = self.actions[int(np.argmax(act_values[0]))] + 1  # returns action
+
+        if action == self.last_action:
+            self.last_action_same_count += 1
+        else:
+            self.last_action = action
+            self.last_action_same_count = 1
+        return self.last_action
 
     # update target network params
     def update_target_net(self):
