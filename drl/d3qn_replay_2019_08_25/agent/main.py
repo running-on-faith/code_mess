@@ -169,7 +169,8 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                     if log_str0 != "" or log_str1 != "" or log_str2 != "":
                         logger.debug(
                             "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%s%s%s",
-                            round_n, episode + 1, num_episodes, episode_step + 1,
+                            round_n,
+                            episode + 1, num_episodes, episode_step + 1,
                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                             agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str0, log_str1,
                             log_str2)
@@ -182,12 +183,16 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                              agent.agent.epsilon * 100, env.buffer_action_count[-1])
             raise exp from exp
         # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
-        if env.buffer_action_count[-1] < 10:
+        if env.A.max_step_count / env.buffer_action_count[-1] > 20:
+            # 平均持仓天数大于20，交易频度过低
             logger.warning(
-                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d < 10，退出本次训练",
-                round_n, episode + 1, num_episodes, episode_step + 1,
-                env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                         agent.agent.epsilon * 100, env.buffer_action_count[-1])
+                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d "
+                "平均持仓天数 %.2f > 20，退出本次训练",
+                round_n,
+                episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
+                env.A.total_value / env.A.init_cash,
+                agent.agent.epsilon * 100, env.buffer_action_count[-1],
+                env.A.max_step_count / env.buffer_action_count[-1])
             break
 
     reward_df = env.plot_data()
