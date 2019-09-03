@@ -58,9 +58,6 @@ class Agent(object):
     def update_eval(self):
         return self.agent.update_value_net()
 
-    def update_target(self):
-        self.agent.update_target_net()
-
     def save_model(self, path="model/weights.h5"):
         # return self.saver.save(self.sess, path)
         self.agent.model_eval.save_weights(path)
@@ -68,7 +65,7 @@ class Agent(object):
     def restore_model(self, path="model/weights.h5"):
         # self.saver.restore(self.sess, path)
         self.agent.model_eval.load_weights(path)
-        self.update_target()
+        self.agent.update_target_net()
 
     def close(self):
         # self.sess.close()

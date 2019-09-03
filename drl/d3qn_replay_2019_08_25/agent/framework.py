@@ -82,7 +82,7 @@ class EpsilonMaker:
 class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
-                 epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05,
+                 epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
                  cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.84):
         self.input_shape = input_shape
         self.action_size = action_size
@@ -124,6 +124,8 @@ class Framework(object):
         self.model_target = self._build_model()
         self.has_logged = False
         self.epochs = epochs
+        self.update_target_net_period = update_target_net_period
+        self.tot_update_count = 0
 
     @property
     def acc_loss_lists(self):
@@ -215,6 +217,10 @@ class Framework(object):
 
     # train, update value network params
     def update_value_net(self):
+
+        self.tot_update_count += 1
+        if self.tot_update_count % self.update_target_net_period == 0:
+            self.update_target_net()
 
         # 以平仓动作为标识，将持仓期间的收益进行反向传递
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
