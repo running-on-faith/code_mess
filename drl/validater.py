@@ -2,6 +2,16 @@
 # -*- coding:utf-8 -*-
 """
 @author  : MG
+@Time    : 19-9-3 下午5:07
+@File    : validater.py
+@contact : mmmaaaggg@163.com
+@desc    : 
+"""
+
+#! /usr/bin/env python
+# -*- coding:utf-8 -*-
+"""
+@author  : MG
 @Time    : 19-7-25 下午1:15
 @File    : validate.py
 @contact : mmmaaaggg@163.com
@@ -9,14 +19,13 @@
 """
 import logging
 
-from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
+logger = logging.getLogger(__name__)
 
 
-def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5",
-                 key=None):
+def load_predict(md_df, batch_factors, model_name, get_agent_func,
+                 tail_n=1, show_plot=True, model_path="model/weights_1.h5", key=None):
     """加载模型，进行样本内训练"""
     from ibats_common.backend.rl.emulator.account import Account
-    logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
         states = batch_factors[-tail_n:]
         md_df = md_df.iloc[-tail_n:]
@@ -24,7 +33,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         states = batch_factors
 
     env = Account(md_df, data_factors=states, state_with_flag=True)
-    agent = get_agent(input_shape=states.shape)
+    agent = get_agent_func(input_shape=states.shape)
     agent.restore_model(path=model_path)
     logger.debug("模型：%s 加载完成，样本内测试开始", model_path)
 
@@ -44,7 +53,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         from ibats_utils.mess import datetime_2_str
         from datetime import datetime
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
+        title = f'{model_name}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
         plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
@@ -53,7 +62,7 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
     return reward_df
 
 
-def _test_load_predict(model_folder='model', target_round_n=1, show_plot_together=True):
+def _test_load_predict(model_name, get_agent_func, model_folder='model', target_round_n=1, show_plot_together=True):
     import pandas as pd
     import os
     from ibats_common.example.data import load_data
@@ -105,8 +114,8 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
     for num, episode in enumerate(episode_list, start=1):
         file_path = episode_model_path_dic[episode]
         logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
-        reward_df = load_predict(md_df, data_factors, tail_n=0, model_path=file_path, key=episode,
-                                 show_plot=False)
+        reward_df = load_predict(md_df, data_factors, model_name, get_agent_func,
+                                 tail_n=0, model_path=file_path, key=episode, show_plot=False)
         # reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
         predict_result_dic[episode] = reward_df.iloc[-1, :]
         episode_reward_df_dic[episode] = reward_df
@@ -127,7 +136,7 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
                                               num % mod == 0 or num in (1, episode_count - 1))})
 
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{MODEL_NAME}_validation_r{target_round_n}_{dt_str}'
+        title = f'{model_name}_validation_r{target_round_n}_{dt_str}'
         plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
                   enable_save_plot=False, enable_show_plot=False, do_clr=False)
 
@@ -137,12 +146,13 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
             ax = fig.add_subplot(212)
         predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{MODEL_NAME}_summary_r{target_round_n}_{dt_str}_trend'
+        title = f'{model_name}_summary_r{target_round_n}_{dt_str}_trend'
         plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
                   ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
 
 
 if __name__ == "__main__":
-    _test_load_predict(target_round_n=1)
+    from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
+    _test_load_predict(model_name=MODEL_NAME, get_agent_func=get_agent, target_round_n=1)
     # for _ in range(1, 11):
     #     _test_load_predict(target_round_n=_)
