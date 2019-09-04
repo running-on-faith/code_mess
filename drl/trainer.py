@@ -48,10 +48,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                 if done:
 
-                    # logger.debug('agent.update_eval()')
                     logs_list = agent.update_eval()
-                    # logger.debug('round=%d, episode=%d, episode_step=%d, agent.update_eval()',
-                    #              round_n,  episode + 1, episode_step)
 
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
@@ -73,28 +70,31 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     if log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%s%s",
+                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d"
+                            "平均持仓天数 %.2f%s%s",
                             round_n,
-                            episode + 1, num_episodes, episode_step + 1, env.A.data_observation.shape[0],
-                            env.A.total_value / env.A.init_cash,
-                            agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str1, log_str2)
+                            episode + 1, num_episodes, episode_step + 1,
+                            env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                            agent.agent.epsilon * 100, env.buffer_action_count[-1],
+                            env.A.max_step_count / env.buffer_action_count[-1], log_str1, log_str2)
 
                     break
         except Exception as exp:
             logger.exception("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d",
-                             round_n, episode + 1, num_episodes, episode_step + 1, env.A.data_observation.shape[0],
-                             env.A.total_value / env.A.init_cash,
-                             agent.agent.epsilon * 100, env.buffer_action_count[-1])
+                             round_n, episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
+                             env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
+                             )
             raise exp from exp
         # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
         if env.buffer_action_count[-1] < 10:
             logger.warning(
-                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d < 10，退出本次训练",
+                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d "
+                "平均持仓天数 %.2f > 20，退出本次训练",
                 round_n,
-                episode + 1, num_episodes, episode_step + 1,
-                env.A.data_observation.shape[0],
+                episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
                 env.A.total_value / env.A.init_cash,
-                agent.agent.epsilon * 100, env.buffer_action_count[-1])
+                agent.agent.epsilon * 100, env.buffer_action_count[-1],
+                env.A.max_step_count / env.buffer_action_count[-1])
             break
 
     reward_df = env.plot_data()

@@ -112,7 +112,7 @@ def get_agent(action_size=2, dueling=True, batch_size=512, epochs=1, epsilon_dec
     return agent
 
 
-def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40, target_episode_size=20,
+def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40,
           env_kwargs={}, agent_kwargs={}):
     import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
@@ -137,16 +137,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
                 if done:
 
-                    if episode % target_episode_size == 0:
-                        agent.update_target()
-                        log_str0 = ', update_target'
-                    else:
-                        log_str0 = ""
-
-                    # logger.debug('agent.update_eval()')
                     logs_list = agent.update_eval()
-                    # logger.debug('round=%d, episode=%d, episode_step=%d, agent.update_eval()',
-                    #              round_n,  episode + 1, episode_step)
 
                     if episode % n_episode_pre_record == 0 or episode == num_episodes - 1:
                         episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
@@ -166,21 +157,22 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
                     else:
                         log_str2 = ""
 
-                    if log_str0 != "" or log_str1 != "" or log_str2 != "":
+                    if log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d%s%s%s",
+                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d"
+                            "平均持仓天数 %.2f%s%s",
                             round_n,
                             episode + 1, num_episodes, episode_step + 1,
                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                            agent.agent.epsilon * 100, env.buffer_action_count[-1], log_str0, log_str1,
-                            log_str2)
+                            agent.agent.epsilon * 100, env.buffer_action_count[-1],
+                            env.A.max_step_count / env.buffer_action_count[-1], log_str1, log_str2)
 
                     break
         except Exception as exp:
             logger.exception("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d",
-                             round_n, episode + 1, num_episodes, episode_step + 1,
-                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
-                             agent.agent.epsilon * 100, env.buffer_action_count[-1])
+                             round_n, episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
+                             env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
+                             )
             raise exp from exp
         # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
         if env.A.max_step_count / env.buffer_action_count[-1] > 20:
