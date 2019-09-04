@@ -22,8 +22,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def load_predict(md_df, batch_factors, model_name, get_agent_func,
-                 tail_n=1, show_plot=True, model_path="model/weights_1.h5", key=None):
+def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_agent_func,
+                                       tail_n=1, show_plot=True, model_path="model/weights_1.h5", key=None):
     """加载模型，进行样本内训练"""
     from ibats_common.backend.rl.emulator.account import Account
     if tail_n is not None and tail_n > 0:
@@ -62,12 +62,13 @@ def load_predict(md_df, batch_factors, model_name, get_agent_func,
     return reward_df
 
 
-def _test_load_predict(model_name, get_agent_func, model_folder='model', target_round_n=1, show_plot_together=True):
+def validate_bunch(model_name, get_agent_func, model_folder='model', target_round_n=1,
+                   in_sample_date_line=None, show_plot_together=True):
     import pandas as pd
     import os
     from ibats_common.example.data import load_data
     from ibats_common.backend.factor import get_factor, transfer_2_batch
-    from ibats_utils.mess import datetime_2_str
+    from ibats_utils.mess import datetime_2_str, str_2_date, date_2_str
     from datetime import datetime
     from ibats_common.analysis.plot import plot_twin
     from drl import DATA_FOLDER_PATH
@@ -114,8 +115,8 @@ def _test_load_predict(model_name, get_agent_func, model_folder='model', target_
     for num, episode in enumerate(episode_list, start=1):
         file_path = episode_model_path_dic[episode]
         logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
-        reward_df = load_predict(md_df, data_factors, model_name, get_agent_func,
-                                 tail_n=0, model_path=file_path, key=episode, show_plot=False)
+        reward_df = load_model_and_predict_through_all(md_df, data_factors, model_name, get_agent_func,
+                                                       tail_n=0, model_path=file_path, key=episode, show_plot=False)
         # reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
         predict_result_dic[episode] = reward_df.iloc[-1, :]
         episode_reward_df_dic[episode] = reward_df
@@ -135,10 +136,14 @@ def _test_load_predict(model_name, get_agent_func, model_folder='model', target_
                                       if episode_reward_df_dic[episode].shape[0] > 0 and (
                                               num % mod == 0 or num in (1, episode_count - 1))})
 
-        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{model_name}_validation_r{target_round_n}_{dt_str}'
+        # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
+        dt_str = date_2_str(datetime.now())
+        title = f"{model_name}_in_sample" \
+            f"{'_' + str_2_date(in_sample_date_line) if in_sample_date_line is not None else ''}" \
+            f"_r{target_round_n}_{dt_str}"
         plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
-                  enable_save_plot=False, enable_show_plot=False, do_clr=False)
+                  enable_save_plot=False, enable_show_plot=False, do_clr=False,
+                  in_sample_date_line=in_sample_date_line)
 
     # 展示训练曲线
     if len(predict_result_dic) > 0:
@@ -153,6 +158,6 @@ def _test_load_predict(model_name, get_agent_func, model_folder='model', target_
 
 if __name__ == "__main__":
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
-    _test_load_predict(model_name=MODEL_NAME, get_agent_func=get_agent, target_round_n=1)
+    validate_bunch(model_name=MODEL_NAME, get_agent_func=get_agent, target_round_n=1)
     # for _ in range(1, 11):
     #     _test_load_predict(target_round_n=_)

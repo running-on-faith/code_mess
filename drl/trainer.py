@@ -8,19 +8,20 @@
 @desc    : 用于进行指定日期范围数据训练
 在 drl/d3qn_replay_2019_08_25/agent/main.py 基础上改进
 """
-import logging
+# import logging
 import os
 
 import numpy as np
 import pandas as pd
 
-from drl import DATA_FOLDER_PATH
+from drl import DATA_FOLDER_PATH, logging
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
           model_name=None, root_folder_path=os.path.curdir, env_kwargs={}, agent_kwargs={}):
+    logger = logging.getLogger(__name__)
     root_folder_path = os.path.abspath(root_folder_path)
     models_folder_path = os.path.join(root_folder_path, 'model')
     images_folder_path = os.path.join(root_folder_path, 'images')
@@ -163,6 +164,7 @@ def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, roun
                    increase=200,
                    n_step=60, env_kwargs={}, agent_kwargs={}):
     """在日期范围内进行模型训练"""
+    logger = logging.getLogger(__name__)
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
@@ -186,25 +188,29 @@ def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, roun
     # print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
     md_df = md_df.loc[df_index, :]
 
+    logger.debug('开始训练，')
     # success_count, success_max_count, round_n = 0, 10, 0
     for round_n in range(round_from, round_max):
         # 执行训练
         num_episodes = episodes_base + round_n * increase
         try:
             agent_kwargs['tensorboard_log_dir'] = os.path.join(root_folder_path, 'log')
+            logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s',
+                         round_n, round_max, root_folder_path, agent_kwargs)
             df, path = train(md_df, batch_factors, get_agent_func, round_n=round_n,
                              num_episodes=num_episodes, model_name=model_name,
                              n_episode_pre_record=int(num_episodes / 6),
                              root_folder_path=root_folder_path,
                              env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
-            logger.debug('round_n=%d, root_folder_path=%s, final status:\n%s',
-                         round_n, root_folder_path, df.iloc[-1, :])
+            logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
+                         round_n, round_max, root_folder_path, agent_kwargs, df.iloc[-1, :])
         except:
             pass
 
 
 def train_on_each_period(model_name, get_agent_func, base_data_count=1000, offset=180, batch_size=512):
     """间隔指定周期进行训练"""
+    logger = logging.getLogger(__name__)
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
     agent_kwargs = dict(batch_size=batch_size, epsilon_memory_size=20)
     # 建立相关数据
@@ -212,9 +218,11 @@ def train_on_each_period(model_name, get_agent_func, base_data_count=1000, offse
     md_df = load_data('RB.csv',
                       folder_path=DATA_FOLDER_PATH, index_col='trade_date'
                       )
+    logger.info('加载数据，提取日期序列')
     date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index[:-30])
     md_df = None  # 释放内存
     for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
+        logger.info('开始训练，样本截止日期：%s', date_to)
         train_on_range(model_name=model_name, get_agent_func=get_agent_func, range_to=date_to,
                        env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
 

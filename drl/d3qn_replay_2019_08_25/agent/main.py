@@ -159,7 +159,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
                     if log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d"
+                            "done round=%d, episode=%4d/%4d, %d/%d, 净值=%.4f, epsilon=%.5f%%, action_count=%d"
                             "平均持仓天数 %.2f%s%s",
                             round_n,
                             episode + 1, num_episodes, episode_step + 1,
@@ -169,7 +169,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
                     break
         except Exception as exp:
-            logger.exception("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d",
+            logger.exception("done round=%d, episode=%4d/%4d, %d/%d, 净值=%.4f, epsilon=%.5f%%, action_count=%d",
                              round_n, episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
                              env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
                              )
@@ -178,7 +178,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         if env.A.max_step_count / env.buffer_action_count[-1] > 20:
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
-                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d "
+                "done round=%d, episode=%4d/%4d, %d/%d, 净值=%.4f, epsilon=%.5f%%, action_count=%d "
                 "平均持仓天数 %.2f > 20，退出本次训练",
                 round_n,
                 episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
