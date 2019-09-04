@@ -71,7 +71,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     if log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d"
+                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d, "
                             "平均持仓天数 %.2f%s%s",
                             round_n,
                             episode + 1, num_episodes, episode_step + 1,
@@ -89,7 +89,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
         # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
         if env.buffer_action_count[-1] < 10:
             logger.warning(
-                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d "
+                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d, "
                 "平均持仓天数 %.2f > 20，退出本次训练",
                 round_n,
                 episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
