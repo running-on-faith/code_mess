@@ -197,7 +197,7 @@ class Framework(object):
             if np.any(np.isnan(act_values)):
                 self.logger.error("predict error act_values=%s", act_values)
                 raise ZeroDivisionError("predict error act_values=%s" % act_values)
-            action = self.actions[int(np.argmax(act_values[0]))] + 1  # returns action
+            action = self.actions[int(np.argmax(act_values[0]))]  # returns action
 
         if action == self.last_action:
             self.last_action_same_count += 1
