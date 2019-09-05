@@ -13,10 +13,9 @@ import os
 
 import numpy as np
 import pandas as pd
+from ibats_utils.mess import date_2_str
 
 from drl import DATA_FOLDER_PATH, logging
-
-# logger = logging.getLogger(__name__)
 
 
 def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
@@ -26,15 +25,16 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     models_folder_path = os.path.join(root_folder_path, 'model')
     images_folder_path = os.path.join(root_folder_path, 'images')
     rewards_folder_path = os.path.join(root_folder_path, 'rewards')
-    import pandas as pd
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors, **env_kwargs)
     agent = get_agent_func(input_shape=batch_factors.shape, **agent_kwargs)
-    logger.info('train params env_kwargs=%s, agent_kwargs=%s', env_kwargs, agent_kwargs)
+    max_date = max(md_df.index)
+    max_date_str = date_2_str(max_date)
+    logger.info('train until %s with env_kwargs=%s, agent_kwargs=%s', max_date_str, env_kwargs, agent_kwargs)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
-
-    episodes_reward_df_dic = {}
+    is_broken = False
+    episodes_reward_df_dic, model_path = {}, None
     for episode in range(num_episodes):
         state = env.reset()
         episode_step = 0
@@ -59,13 +59,13 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     if episode > 0 and episode % 50 == 0:
                         # 每 50 轮，进行一次样本内测试
-                        path = os.path.join(models_folder_path, f"weights_{round_n}_{episode}.h5")
-                        agent.save_model(path=path)
+                        model_path = os.path.join(models_folder_path, f"weights_{round_n}_{episode}.h5")
+                        agent.save_model(path=model_path)
                         # 输出 csv文件
                         reward_df = env.plot_data()
                         reward_df.to_csv(os.path.join(rewards_folder_path, f'reward_{round_n}_{episode}.csv'))
-                        # logger.debug('model save to path: %s', path)
-                        log_str2 = f", model save to path: {path}"
+                        # logger.debug('model save to path: %s', model_path)
+                        log_str2 = f", model save to path: {model_path}"
                     else:
                         log_str2 = ""
 
@@ -96,6 +96,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                 env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
                 env.A.max_step_count / env.buffer_action_count[-1])
+            is_broken = True
             break
 
     reward_df = env.plot_data()
@@ -103,9 +104,6 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     # 输出图表
     import matplotlib.pyplot as plt
     from ibats_common.analysis.plot import plot_twin
-    import datetime
-    from ibats_utils.mess import datetime_2_str
-    dt_str = datetime_2_str(datetime.datetime.now(), '%Y-%m-%d %H%M%S')
     # 输出历史训练曲线
     if len(logs_list) > 0:
         # acc_loss_df = pd.DataFrame({'acc': acc_list, 'log(loss)': np.log(loss_list)}).ffill()
@@ -124,7 +122,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                     loss_names.append(col_name)
             else:
                 acc_names.append(col_name)
-        title = f'{model_name}_train_r{round_n}_epi{num_episodes}_{dt_str}_acc_loss'
+        title = f'{model_name}_train_r{round_n}_epi{num_episodes}_{max_date_str}_acc_loss'
         fig = plt.figure(figsize=(12, 16))
         ax = fig.add_subplot(211)
         if len(acc_names) == 0 or len(loss_names) == 0:
@@ -139,7 +137,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
         ax = None
 
     # 展示训练结果——历史
-    title = f'{model_name}_r{round_n}_epi{num_episodes}_{dt_str}_list'
+    title = f'{model_name}_r{round_n}_epi{num_episodes}_{max_date_str}_list'
     value_df = pd.DataFrame({f'{num}_v': df['value']
                              for num, df in episodes_reward_df_dic.items()
                              if df.shape[0] > 0})
@@ -152,12 +150,14 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
     plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path=images_folder_path)
 
-    # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
-    path = os.path.join(models_folder_path, f"weights_{round_n}_{num_episodes}.h5")
-    agent.save_model(path=path)
-    logger.debug('model save to path: %s', path)
+    if not is_broken:
+        # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
+        model_path = os.path.join(models_folder_path, f"weights_{round_n}_{num_episodes}.h5")
+        agent.save_model(path=model_path)
+        logger.debug('model save to path: %s', model_path)
+
     agent.close()
-    return reward_df, path
+    return reward_df, model_path
 
 
 def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, round_max=5, episodes_base=2000,
@@ -171,7 +171,6 @@ def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, roun
     md_df = load_data('RB.csv',
                       folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
                       )[ohlcav_col_name_list]
-    from ibats_utils.mess import date_2_str
     # 参数及环境设置
     range_to = max(md_df.index[md_df.index <= pd.to_datetime(range_to)]) if range_to is not None else max(md_df.index)
     root_folder_path = os.path.abspath(os.path.join(os.path.curdir, 'output', date_2_str(range_to)))
@@ -204,11 +203,11 @@ def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, roun
                              env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
             logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
                          round_n, round_max, root_folder_path, agent_kwargs, df.iloc[-1, :])
-        except:
+        except ZeroDivisionError:
             pass
 
 
-def train_on_each_period(model_name, get_agent_func, base_data_count=1000, offset=180, batch_size=512):
+def train_on_each_period(model_name, get_agent_func, base_data_count=1000, offset=180, batch_size=512, **train_kwargs):
     """间隔指定周期进行训练"""
     logger = logging.getLogger(__name__)
     env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
@@ -224,10 +223,10 @@ def train_on_each_period(model_name, get_agent_func, base_data_count=1000, offse
     for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
         logger.info('开始训练，样本截止日期：%s', date_to)
         train_on_range(model_name=model_name, get_agent_func=get_agent_func, range_to=date_to,
-                       env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
+                       env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
 
 
 if __name__ == '__main__':
     from drl.d3qn_replay_2019_08_25.agent.main import MODEL_NAME, get_agent
 
-    train_on_each_period(model_name=MODEL_NAME, get_agent_func=get_agent)
+    train_on_each_period(model_name=MODEL_NAME, get_agent_func=get_agent, round_from=1, round_max=4)
