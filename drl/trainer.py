@@ -96,6 +96,12 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                 env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
                 env.A.max_step_count / env.buffer_action_count[-1])
+
+            # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
+            model_path = os.path.join(models_folder_path, f"weights_{round_n}_{episode}.h5")
+            agent.save_model(path=model_path)
+            logger.debug('model save to path: %s', model_path)
+
             is_broken = True
             break
 
