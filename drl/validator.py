@@ -3,29 +3,27 @@
 """
 @author  : MG
 @Time    : 19-9-3 下午5:07
-@File    : validater.py
-@contact : mmmaaaggg@163.com
-@desc    : 
-"""
-
-#! /usr/bin/env python
-# -*- coding:utf-8 -*-
-"""
-@author  : MG
-@Time    : 19-7-25 下午1:15
-@File    : validate.py
+@File    : validator.py
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
 import logging
+import os
 
-logger = logging.getLogger(__name__)
+import pandas as pd
+from ibats_common.analysis.plot import plot_twin
+from ibats_common.backend.factor import get_factor, transfer_2_batch
+from ibats_common.backend.rl.emulator.account import Account
+from ibats_common.example.data import load_data
+from ibats_utils.mess import date_2_str
+
+from drl import DATA_FOLDER_PATH
 
 
 def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_agent_func,
                                        tail_n=1, show_plot=True, model_path="model/weights_1.h5", key=None):
     """加载模型，进行样本内训练"""
-    from ibats_common.backend.rl.emulator.account import Account
+    logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
         states = batch_factors[-tail_n:]
         md_df = md_df.iloc[-tail_n:]
@@ -34,8 +32,10 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
 
     env = Account(md_df, data_factors=states, state_with_flag=True)
     agent = get_agent_func(input_shape=states.shape)
+    max_date = max(md_df.index)
+    max_date_str = date_2_str(max_date)
     agent.restore_model(path=model_path)
-    logger.debug("模型：%s 加载完成，样本内测试开始", model_path)
+    # logger.debug("模型：%s 加载完成，样本内测试开始", model_path)
 
     # 单步执行
     done, state, num = False, env.reset(), 0
@@ -50,11 +50,8 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     reward_df = env.plot_data()
     if show_plot:
         value_df = reward_df[['value', 'value_fee0']] / env.A.init_cash
-        from ibats_utils.mess import datetime_2_str
-        from datetime import datetime
-        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{model_name}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
-        from ibats_common.analysis.plot import plot_twin
+        title = f'{model_name}_predict_{max_date_str}' if key is None else \
+            f'{model_name}_predict_episode_{key}_{max_date_str}'
         plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
     logger.debug("模型：%s，样本内测试完成, 累计操作 %d 次, 净值：%.4f",
@@ -62,19 +59,9 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     return reward_df
 
 
-def validate_bunch(model_name, get_agent_func, model_folder='model', target_round_n=1,
-                   in_sample_date_line=None, show_plot_together=True):
-    import pandas as pd
-    import os
-    from ibats_common.example.data import load_data
-    from ibats_common.backend.factor import get_factor, transfer_2_batch
-    from ibats_utils.mess import datetime_2_str, str_2_date, date_2_str
-    from datetime import datetime
-    from ibats_common.analysis.plot import plot_twin
-    from drl import DATA_FOLDER_PATH
+def validate_bunch(model_name, get_agent_func, model_folder='model', target_round_n=1, n_step=60, **analysis_kwargs):
     logger = logging.getLogger(__name__)
     # 建立相关数据
-    n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
     md_df = load_data('RB.csv',
@@ -84,6 +71,8 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', target_roun
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     data_factors, shape = data_arr_batch, data_arr_batch.shape
+    max_date = max(md_df.index)
+    max_date_str = date_2_str(max_date)
     # shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     # data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     # print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
@@ -118,9 +107,19 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', target_roun
         reward_df = load_model_and_predict_through_all(md_df, data_factors, model_name, get_agent_func,
                                                        tail_n=0, model_path=file_path, key=episode, show_plot=False)
         # reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
-        predict_result_dic[episode] = reward_df.iloc[-1, :]
+        # predict_result_dic[episode] = reward_df.iloc[-1, :]
         episode_reward_df_dic[episode] = reward_df
 
+    analysis_kwargs['title_header'] = f"{model_name}_r{target_round_n}_{max_date_str}"
+    analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
+
+
+def analysis_rewards(episode_reward_df_dic: dict, md_df, title_header, in_sample_date_line=None,
+                     show_plot_together=True):
+    """分析 rewards，生成报告"""
+    episode_list = list(episode_reward_df_dic.keys())
+    episode_list.sort()
+    episode_count = len(episode_list)
     import matplotlib.pyplot as plt
     fig, ax = plt.figure(figsize=(10, 16)), None  #
     if show_plot_together:
@@ -137,27 +136,25 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', target_roun
                                               num % mod == 0 or num in (1, episode_count - 1))})
 
         # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
-        dt_str = date_2_str(datetime.now())
-        title = f"{model_name}_in_sample" \
-            f"{'_' + str_2_date(in_sample_date_line) if in_sample_date_line is not None else ''}" \
-            f"_r{target_round_n}_{dt_str}"
+        title = title_header + f"{'_' + date_2_str(in_sample_date_line) if in_sample_date_line is not None else ''}"
         plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
                   enable_save_plot=False, enable_show_plot=False, do_clr=False,
                   in_sample_date_line=in_sample_date_line)
 
     # 展示训练曲线
-    if len(predict_result_dic) > 0:
+    if len(episode_reward_df_dic) > 0:
+        predict_result_dic = {_: val.iloc[-1, :] for _, val in episode_reward_df_dic.items()}
         if ax is not None:
             ax = fig.add_subplot(212)
         predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
-        dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
-        title = f'{model_name}_summary_r{target_round_n}_{dt_str}_trend'
+        title = f'{title_header}_summary'
         plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
                   ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
 
 
 if __name__ == "__main__":
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
+
     validate_bunch(model_name=MODEL_NAME, get_agent_func=get_agent, target_round_n=1)
     # for _ in range(1, 11):
     #     _test_load_predict(target_round_n=_)
