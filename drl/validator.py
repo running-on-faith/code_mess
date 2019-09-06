@@ -15,7 +15,7 @@ from ibats_common.analysis.plot import plot_twin
 from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.example.data import load_data
-from ibats_utils.mess import date_2_str
+from ibats_utils.mess import date_2_str, open_file_with_system_app
 
 from drl import DATA_FOLDER_PATH
 
@@ -44,7 +44,8 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
         action = agent.choose_action_deterministic(state)
         state, reward, done = env.step(action)
         if done:
-            logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
+            if num + 1 < md_df.shape[0]:
+                logger.debug('执行循环 %d / %d 次', num, md_df.shape[0])
             break
 
     reward_df = env.plot_data()
@@ -54,12 +55,14 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
             f'{model_name}_predict_episode_{key}_{max_date_str}'
         plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
-    logger.debug("模型：%s，样本内测试完成, 累计操作 %d 次, 净值：%.4f",
-                 model_path, reward_df['action_count'].iloc[-1], reward_df['value'].iloc[-1] / env.A.init_cash)
+    action_count = reward_df['action_count'].iloc[-1]
+    logger.debug("累计操作 %d 次, 平均持仓时间 %.2f 天, 净值：%.4f, 模型：%s，",
+                 action_count, num / action_count * 2, reward_df['value'].iloc[-1] / env.A.init_cash, model_path, )
     return reward_df
 
 
-def validate_bunch(model_name, get_agent_func, model_folder='model', target_round_n=1, n_step=60, **analysis_kwargs):
+def validate_bunch(model_name, get_agent_func, model_folder='model', reward_2_csv=False,
+                   target_round_n=1, n_step=60, **analysis_kwargs):
     logger = logging.getLogger(__name__)
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -106,17 +109,28 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', target_roun
         logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
         reward_df = load_model_and_predict_through_all(md_df, data_factors, model_name, get_agent_func,
                                                        tail_n=0, model_path=file_path, key=episode, show_plot=False)
-        # reward_df.to_csv(f'reward_{round_n}_{file_name_no_extension}.csv')
-        # predict_result_dic[episode] = reward_df.iloc[-1, :]
+        if reward_2_csv:
+            reward_df.to_csv(os.path.join(model_folder, f'reward_{target_round_n}_{episode}.csv'))
+
         episode_reward_df_dic[episode] = reward_df
 
-    analysis_kwargs['title_header'] = f"{model_name}_r{target_round_n}_{max_date_str}"
-    analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
+    title_header = f"{model_name}_r{target_round_n}_{max_date_str}"
+    analysis_kwargs['title_header'] = title_header
+    # analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
+    from analysis.summary import analysis_rewards_with_md, summary_4_rewards
+    result_dic = analysis_rewards_with_md(episode_reward_df_dic, md_df,
+                                          show_plot_141=True, **analysis_kwargs)
+    file_path = summary_4_rewards(result_dic, title_header, md_df,
+                                  doc_file_path=f'/home/mg/github/code_mess/output/reports/{title_header}.docx'
+                                  )
+    logger.debug('文件路径：%s', file_path)
+    return file_path
 
 
 def analysis_rewards(episode_reward_df_dic: dict, md_df, title_header, in_sample_date_line=None,
                      show_plot_together=True):
     """分析 rewards，生成报告"""
+    logger = logging.getLogger(__name__)
     episode_list = list(episode_reward_df_dic.keys())
     episode_list.sort()
     episode_count = len(episode_list)
@@ -150,11 +164,25 @@ def analysis_rewards(episode_reward_df_dic: dict, md_df, title_header, in_sample
         title = f'{title_header}_summary'
         plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
                   ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
+        logger.debug("predict_result_df=\n%s", predict_result_df)
+
+
+def _test_validate_bunch(auto_open_file=True):
+    from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
+
+    file_path = validate_bunch(
+        model_name=MODEL_NAME, get_agent_func=get_agent,
+        model_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-05-13/model',
+        # model_folder=r'/home/mg/github/code_mess/drl/d3qn_replay_2019_08_25/agent/model',
+        target_round_n=2,
+        in_sample_date_line='2013-05-13',
+        reward_2_csv=True,
+    )
+    # for _ in range(1, 11):
+    #     _test_load_predict(target_round_n=_)
+    if auto_open_file and file_path is not None:
+        open_file_with_system_app(file_path)
 
 
 if __name__ == "__main__":
-    from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
-
-    validate_bunch(model_name=MODEL_NAME, get_agent_func=get_agent, target_round_n=1)
-    # for _ in range(1, 11):
-    #     _test_load_predict(target_round_n=_)
+    _test_validate_bunch()

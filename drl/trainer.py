@@ -8,14 +8,14 @@
 @desc    : 用于进行指定日期范围数据训练
 在 drl/d3qn_replay_2019_08_25/agent/main.py 基础上改进
 """
-# import logging
+import logging
 import os
 
 import numpy as np
 import pandas as pd
 from ibats_utils.mess import date_2_str
 
-from drl import DATA_FOLDER_PATH, logging
+from drl import DATA_FOLDER_PATH
 
 
 def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
@@ -77,7 +77,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                             episode + 1, num_episodes, episode_step + 1,
                             env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
                             agent.agent.epsilon * 100, env.buffer_action_count[-1],
-                            env.A.max_step_count / env.buffer_action_count[-1], log_str1, log_str2)
+                            env.A.max_step_count / env.buffer_action_count[-1] * 2, log_str1, log_str2)
 
                     break
         except Exception as exp:
@@ -86,8 +86,9 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                              env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
                              )
             raise exp from exp
-        # 加入 action 指令变化小于 10 次，则视为训练无效，退出当期训练，重新训练
-        if env.buffer_action_count[-1] < 10:
+        avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2  # 一卖一买算换手一次，因此你 "* 2"
+        if avg_holding_days > 20:
+            # 平均持仓天数大于20，交易频度过低
             logger.warning(
                 "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d, "
                 "平均持仓天数 %.2f > 20，退出本次训练",
@@ -95,7 +96,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                 episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
                 env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
-                env.A.max_step_count / env.buffer_action_count[-1])
+                avg_holding_days)
 
             # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
             model_path = os.path.join(models_folder_path, f"weights_{round_n}_{episode}.h5")
@@ -195,7 +196,7 @@ def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, roun
 
     logger.debug('开始训练，')
     # success_count, success_max_count, round_n = 0, 10, 0
-    for round_n in range(round_from, round_max):
+    for round_n in range(round_from, round_max + 1):
         # 执行训练
         num_episodes = episodes_base + round_n * increase
         try:

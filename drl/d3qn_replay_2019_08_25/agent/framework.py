@@ -83,7 +83,7 @@ class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
-                 cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.84):
+                 cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057):
         self.input_shape = input_shape
         self.action_size = action_size
         if action_size == 2:
@@ -95,6 +95,9 @@ class Framework(object):
         # 延续上一执行动作的概率
         # keep_last_action=0.84     math.pow(0.5, 0.25) = 0.84089
         # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
+        # keep_last_action=0.8816   math.pow(0.5, 0.1818) = 0.8816
+        # keep_last_action=0.9057   math.pow(0.5, 1/7) = 0.9057
+        # keep_last_action=0.9170   math.pow(0.5, 0.125) = 0.9170
         self.keep_last_action = keep_last_action
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size

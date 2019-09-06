@@ -16,4 +16,4 @@ from drl.trainer import train_on_each_period
 from drl.d3qn_replay_2019_08_25.agent.main import MODEL_NAME, get_agent
 
 if __name__ == '__main__':
-    train_on_each_period(model_name=MODEL_NAME, get_agent_func=get_agent, round_from=1, round_max=4)
+    train_on_each_period(model_name=MODEL_NAME, get_agent_func=get_agent, round_from=0, round_max=4)
