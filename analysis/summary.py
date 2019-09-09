@@ -32,7 +32,7 @@ FORMAT_2_FLOAT2 = r"{0:.2f}"
 FORMAT_2_FLOAT4 = r"{0:.4f}"
 
 
-def analysis_rewards_with_md(episode_reward_df_dic, title_header, md_df, enable_show_plot=False,
+def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, enable_show_plot=False,
                              enable_save_plot=True, show_plot_141=False,
                              in_sample_date_line=None, risk_free=0.03,
                              **kwargs):
@@ -83,26 +83,22 @@ def analysis_rewards_with_md(episode_reward_df_dic, title_header, md_df, enable_
 
     # value，value_fee0 走势图
     # 合并展示图
-    if episode_count > 10:
-        mod = int(episode_count / 5)
-    else:
-        mod = 1
+    from ibats_utils.mess import split_chunk
+    for episode_list_sub in split_chunk(
+            [episode for episode in episode_list if episode_reward_df_dic[episode].shape[0] > 0], 5):
 
-    value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
-                             for num, episode in enumerate(episode_list)
-                             if episode_reward_df_dic[episode].shape[0] > 0 and (
-                                     num % mod == 0 or num in (1, episode_count - 1))})
-    value_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['value_fee0']
-                                  for num, episode in enumerate(episode_list)
-                                  if episode_reward_df_dic[episode].shape[0] > 0 and (
-                                          num % mod == 0 or num in (1, episode_count - 1))})
+        value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
+                                 for num, episode in enumerate(episode_list_sub)})
+        value_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['value_fee0']
+                                      for num, episode in enumerate(episode_list_sub)})
 
-    # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
-    title = f"{title_header}_value_tot"
-    file_path = plot_twin([value_df, value_fee0_df], md_df['close'], name=title,
-                          folder_path=cache_folder_path,
-                          in_sample_date_line=in_sample_date_line, **enable_kwargs)
-    result_dic['value_plot'] = file_path
+        # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
+        title = f"{title_header}_value_tot_[{min(episode_list_sub)}-{max(episode_list_sub)}]"
+        file_path = plot_twin([value_df, value_fee0_df], md_df['close'], name=title,
+                              folder_path=cache_folder_path,
+                              in_sample_date_line=in_sample_date_line, **enable_kwargs)
+        result_dic.setdefault('value_plot_list', []).append(file_path)
+
     result_dic['episode_reward_df'] = pd.DataFrame(
         {episode: df.iloc[-1, :] for episode, df in episode_reward_df_dic.items()}
         ).T.sort_index()
@@ -110,6 +106,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, title_header, md_df, enable_
     # in_sample_date_line 节点后绩效分析
     perfomance_dic = {}
     for num, (episode, reward_df) in enumerate(episode_reward_df_dic.items()):
+        if reward_df.shape[0] == 0:
+            continue
         if in_sample_date_line is not None:
             reward_df = reward_df[reward_df.index >= in_sample_date_line]
 
@@ -128,7 +126,7 @@ def analysis_rewards_with_md(episode_reward_df_dic, title_header, md_df, enable_
     return result_dic
 
 
-def summary_4_rewards(result_dic, title_header, md_df, enable_clean_cache=False,
+def summary_4_rewards(result_dic, md_df, title_header, enable_clean_cache=False,
                       doc_file_path=None):
     """创建 绩效分析结果 word 文档"""
     # 生成 docx 文档将所需变量
@@ -162,9 +160,9 @@ def summary_4_rewards(result_dic, title_header, md_df, enable_clean_cache=False,
     document.add_paragraph('')
     available_reward_col_name_list = ['value', 'cash', 'fee_tot', 'value_fee0', 'action_count']
     key = 'episode_trend_summary_df'
+    int_col_name_set = {'action', 'action_count'}
     if key in result_dic:
         data_df = result_dic[key][available_reward_col_name_list]
-        int_col_name_set = {'action', 'action_count'}
         format_by_col = {_: FORMAT_2_FLOAT2 for _ in data_df.columns if _ not in int_col_name_set}
         df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=5)
         heading_count += 1
@@ -175,18 +173,20 @@ def summary_4_rewards(result_dic, title_header, md_df, enable_clean_cache=False,
     document.add_heading(f'{heading_count}、Reward Value 曲线走势', 1)
     # 汇总展示
     document.add_heading(f'{heading_count}.1、汇总走势', 2)
-    file_path = result_dic['value_plot']
-    document.add_picture(file_path)
-    document.add_paragraph('')
+    for num, file_path in enumerate(result_dic['value_plot_list'], start=1):
+        document.add_paragraph(f'{heading_count}.1.{num}')
+        document.add_picture(file_path)
+        document.add_paragraph('')
     data_df = result_dic['episode_reward_df'][available_reward_col_name_list]
     format_by_col = {_: FORMAT_2_FLOAT2 for _ in data_df.columns if _ not in int_col_name_set}
     df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=5)
     document.add_paragraph('')
     key = 'value_plot_dic'
     if key in result_dic:
+        document.add_heading(f'{heading_count}.2、详细数据', 2)
         # 分别展示
         for num, (episode, file_path) in enumerate(result_dic[key].items(), start=2):
-            document.add_heading(f'{heading_count}.{num}、episode={episode}', 2)
+            document.add_heading(f'{heading_count}.2.{num}、episode={episode}', 2)
             document.add_picture(file_path)
             document.add_paragraph('')
             data_df = result_dic['episode_reward_dic'][episode][available_reward_col_name_list]
@@ -258,9 +258,9 @@ def _test_analysis_rewards_with_md(auto_open_file=True):
     md_df = load_data('RB.csv',
                       folder_path=DATA_FOLDER_PATH, index_col='trade_date'
                       )
-    result_dic = analysis_rewards_with_md(episode_reward_df_dic, title_header, md_df,
+    result_dic = analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header,
                                           in_sample_date_line=in_sample_date_line, show_plot_141=True)
-    file_path = summary_4_rewards(result_dic, title_header, md_df,
+    file_path = summary_4_rewards(result_dic, md_df, title_header,
                                   doc_file_path=f'/home/mg/github/code_mess/output/reports/{title_header}.docx'
                                   )
     logger.debug('文件路径：%s', file_path)
