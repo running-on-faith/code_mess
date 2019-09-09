@@ -13,6 +13,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from ibats_common.example.data import load_data
 from ibats_utils.mess import date_2_str
 
 from drl import DATA_FOLDER_PATH
@@ -35,7 +36,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     logs_list = []
     is_broken = False
     episodes_reward_df_dic, model_path = {}, None
-    for episode in range(num_episodes):
+    for episode in range(1, num_episodes + 1):
         state = env.reset()
         episode_step = 0
         try:
@@ -71,18 +72,18 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     if log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d, "
-                            "平均持仓天数 %.2f%s%s",
-                            round_n,
-                            episode + 1, num_episodes, episode_step + 1,
-                            env.A.data_observation.shape[0], env.A.total_value / env.A.init_cash,
+                            "train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, "
+                            "action_count=%d, 平均持仓天数 %.2f%s%s",
+                            max_date_str, round_n, episode, num_episodes,
+                            episode_step + 1, env.A.max_step_count, env.A.total_value / env.A.init_cash,
                             agent.agent.epsilon * 100, env.buffer_action_count[-1],
                             env.A.max_step_count / env.buffer_action_count[-1] * 2, log_str1, log_str2)
 
                     break
         except Exception as exp:
-            logger.exception("done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d",
-                             round_n, episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
+            logger.exception("train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, "
+                             "action_count=%d",
+                             max_date_str, round_n, episode, num_episodes, episode_step + 1, env.A.max_step_count,
                              env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
                              )
             raise exp from exp
@@ -90,11 +91,10 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
         if avg_holding_days > 20:
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
-                "done round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, action_count=%d, "
-                "平均持仓天数 %.2f > 20，退出本次训练",
-                round_n,
-                episode + 1, num_episodes, episode_step + 1, env.A.max_step_count,
-                env.A.total_value / env.A.init_cash,
+                "train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%.5f%%, "
+                "action_count=%d, 平均持仓天数 %.2f > 20，退出本次训练",
+                max_date_str, round_n, episode, num_episodes,
+                episode_step + 1, env.A.max_step_count, env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
                 avg_holding_days)
 
@@ -167,20 +167,17 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     return reward_df, model_path
 
 
-def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, round_max=5, episodes_base=2000,
-                   increase=200,
-                   n_step=60, env_kwargs={}, agent_kwargs={}):
+def train_on_range(train_round_kwargs_iter, range_to=None, n_step=60):
     """在日期范围内进行模型训练"""
     logger = logging.getLogger(__name__)
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
-    from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv',
-                      folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
+    md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
                       )[ohlcav_col_name_list]
     # 参数及环境设置
     range_to = max(md_df.index[md_df.index <= pd.to_datetime(range_to)]) if range_to is not None else max(md_df.index)
-    root_folder_path = os.path.abspath(os.path.join(os.path.curdir, 'output', date_2_str(range_to)))
+    range_to_str = date_2_str(range_to)
+    root_folder_path = os.path.abspath(os.path.join(os.path.curdir, 'output', range_to_str))
     os.makedirs(os.path.join(root_folder_path, 'model'), exist_ok=True)
     os.makedirs(os.path.join(root_folder_path, 'images'), exist_ok=True)
     os.makedirs(os.path.join(root_folder_path, 'rewards'), exist_ok=True)
@@ -194,46 +191,38 @@ def train_on_range(model_name, get_agent_func, range_to=None, round_from=0, roun
     # print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
     md_df = md_df.loc[df_index, :]
 
-    logger.debug('开始训练，')
-    # success_count, success_max_count, round_n = 0, 10, 0
-    for round_n in range(round_from, round_max + 1):
+    logger.info('开始训练，样本截止日期：%s, n_step=%d', range_to_str, n_step)
+    round_list = list(train_round_kwargs_iter)
+    round_max = len(round_list)
+    for round_n, env_kwargs, agent_kwargs, train_kwargs in round_list:
         # 执行训练
-        num_episodes = episodes_base + round_n * increase
         try:
             agent_kwargs['tensorboard_log_dir'] = os.path.join(root_folder_path, 'log')
-            logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s',
-                         round_n, round_max, root_folder_path, agent_kwargs)
-            df, path = train(md_df, batch_factors, get_agent_func, round_n=round_n,
-                             num_episodes=num_episodes, model_name=model_name,
-                             n_episode_pre_record=int(num_episodes / 6),
+            logger.debug('range_to=%s, round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s',
+                         range_to_str, round_n, root_folder_path, agent_kwargs)
+            # TODO: 增加多进程执行
+            df, path = train(md_df, batch_factors,
                              root_folder_path=root_folder_path,
-                             env_kwargs=env_kwargs, agent_kwargs=agent_kwargs)
+                             env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
             logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
                          round_n, round_max, root_folder_path, agent_kwargs, df.iloc[-1, :])
         except ZeroDivisionError:
             pass
 
 
-def train_on_each_period(model_name, get_agent_func, base_data_count=1000, offset=180, batch_size=512, **train_kwargs):
+def train_on_each_period(train_round_kwargs_iter, base_data_count=1000, offset=180, n_step=60):
     """间隔指定周期进行训练"""
     logger = logging.getLogger(__name__)
-    env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-    agent_kwargs = dict(batch_size=batch_size, epsilon_memory_size=20)
     # 建立相关数据
-    from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv',
-                      folder_path=DATA_FOLDER_PATH, index_col='trade_date'
-                      )
+    md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
     logger.info('加载数据，提取日期序列')
     date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index[:-30])
     md_df = None  # 释放内存
     for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
-        logger.info('开始训练，样本截止日期：%s', date_to)
-        train_on_range(model_name=model_name, get_agent_func=get_agent_func, range_to=date_to,
-                       env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
+        train_on_range(train_round_kwargs_iter=train_round_kwargs_iter, range_to=date_to, n_step=n_step)
 
 
 if __name__ == '__main__':
-    from drl.d3qn_replay_2019_08_25.agent.main import MODEL_NAME, get_agent
+    from drl.drl_off_example.d3qn_replay_2019_08_25.train import train_round_iter_func
 
-    train_on_each_period(model_name=MODEL_NAME, get_agent_func=get_agent, round_from=1, round_max=4)
+    train_on_each_period(train_round_kwargs_iter=train_round_iter_func(2))
