@@ -112,14 +112,21 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, enable_
             reward_df = reward_df[reward_df.index >= in_sample_date_line]
 
         df = reward_df[['value', 'value_fee0']] / reward_df[['value', 'value_fee0']]
+        if df.shape[0] == 0:
+            # 理论上这个是一句废话，但是现实中存在 reward_df.shape[0] == 0 没有过滤掉的情况，原因未知
+            continue
         df.rename(columns={'value': f'{episode}_value', 'value_fee0': f'{episode}_value_fee0'}, inplace=True)
         if num == 0:
             df['close'] = md_df.loc[reward_df.index, 'close']
 
         # 绩效分析
-        stats_result = df.calc_stats()
-        stats_result.set_riskfree_rate(risk_free)
-        perfomance_dic.update({_: stats.stats for _, stats in stats_result.items()})
+        try:
+            stats_result = df.calc_stats()
+            stats_result.set_riskfree_rate(risk_free)
+            perfomance_dic.update({_: stats.stats for _, stats in stats_result.items()})
+        except:
+            logger.exception(f"df.calc_stats() exception, df.shape={df.shape}, df.column={df.columns}\n")
+            pass
 
     result_dic['stats_df'] = pd.DataFrame(perfomance_dic).T
 
