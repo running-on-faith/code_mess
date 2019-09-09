@@ -184,3 +184,5 @@ checkpoint
 *.png
 *.h5
 *.csv
+*.doc
+*.docx
