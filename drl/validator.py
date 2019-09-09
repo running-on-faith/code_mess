@@ -9,6 +9,7 @@
 """
 import logging
 import os
+from collections import defaultdict
 
 import pandas as pd
 from ibats_common.analysis.plot import plot_twin
@@ -61,8 +62,8 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     return reward_df
 
 
-def validate_bunch(model_name, get_agent_func, model_folder='model', reward_2_csv=False,
-                   target_round_n=1, n_step=60, **analysis_kwargs):
+def validate_bunch(model_name, get_agent_func, model_folder='model', read_csv=True, reward_2_csv=False,
+                   target_round_n_list=[1], n_step=60, **analysis_kwargs):
     logger = logging.getLogger(__name__)
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -80,7 +81,7 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', reward_2_cs
     # data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     # print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
     md_df = md_df.loc[df_index, :]
-    predict_result_dic, episode_model_path_dic, episode_list = {}, {}, []
+    round_n_episode_model_path_dic = defaultdict(dict)
     for file_name in os.listdir(model_folder):
         file_path = os.path.join(model_folder, file_name)
         if os.path.isdir(file_path):
@@ -91,45 +92,61 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', reward_2_cs
         # _, file_name_no_extension = os.path.split(file_name)
         # model_path = f"model/weights_1.h5"
         _, round_n, episode = file_name_no_extension.split('_')
-        if int(round_n) != target_round_n:
+        round_n = int(round_n)
+        if target_round_n_list is not None and len(target_round_n_list) > 0 and int(round_n) in target_round_n_list:
             continue
         episode = int(episode)
-        episode_model_path_dic[episode] = file_path
-        episode_list.append(episode)
+        round_n_episode_model_path_dic[round_n][episode] = file_path
 
-    if len(episode_list) == 0:
-        logger.info('target_round_n=%d 没有可加载的模型', target_round_n)
+    if len(round_n_episode_model_path_dic) == 0:
+        logger.info('target_round_n=%d 没有可加载的模型', target_round_n_list)
         return
 
     episode_reward_df_dic = {}
-    episode_list.sort()
-    episode_count = len(episode_list)
-    for num, episode in enumerate(episode_list, start=1):
-        file_path = episode_model_path_dic[episode]
-        logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
-        reward_df = load_model_and_predict_through_all(md_df, data_factors, model_name, get_agent_func,
-                                                       tail_n=0, model_path=file_path, key=episode, show_plot=False)
-        if reward_2_csv:
-            reward_df.to_csv(os.path.join(model_folder, f'reward_{target_round_n}_{episode}.csv'))
+    index_col = ['trade_date']
+    round_n_list = list(round_n_episode_model_path_dic.keys())
+    round_n_list.sort()
+    round_summary_file_path_dic = {}
+    for round_n in round_n_list:
+        episode_list = list(round_n_episode_model_path_dic[round_n].keys())
+        episode_list.sort()
+        episode_count = len(episode_list)
+        for num, episode in enumerate(episode_list, start=1):
+            file_path = str(round_n_episode_model_path_dic[round_n][episode])
+            logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
+            reward_file_path = os.path.join(model_folder, f'reward_{round_n}_{episode}.csv')
+            if read_csv and os.path.exists(reward_file_path):
+                reward_df = pd.read_csv(reward_file_path, index_col=index_col, parse_dates=index_col)
+            else:
+                reward_df = load_model_and_predict_through_all(
+                    md_df, data_factors, model_name, get_agent_func,
+                    tail_n=0, model_path=file_path, key=episode, show_plot=False)
 
-        episode_reward_df_dic[episode] = reward_df
+            if reward_df.shape[0] == 0:
+                continue
+            if reward_2_csv:
+                reward_df.to_csv(reward_file_path)
 
-    title_header = f"{model_name}_r{target_round_n}_{max_date_str}"
-    analysis_kwargs['title_header'] = title_header
-    # analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
-    from analysis.summary import analysis_rewards_with_md, summary_4_rewards
-    result_dic = analysis_rewards_with_md(episode_reward_df_dic, md_df,
-                                          show_plot_141=True, **analysis_kwargs)
-    file_path = summary_4_rewards(result_dic, title_header, md_df,
-                                  doc_file_path=f'/home/mg/github/code_mess/output/reports/{title_header}.docx'
-                                  )
-    logger.debug('文件路径：%s', file_path)
-    return file_path
+            episode_reward_df_dic[episode] = reward_df
+
+        title_header = f"{model_name}_{max_date_str}_{round_n}"
+        analysis_kwargs['title_header'] = title_header
+        # analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
+        from analysis.summary import analysis_rewards_with_md, summary_4_rewards
+        result_dic = analysis_rewards_with_md(
+            episode_reward_df_dic, md_df, show_plot_141=True, **analysis_kwargs)
+        doc_folder_path = os.path.join(model_folder, 'reports')
+        os.makedirs(doc_folder_path, exist_ok=True)
+        doc_file_path = os.path.join(doc_folder_path, f'{title_header}.docx')
+        summary_file_path = summary_4_rewards(result_dic, md_df, title_header, doc_file_path=doc_file_path)
+        round_summary_file_path_dic[round_n] = summary_file_path
+        logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
+    return round_summary_file_path_dic
 
 
 def analysis_rewards(episode_reward_df_dic: dict, md_df, title_header, in_sample_date_line=None,
                      show_plot_together=True):
-    """分析 rewards，生成报告"""
+    """分析 rewards，生成报告(以及被summary_4_rewards 取代)"""
     logger = logging.getLogger(__name__)
     episode_list = list(episode_reward_df_dic.keys())
     episode_list.sort()
@@ -170,18 +187,16 @@ def analysis_rewards(episode_reward_df_dic: dict, md_df, title_header, in_sample
 def _test_validate_bunch(auto_open_file=True):
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
 
-    file_path = validate_bunch(
+    round_summary_file_path_dic = validate_bunch(
         model_name=MODEL_NAME, get_agent_func=get_agent,
-        model_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-05-13/model',
+        model_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-11-08/model',
         # model_folder=r'/home/mg/github/code_mess/drl/d3qn_replay_2019_08_25/agent/model',
-        target_round_n=2,
-        in_sample_date_line='2013-05-13',
+        in_sample_date_line='2013-11-08',
         reward_2_csv=True,
     )
-    # for _ in range(1, 11):
-    #     _test_load_predict(target_round_n=_)
-    if auto_open_file and file_path is not None:
-        open_file_with_system_app(file_path)
+    for _, file_path in round_summary_file_path_dic.items():
+        if auto_open_file and file_path is not None:
+            open_file_with_system_app(file_path)
 
 
 if __name__ == "__main__":
