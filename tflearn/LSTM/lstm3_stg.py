@@ -24,7 +24,7 @@ pip3 install tensorflow sklearn tflearn
       *   tensorboard_logs
       *       *   2012-12-31_496[1]_20190605_184316
       *       *       *   events.out.tfevents.1559731396.mg-ubuntu64        datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
-    self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+    self.base_folder_path = folder_path = os.path.join(get_report_folder_path(self.stg_run_id), f'tf_saves_{datetime_str}')
 
       *       *   2013-02-28_496[1]_20190605_184716
       *       *       *   events.out.tfevents.1559731396.mg-ubuntu64
@@ -46,7 +46,7 @@ import tflearn
 from ibats_utils.mess import date_2_str, get_last, get_module_file_path, copy_module_file_to, copy_file_to
 from sklearn.model_selection import train_test_split
 
-from ibats_common import module_root_path
+from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.analysis.plot import show_accuracy
 from ibats_common.analysis.summary import summary_release_2_docx
 from ibats_common.backend.factor import get_factor
@@ -98,10 +98,12 @@ class AIStg(AIStgBase):
         # 该字段与 self.load_model_if_exist 函数的 enable_load_model_if_exist参数是 “or” 的关系
         self.enable_load_model_if_exist = False
         if self.enable_load_model_if_exist:
-            self.base_folder_path = folder_path = os.path.join(module_root_path, 'tf_saves_2019-06-27_16_24_34')
+            self.base_folder_path = folder_path = os.path.join(
+                get_report_folder_path(self.stg_run_id), 'tf_saves_2019-06-27_16_24_34')
         else:
             datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
-            self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+            self.base_folder_path = folder_path = os.path.join(
+                get_report_folder_path(self.stg_run_id), f'tf_saves_{datetime_str}')
 
         self.trade_date_acc_list = defaultdict(lambda: [0.0, 0.0])
         self.do_nothing_on_min_bar = False  # 仅供调试使用
@@ -228,7 +230,7 @@ class AIStg(AIStgBase):
 
 
 def _test_use(is_plot):
-    from ibats_common import module_root_path
+    from ibats_common.backend.mess import get_folder_path
     import os
     instrument_type = 'RB'
     # 参数设置
@@ -242,7 +244,8 @@ def _test_use(is_plot):
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2013-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
-        'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', f'{instrument_type}.csv')),
+        'file_path': os.path.abspath(os.path.join(
+            get_folder_path('example', create_if_not_found=False), 'data', f'{instrument_type}.csv')),
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:

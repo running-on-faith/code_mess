@@ -18,7 +18,7 @@ import tflearn
 from ibats_utils.mess import get_last_idx
 from sklearn.model_selection import train_test_split
 
-from ibats_common import module_root_path
+from ibats_common.backend.mess import get_report_folder_path
 from ibats_common.backend.factor import get_factor
 from ibats_common.backend.label import calc_label2
 from ibats_common.common import BacktestTradeMode, ContextKey, Direction, CalcMode
@@ -53,7 +53,8 @@ class AIStg(StgBase):
         self.classify_wave_rate = 0.0025
         self.predict_test_random_state = None
         datetime_str = datetime.now().strftime('%Y-%m-%d_%H_%M_%S')
-        self.base_folder_path = folder_path = os.path.join(module_root_path, f'tf_saves_{datetime_str}')
+        self.base_folder_path = folder_path = os.path.join(
+            get_report_folder_path(self.stg_run_id), f'tf_saves_{datetime_str}')
         model_folder_path = os.path.join(folder_path, 'model_tfls')
         if not os.path.exists(model_folder_path):
             os.makedirs(model_folder_path, exist_ok=True)
@@ -451,7 +452,7 @@ class AIStg(StgBase):
 
 
 def _test_use(is_plot):
-    from ibats_common import module_root_path
+    from ibats_common.backend.mess import get_folder_path
     import os
     instrument_type = 'RB'
     # 参数设置
@@ -465,7 +466,8 @@ def _test_use(is_plot):
         'init_md_date_from': '1995-1-1',  # 行情初始化加载历史数据，供策略分析预加载使用
         'init_md_date_to': '2013-1-1',
         # 'C:\GitHub\IBATS_Common\ibats_common\example\ru_price2.csv'
-        'file_path': os.path.abspath(os.path.join(module_root_path, 'example', 'data', f'{instrument_type}.csv')),
+        'file_path': os.path.abspath(os.path.join(
+            get_folder_path('example', create_if_not_found=False), 'data', f'{instrument_type}.csv')),
         'symbol_key': 'instrument_type',
     }]
     if run_mode == RunMode.Realtime:
