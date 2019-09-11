@@ -16,7 +16,7 @@ from ibats_common.analysis.plot import plot_twin
 from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.example.data import load_data
-from ibats_utils.mess import date_2_str, open_file_with_system_app
+from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
 
 from drl import DATA_FOLDER_PATH
 
@@ -63,7 +63,7 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
 
 
 def validate_bunch(model_name, get_agent_func, model_folder='model', read_csv=True, reward_2_csv=False,
-                   target_round_n_list=[1], n_step=60, **analysis_kwargs):
+                   target_round_n_list: (None, list) = None, n_step=60, **analysis_kwargs):
     logger = logging.getLogger(__name__)
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -93,7 +93,7 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', read_csv=Tr
         # model_path = f"model/weights_1.h5"
         _, round_n, episode = file_name_no_extension.split('_')
         round_n = int(round_n)
-        if target_round_n_list is not None and len(target_round_n_list) > 0 and int(round_n) in target_round_n_list:
+        if target_round_n_list is not None and len(target_round_n_list) > 0 and int(round_n) not in target_round_n_list:
             continue
         episode = int(episode)
         round_n_episode_model_path_dic[round_n][episode] = file_path
@@ -135,10 +135,9 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', read_csv=Tr
         from analysis.summary import analysis_rewards_with_md, summary_4_rewards
         result_dic = analysis_rewards_with_md(
             episode_reward_df_dic, md_df, show_plot_141=True, **analysis_kwargs)
-        doc_folder_path = os.path.join(model_folder, 'reports')
+        doc_folder_path = os.path.join(model_folder, os.pardir, 'reports')
         os.makedirs(doc_folder_path, exist_ok=True)
-        doc_file_path = os.path.join(doc_folder_path, f'{title_header}.docx')
-        summary_file_path = summary_4_rewards(result_dic, md_df, title_header, doc_file_path=doc_file_path)
+        summary_file_path = summary_4_rewards(result_dic, md_df, title_header)
         round_summary_file_path_dic[round_n] = summary_file_path
         logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
     return round_summary_file_path_dic
@@ -199,5 +198,41 @@ def _test_validate_bunch(auto_open_file=True):
             open_file_with_system_app(file_path)
 
 
+def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=False):
+    date_model_folder_dic = {}
+    for file_name in os.listdir(output_folder):
+        file_path = os.path.join(output_folder, file_name)
+        if not os.path.isdir(file_path):
+            continue
+        in_sample_date_line = str_2_date(file_name)
+        import datetime
+        if not isinstance(in_sample_date_line, datetime.date):
+            continue
+        model_folder = os.path.join(file_path, 'model')
+        date_model_folder_dic[in_sample_date_line] = model_folder
+
+    date_list = list(date_model_folder_dic.keys())
+    date_list.sort()
+    for in_sample_date_line in date_list:
+        model_folder = date_model_folder_dic[in_sample_date_line]
+        round_summary_file_path_dic = validate_bunch(
+            model_name=model_name, get_agent_func=get_agent,
+            model_folder=model_folder,
+            in_sample_date_line=in_sample_date_line,
+            reward_2_csv=True,
+        )
+        for _, file_path in round_summary_file_path_dic.items():
+            if auto_open_file and file_path is not None:
+                open_file_with_system_app(file_path)
+
+
+def _test_auto_valid_and_report(output_folder, auto_open_file=True):
+    from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
+    auto_valid_and_report(output_folder, MODEL_NAME, get_agent, auto_open_file=auto_open_file)
+
+
 if __name__ == "__main__":
-    _test_validate_bunch()
+    # _test_validate_bunch()
+    _test_auto_valid_and_report(
+        output_folder='/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output',
+        auto_open_file=False)
