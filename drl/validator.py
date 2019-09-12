@@ -62,9 +62,10 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     return reward_df
 
 
-def validate_bunch(model_name, get_agent_func, model_folder='model', read_csv=True, reward_2_csv=False,
+def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True, reward_2_csv=False,
                    target_round_n_list: (None, list) = None, n_step=60, **analysis_kwargs):
     logger = logging.getLogger(__name__)
+    analysis_kwargs['in_sample_date_line'] = in_sample_date_line
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
 
@@ -129,58 +130,19 @@ def validate_bunch(model_name, get_agent_func, model_folder='model', read_csv=Tr
 
             episode_reward_df_dic[episode] = reward_df
 
-        title_header = f"{model_name}_{max_date_str}_{round_n}"
+        # 创建 word 文档
+        title_header = f"{model_name}_{date_2_str(in_sample_date_line)}_{round_n}"
         analysis_kwargs['title_header'] = title_header
         # analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
-        from analysis.summary import analysis_rewards_with_md, summary_4_rewards
+        from analysis.summary import summary_rewards_2_docx
+        from analysis.analysis import analysis_rewards_with_md
         result_dic = analysis_rewards_with_md(
-            episode_reward_df_dic, md_df, show_plot_141=True, **analysis_kwargs)
-        doc_folder_path = os.path.join(model_folder, os.pardir, 'reports')
-        os.makedirs(doc_folder_path, exist_ok=True)
-        summary_file_path = summary_4_rewards(result_dic, md_df, title_header)
+            episode_reward_df_dic, md_df, **analysis_kwargs)
+        summary_file_path = summary_rewards_2_docx(result_dic, title_header)
         round_summary_file_path_dic[round_n] = summary_file_path
         logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
+
     return round_summary_file_path_dic
-
-
-def analysis_rewards(episode_reward_df_dic: dict, md_df, title_header, in_sample_date_line=None,
-                     show_plot_together=True):
-    """分析 rewards，生成报告(以及被summary_4_rewards 取代)"""
-    logger = logging.getLogger(__name__)
-    episode_list = list(episode_reward_df_dic.keys())
-    episode_list.sort()
-    episode_count = len(episode_list)
-    import matplotlib.pyplot as plt
-    fig, ax = plt.figure(figsize=(10, 16)), None  #
-    if show_plot_together:
-        ax = fig.add_subplot(211)
-        # 前两个以及最后一个输出，其他的能整除才输出
-        mod = int(episode_count / 5)
-        value_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['value']
-                                 for num, episode in enumerate(episode_list)
-                                 if episode_reward_df_dic[episode].shape[0] > 0 and (
-                                         num % mod == 0 or num in (1, episode_count - 1))})
-        value_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['value_fee0']
-                                      for num, episode in enumerate(episode_list)
-                                      if episode_reward_df_dic[episode].shape[0] > 0 and (
-                                              num % mod == 0 or num in (1, episode_count - 1))})
-
-        # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
-        title = title_header + f"{'_' + date_2_str(in_sample_date_line) if in_sample_date_line is not None else ''}"
-        plot_twin([value_df, value_fee0_df], md_df['close'], ax=ax, name=title,
-                  enable_save_plot=False, enable_show_plot=False, do_clr=False,
-                  in_sample_date_line=in_sample_date_line)
-
-    # 展示训练曲线
-    if len(episode_reward_df_dic) > 0:
-        predict_result_dic = {_: val.iloc[-1, :] for _, val in episode_reward_df_dic.items()}
-        if ax is not None:
-            ax = fig.add_subplot(212)
-        predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
-        title = f'{title_header}_summary'
-        plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
-                  ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
-        logger.debug("predict_result_df=\n%s", predict_result_df)
 
 
 def _test_validate_bunch(auto_open_file=True):
@@ -192,6 +154,7 @@ def _test_validate_bunch(auto_open_file=True):
         # model_folder=r'/home/mg/github/code_mess/drl/d3qn_replay_2019_08_25/agent/model',
         in_sample_date_line='2013-11-08',
         reward_2_csv=True,
+        target_round_n_list=[1],
     )
     for _, file_path in round_summary_file_path_dic.items():
         if auto_open_file and file_path is not None:
@@ -199,12 +162,17 @@ def _test_validate_bunch(auto_open_file=True):
 
 
 def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=False):
+    logger = logging.getLogger(__name__)
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
         file_path = os.path.join(output_folder, file_name)
         if not os.path.isdir(file_path):
             continue
-        in_sample_date_line = str_2_date(file_name)
+        try:
+            in_sample_date_line = str_2_date(file_name)
+        except:
+            logger.debug('跳过 %s 目录', file_path)
+            continue
         import datetime
         if not isinstance(in_sample_date_line, datetime.date):
             continue
@@ -220,6 +188,7 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
             model_folder=model_folder,
             in_sample_date_line=in_sample_date_line,
             reward_2_csv=True,
+            show_plot_141=False
         )
         for _, file_path in round_summary_file_path_dic.items():
             if auto_open_file and file_path is not None:
@@ -232,7 +201,7 @@ def _test_auto_valid_and_report(output_folder, auto_open_file=True):
 
 
 if __name__ == "__main__":
-    # _test_validate_bunch()
-    _test_auto_valid_and_report(
-        output_folder='/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output',
-        auto_open_file=False)
+    _test_validate_bunch()
+    # _test_auto_valid_and_report(
+    #     output_folder='/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output',
+    #     auto_open_file=False)
