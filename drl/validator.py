@@ -62,8 +62,8 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     return reward_df
 
 
-def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True, reward_2_csv=False,
-                   target_round_n_list: (None, list) = None, n_step=60, **analysis_kwargs):
+def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
+                   reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60, **analysis_kwargs):
     logger = logging.getLogger(__name__)
     analysis_kwargs['in_sample_date_line'] = in_sample_date_line
     # 建立相关数据
@@ -136,9 +136,16 @@ def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder
         # analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
         from analysis.summary import summary_rewards_2_docx
         from analysis.analysis import analysis_rewards_with_md
+        # 模型相关参数
+        param_dic = dict(model_name=model_name,
+                         in_sample_date_line=date_2_str(in_sample_date_line),
+                         round_n=round_n,
+                         model_folder=model_folder,
+                         n_step=n_step,
+                         )
         result_dic = analysis_rewards_with_md(
             episode_reward_df_dic, md_df, **analysis_kwargs)
-        summary_file_path = summary_rewards_2_docx(result_dic, title_header)
+        summary_file_path = summary_rewards_2_docx(param_dic, result_dic, title_header)
         round_summary_file_path_dic[round_n] = summary_file_path
         logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
 
