@@ -18,7 +18,7 @@ from docx.shared import Pt
 from ibats_common.analysis.plot import clean_cache
 from ibats_common.analysis.summary import df_2_table, stats_df_2_docx_table
 from ibats_common.backend.mess import get_report_folder_path
-from ibats_utils.mess import datetime_2_str, date_2_str
+from ibats_utils.mess import datetime_2_str, date_2_str, str_2_date, open_file_with_system_app
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,122 @@ FORMAT_2_FLOAT4 = r"{0:.4f}"
 FORMAT_2_MONEY = r"{0:,.2f}"
 
 
-def summary_rewards_2_docx(result_dic, title_header, enable_clean_cache=False,
+def dic_2_table(doc, param_dic: dict, col_group_num, format_dic: (dict, None)=None):
+    # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
+    from docx.oxml.ns import nsdecls
+    from docx.oxml import parse_xml
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    data_count = len(param_dic)
+    if data_count == 0:
+        return
+    col_num_max = col_group_num * 2
+    row_num_max = (data_count // col_group_num + 1) if data_count % col_group_num == 0 else \
+        (data_count // col_group_num + 2)
+    t = doc.add_table(row_num_max, col_num_max)
+
+    # write head
+    # col_name_list = list(sub_df.columns)
+    for j in range(col_num_max):
+        paragraph = t.cell(0, j).paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if j % 2 == 0:
+            paragraph.add_run('key').bold = True
+        else:
+            paragraph.add_run('value').bold = True
+
+    # write head bg color
+    for j in range(col_num_max):
+        # t.cell(0, j).text = df.columns[j]
+        t.cell(0, j)._tc.get_or_add_tcPr().append(
+            parse_xml(r'<w:shd {} w:fill="00A2E8"/>'.format(nsdecls('w'))))
+
+    # format table style to be a grid
+    t.style = 'TableGrid'
+
+    for num, (key, value) in enumerate(param_dic.items()):
+        row_num, col_num = num // col_group_num + 1, num % col_group_num * 2
+
+        paragraph = t.cell(row_num, col_num).paragraphs[0]
+        # populate the table with the dataframe
+        paragraph.add_run(key).bold = True
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+        if format_dic is not None and key in format_dic:
+            format_cell = format_dic[key]
+        else:
+            format_cell = None
+
+        if format_cell is None:
+            text = str(value)
+        elif isinstance(format_cell, str):
+            text = str.format(format_cell, value)
+        elif callable(format_cell):
+            text = format_cell(value)
+        else:
+            raise ValueError('%s: %s 无效', key, format_cell)
+
+        paragraph = t.cell(row_num, col_num + 1).paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        try:
+            style = paragraph.add_run(text)
+        except TypeError as exp:
+            logger.exception('param_dic[%s] = %s', key, text)
+            raise exp from exp
+
+    for i in range(1, row_num_max):
+        for j in range(col_num_max):
+            if i % 2 == 0:
+                t.cell(i, j)._tc.get_or_add_tcPr().append(
+                    parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
+
+
+def _test_dic_2_table():
+
+    from docx.oxml.ns import nsdecls
+    from docx.oxml import parse_xml
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    # 生成 docx 文件
+    document = docx.Document()
+    # 设置默认字体
+    document.styles['Normal'].font.name = '微软雅黑'
+    document.styles['Normal']._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+    # 创建自定义段落样式(第一个参数为样式名, 第二个参数为样式类型, 1为段落样式, 2为字符样式, 3为表格样式)
+    UserStyle1 = document.styles.add_style('UserStyle1', 1)
+    # 设置字体尺寸
+    UserStyle1.font.size = docx.shared.Pt(40)
+    # 设置字体颜色
+    UserStyle1.font.color.rgb = docx.shared.RGBColor(0xff, 0xde, 0x00)
+    # 居中文本
+    UserStyle1.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # 设置中文字体
+    UserStyle1.font.name = '微软雅黑'
+    UserStyle1._element.rPr.rFonts.set(docx.oxml.ns.qn('w:eastAsia'), '微软雅黑')
+
+    # 文件内容
+    heading_count, sub_heading_count = 0, 0
+    document.add_heading('测试使用', 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph('')
+    document.add_paragraph('')
+
+    dic = {
+        'from_date': str_2_date('2018-08-09'),
+        'name': 'name test',
+        'num': 12345,
+        'float': 23456.789,
+        'list': [1, 2, 3, 4],
+        'long text': """bla bla bla（唧唧歪歪） 在英语中是“等等，之类的”的意思。
+        当别人知道你要表达的意思时，用blablabla会比较方便，可要注意用的场合与人。在某种场合也形容某些人比较八卦。"""
+    }
+    file_path = 'test.docx'
+    dic_2_table(document, dic, col_group_num=2, )
+    document.save(file_path)
+    open_file_with_system_app(file_path)
+    return file_path
+
+
+def summary_rewards_2_docx(param_dic, result_dic, title_header, enable_clean_cache=False,
                            doc_file_path=None, in_sample_date_line=None):
     """创建 绩效分析结果 word 文档"""
     # 整理参数
@@ -66,6 +181,14 @@ def summary_rewards_2_docx(result_dic, title_header, enable_clean_cache=False,
     document.add_paragraph('')
     document.add_paragraph('')
 
+    # 将测试运行参数输出到 word
+    if param_dic is not None and len(param_dic) > 0:
+        heading_count += 1
+        document.add_heading(f'{heading_count}、相关参数', 1)
+        document.add_paragraph("""\t包括训练、模型路径等相关初始化参数""")
+        format_dic = {}
+        dic_2_table(document, param_dic, col_group_num=2, format_dic=format_dic)
+
     # 随 Episode 增长，样本内 value 与 样本外 5日、10日、20日、60日 value 趋势对比
     # 目的是查看 样本内表现与样本外表现直接是否存在一定的相关性
     heading_count += 1
@@ -76,7 +199,7 @@ def summary_rewards_2_docx(result_dic, title_header, enable_clean_cache=False,
     if key in result_dic:
         for n_days, file_path in result_dic[key].items():
             sub_heading_count += 1
-            document.add_heading(f'{heading_count}、{sub_heading_count} {n_days}日对比走势', 1)
+            document.add_heading(f'{heading_count}、{sub_heading_count} 样本内与样本外{n_days}日对比走势', 1)
             document.add_picture(file_path)  # , width=docx.shared.Inches(1.25)
             document.add_paragraph('')
 
@@ -166,7 +289,7 @@ def summary_rewards_2_docx(result_dic, title_header, enable_clean_cache=False,
 
     if file_name == '':
         file_name = f"{title_header}_" \
-            f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+                    f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
         file_path = os.path.join(folder_path, file_name)
     else:
         file_path = doc_file_path
@@ -176,3 +299,7 @@ def summary_rewards_2_docx(result_dic, title_header, enable_clean_cache=False,
         clean_cache()
 
     return file_path
+
+
+if __name__ == '__main__':
+    _test_dic_2_table()
