@@ -40,12 +40,12 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
 
     def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
         df = reward_df[['value', 'value_fee0', 'close', 'action_count']]
+        df['avg_holding'] = df['action_count'] / df.shape[0]
         if baseline is not None:
             df = df[df.index <= baseline]
         ret_s = df.iloc[-1, :].copy()
         ret_s[['value', 'value_fee0', 'close']] /= df.iloc[0, :][['value', 'value_fee0', 'close']]
         return ret_s
-
 
     # 计算 样本内 以及 day_span_list 日 Episode 对应的 value
     # 建立 每日各个 episode value 值 DataFrame
@@ -73,8 +73,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         baseline_df = pd.DataFrame([[cur_date_net_close, baseline_net_close] for _ in episode_list],
                                    index=episode_list,
                                    columns=[f'{date_2_str(cur_date)}_close', f'{date_2_str(baseline_net_close)}_close'])
-        gap_s = compare_value_df[cur_date] - compare_value_df[baseline_date]
-        gap_s.name = 'gap'
+        gap_s = (compare_value_df[cur_date] - compare_value_df[baseline_date]) * 100
+        gap_s.name = 'gap*100'
         file_path = plot_twin([compare_value_df, baseline_df], gap_s,
                               name=title, y_scales_log=[False, False], **enable_kwargs)
         result_dic.setdefault('episode_value_compare', {})[n_days] = file_path
@@ -82,7 +82,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     # 随 Episode 增长，value 结果变化曲线
     episode_list.sort()
     episode_value_df = pd.DataFrame({episode: calc_reward_nav_value(reward_df, in_sample_date_line)
-                                     for episode, reward_df in episode_reward_df_dic.items()}).T.sort_index()
+                                     for episode, reward_df in episode_reward_df_dic.items()
+                                     if reward_df.shape[0] > 0}).T.sort_index()
     # 将 value 净值化，以方便与 close 进行比对
     result_dic['episode_trend_in_sample_summary_df'] = episode_value_df
     title = f'{title_header}_episode_trend_in_sample_summary'
@@ -95,15 +96,16 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
 
     # 各个 episod 样本外 5日、10日、20日，60日、120日收益率 变化
     episode_value_dic = {episode: calc_reward_nav_value(reward_df)
-                         for episode, reward_df in episode_reward_df_dic.items()}
+                         for episode, reward_df in episode_reward_df_dic.items() if reward_df.shape[0] > 0}
     episode_value_df = pd.DataFrame(episode_value_dic).T.sort_index()
 
     # 计算 样本外 'value' 近5日、10日、20日，60日、120日收益率、年华收益率
     if in_sample_date_line is not None:
         days_rr_dic = {}
         # 日期索引，episod 列名，记录 value 值的 DataFrame
-        date_episode_value_df = pd.DataFrame(
-            {episode: reward_df['value'] for episode, reward_df in episode_reward_df_dic.items()})
+        date_episode_value_df = pd.DataFrame({episode: reward_df['value']
+                                              for episode, reward_df in episode_reward_df_dic.items()
+                                              if reward_df.shape[0] > 0})
         idx_max = date_episode_value_df.shape[0] - 1
         baseline_date = max(date_episode_value_df.index[date_episode_value_df.index <= in_sample_date_line])
         date_line_index = np.argmax(date_episode_value_df.index == baseline_date)
@@ -238,9 +240,10 @@ def _test_analysis_rewards_with_md(auto_open_file=True):
     md_df = load_data('RB.csv',
                       folder_path=DATA_FOLDER_PATH, index_col='trade_date'
                       )
+    param_dic = {}
     result_dic = analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header,
                                           in_sample_date_line=in_sample_date_line, show_plot_141=True)
-    file_path = summary_rewards_2_docx(result_dic, title_header)
+    file_path = summary_rewards_2_docx(param_dic, result_dic, title_header)
     logger.debug('文件路径：%s', file_path)
     if auto_open_file and file_path is not None:
         open_file_with_system_app(file_path)
