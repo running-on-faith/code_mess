@@ -24,16 +24,17 @@ logger.debug('import %s', ffn)
 
 
 def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_sample_date_line, enable_show_plot=False,
-                             enable_save_plot=True, show_plot_141=False, risk_free=0.03, **kwargs):
+                             enable_save_plot=True, show_plot_141=False, risk_free=0.03, in_sample_only=False,
+                             **kwargs):
     """分析 rewards 绩效"""
     # 整理参数
     # cache_folder_path = r'/home/mg/github/code_mess/output/cache'
-    result_dic = {}
+    analysis_result_dic = {}
     day_span_list = [5, 10, 20, 60]
     close_s = md_df['close']
     episode_count, episode_list = len(episode_reward_df_dic), list(episode_reward_df_dic.keys())
     if episode_count == 0:
-        return result_dic
+        return analysis_result_dic
     episode_list.sort()
     enable_kwargs = dict(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, figsize=(5.4, 6.8))
     in_sample_date_line = pd.to_datetime(in_sample_date_line)
@@ -61,23 +62,25 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         raise ValueError(f"in_sample_date_line={date_2_str(in_sample_date_line)} 没有样本内数据")
     baseline_date = in_sample_date_list[-1]
     idx, idx_max = len(in_sample_date_list) - 1, date_episode_value_df.shape[0] - 1
-    ndays_date_dic = {n_days: date_episode_value_df.index[idx + n_days]
-                      for n_days in day_span_list if idx + n_days <= idx_max}
-    # 样本内数据最后一天的 close 净值
-    baseline_net_close = date_episode_value_df['close'].loc[baseline_date]
-    for n_days, cur_date in ndays_date_dic.items():
-        cur_date = ndays_date_dic[n_days]
-        cur_date_net_close = date_episode_value_df['close'].loc[cur_date]
-        title = f'{title_header}_episode_value_[{n_days}]_{date_2_str(cur_date)}'
-        compare_value_df = date_episode_value_df[episode_list].loc[[cur_date, baseline_date]].T
-        baseline_df = pd.DataFrame([[cur_date_net_close, baseline_net_close] for _ in episode_list],
-                                   index=episode_list,
-                                   columns=[f'{date_2_str(cur_date)}_close', f'{date_2_str(baseline_net_close)}_close'])
-        gap_s = (compare_value_df[cur_date] - compare_value_df[baseline_date]) * 100
-        gap_s.name = 'gap*100'
-        file_path = plot_twin([compare_value_df, baseline_df], gap_s,
-                              name=title, y_scales_log=[False, False], **enable_kwargs)
-        result_dic.setdefault('episode_value_compare', {})[n_days] = file_path
+    if not in_sample_only:
+        ndays_date_dic = {n_days: date_episode_value_df.index[idx + n_days]
+                          for n_days in day_span_list if idx + n_days <= idx_max}
+        # 样本内数据最后一天的 close 净值
+        baseline_net_close = date_episode_value_df['close'].loc[baseline_date]
+        for n_days, cur_date in ndays_date_dic.items():
+            cur_date = ndays_date_dic[n_days]
+            cur_date_net_close = date_episode_value_df['close'].loc[cur_date]
+            title = f'{title_header}_episode_value_[{n_days}]_{date_2_str(cur_date)}'
+            compare_value_df = date_episode_value_df[episode_list].loc[[cur_date, baseline_date]].T
+            baseline_df = pd.DataFrame(
+                [[cur_date_net_close, baseline_net_close] for _ in episode_list],
+                index=episode_list,
+                columns=[f'{date_2_str(cur_date)}_close', f'{date_2_str(baseline_net_close)}_close'])
+            gap_s = (compare_value_df[cur_date] - compare_value_df[baseline_date]) * 100
+            gap_s.name = 'gap*100'
+            file_path = plot_twin([compare_value_df, baseline_df], gap_s,
+                                  name=title, y_scales_log=[False, False], **enable_kwargs)
+            analysis_result_dic.setdefault('episode_value_compare', {})[n_days] = file_path
 
     # 随 Episode 增长，value 结果变化曲线
     episode_list.sort()
@@ -85,14 +88,14 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
                                      for episode, reward_df in episode_reward_df_dic.items()
                                      if reward_df.shape[0] > 0}).T.sort_index()
     # 将 value 净值化，以方便与 close 进行比对
-    result_dic['episode_trend_in_sample_summary_df'] = episode_value_df
+    analysis_result_dic['episode_trend_in_sample_summary_df'] = episode_value_df
     title = f'{title_header}_episode_trend_in_sample_summary'
     file_path = plot_twin([episode_value_df[['value', 'value_fee0']], episode_value_df['close']],
                           episode_value_df['action_count'],
                           # folder_path=cache_folder_path,
                           name=title, y_scales_log=[False, True], **enable_kwargs)
     # logger.debug("predict_result_df=\n%s", predict_result_df)
-    result_dic['episode_trend_in_sample_summary_plot'] = file_path
+    analysis_result_dic['episode_trend_in_sample_summary_plot'] = file_path
 
     # 各个 episod 样本外 5日、10日、20日，60日、120日收益率 变化
     episode_value_dic = {episode: calc_reward_nav_value(reward_df)
@@ -126,8 +129,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
                           # folder_path=cache_folder_path,
                           name=title, y_scales_log=[False, True], **enable_kwargs)
     # logger.debug("predict_result_df=\n%s", predict_result_df)
-    result_dic['episode_trend_summary_plot'] = file_path
-    result_dic['episode_trend_summary_df'] = episode_value_df
+    analysis_result_dic['episode_trend_summary_plot'] = file_path
+    analysis_result_dic['episode_trend_summary_df'] = episode_value_df
 
     # value，value_fee0 走势图
     # 每一个 reward 一张图
@@ -155,8 +158,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
             value_plot_dic[episode] = file_path
             episode_reward_dic[episode] = episode_reward_df_dic[episode].iloc[-1:, :]
 
-        result_dic['value_plot_dic'] = value_plot_dic
-        result_dic['episode_reward_dic'] = episode_reward_dic
+        analysis_result_dic['value_plot_dic'] = value_plot_dic
+        analysis_result_dic['episode_reward_dic'] = episode_reward_dic
 
     # value，value_fee0 走势图
     # 合并展示图
@@ -174,9 +177,9 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         file_path = plot_twin([value_df, value_fee0_df], close_s, name=title,
                               # folder_path=cache_folder_path,
                               in_sample_date_line=in_sample_date_line, **enable_kwargs)
-        result_dic.setdefault('value_plot_list', []).append(file_path)
+        analysis_result_dic.setdefault('value_plot_list', []).append(file_path)
 
-    result_dic['episode_reward_df'] = pd.DataFrame(
+    analysis_result_dic['episode_reward_df'] = pd.DataFrame(
         {episode: df.iloc[-1, :] for episode, df in episode_reward_df_dic.items()}
     ).T.sort_index()
 
@@ -207,9 +210,9 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
             logger.exception(f"df.calc_stats() exception, df.shape={df.shape}, df.column={df.columns}\n")
             pass
     if len(perfomance_dic) > 0:
-        result_dic['stats_df'] = pd.DataFrame(perfomance_dic)
+        analysis_result_dic['stats_df'] = pd.DataFrame(perfomance_dic)
 
-    return result_dic
+    return analysis_result_dic
 
 
 def _test_analysis_rewards_with_md(auto_open_file=True):
@@ -241,9 +244,9 @@ def _test_analysis_rewards_with_md(auto_open_file=True):
                       folder_path=DATA_FOLDER_PATH, index_col='trade_date'
                       )
     param_dic = {}
-    result_dic = analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header,
-                                          in_sample_date_line=in_sample_date_line, show_plot_141=True)
-    file_path = summary_rewards_2_docx(param_dic, result_dic, title_header)
+    analysis_result_dic = analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header,
+                                                   in_sample_date_line=in_sample_date_line, show_plot_141=True)
+    file_path = summary_rewards_2_docx(param_dic, analysis_result_dic, title_header)
     logger.debug('文件路径：%s', file_path)
     if auto_open_file and file_path is not None:
         open_file_with_system_app(file_path)
