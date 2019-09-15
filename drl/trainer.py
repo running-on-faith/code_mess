@@ -9,6 +9,7 @@
 在 drl/d3qn_replay_2019_08_25/agent/main.py 基础上改进
 """
 import logging
+import multiprocessing
 import os
 
 import numpy as np
@@ -34,7 +35,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     logger.info('train until %s with env_kwargs=%s, agent_kwargs=%s', max_date_str, env_kwargs, agent_kwargs)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
-    is_broken = False
+    episode, is_broken = 1, False
     episodes_reward_df_dic, model_path = {}, None
     for episode in range(1, num_episodes + 1):
         state = env.reset()
@@ -99,13 +100,22 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                 avg_holding_days)
 
             # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
-            model_path = os.path.join(models_folder_path, f"weights_{round_n}_{episode}.h5")
+            model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
             agent.save_model(path=model_path)
             logger.debug('model save to path: %s', model_path)
 
             is_broken = True
             break
 
+    if not is_broken:
+        # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
+        model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
+        agent.save_model(path=model_path)
+        logger.debug('model save to path: %s', model_path)
+
+    agent.close()
+
+    # 生成训练结果数据
     reward_df = env.plot_data()
 
     # 输出图表
@@ -157,23 +167,17 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
     plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path=images_folder_path)
 
-    if not is_broken:
-        # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
-        model_path = os.path.join(models_folder_path, f"weights_{round_n}_{num_episodes}.h5")
-        agent.save_model(path=model_path)
-        logger.debug('model save to path: %s', model_path)
-
-    agent.close()
     return reward_df, model_path
 
 
-def train_on_range(train_round_kwargs_iter, range_to=None, n_step=60):
+def train_on_range(md_loader, train_round_kwargs_iter, range_to=None, n_step=60, pool: multiprocessing.Pool = None):
     """在日期范围内进行模型训练"""
     logger = logging.getLogger(__name__)
     # 建立相关数据
-    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
-    md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
-                      )[ohlcav_col_name_list]
+    # ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
+    #                   )[ohlcav_col_name_list]
+    md_df = md_loader(range_to)
     # 参数及环境设置
     range_to = max(md_df.index[md_df.index <= pd.to_datetime(range_to)]) if range_to is not None else max(md_df.index)
     range_to_str = date_2_str(range_to)
@@ -194,35 +198,95 @@ def train_on_range(train_round_kwargs_iter, range_to=None, n_step=60):
     logger.info('开始训练，样本截止日期：%s, n_step=%d', range_to_str, n_step)
     round_list = list(train_round_kwargs_iter)
     round_max = len(round_list)
+    results = {}
     for round_n, env_kwargs, agent_kwargs, train_kwargs in round_list:
         # 执行训练
         try:
             agent_kwargs['tensorboard_log_dir'] = os.path.join(root_folder_path, 'log')
             logger.debug('range_to=%s, round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s',
                          range_to_str, round_n, root_folder_path, agent_kwargs)
-            # TODO: 增加多进程执行
-            df, path = train(md_df, batch_factors,
-                             root_folder_path=root_folder_path,
-                             env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
-            logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
-                         round_n, round_max, root_folder_path, agent_kwargs, df.iloc[-1, :])
+            if pool is None:
+                df, path = train(md_df, batch_factors,
+                                 root_folder_path=root_folder_path,
+                                 env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
+                logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
+                             round_n, round_max, root_folder_path, agent_kwargs, df.iloc[-1, :])
+                results[round_n] = (df, path)
+            else:
+                result = pool.apply_async(train, (md_df, batch_factors,),
+                                          kwds=dict(root_folder_path=root_folder_path,
+                                                    env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs))
+                results[round_n] = result
         except ZeroDivisionError:
             pass
 
+    return results
 
-def train_on_each_period(train_round_kwargs_iter, base_data_count=1000, offset=180, n_step=60):
-    """间隔指定周期进行训练"""
+
+def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=1000, offset=180, n_step=60,
+                         use_pool=True, max_process_count=multiprocessing.cpu_count()):
+    """
+    间隔指定周期进行训练
+    :param md_loader: 数据加载器
+    :param train_round_kwargs_iter:训练参数迭代器
+    :param base_data_count: 初始训练数据长度
+    :param offset: 训练数据步进长度
+    :param n_step: 训练数据 step
+    :param use_pool: 是否使用进程池
+    :param max_process_count:最大进程数（默认 cup 数量）
+    :return:
+    """
     logger = logging.getLogger(__name__)
     # 建立相关数据
-    md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
+    # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
+    md_df = md_loader()
     logger.info('加载数据，提取日期序列')
     date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index[:-30])
     md_df = None  # 释放内存
+    if use_pool:
+        pool = multiprocessing.Pool(max_process_count)
+    else:
+        pool = None
+    results = {}
     for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
-        train_on_range(train_round_kwargs_iter=train_round_kwargs_iter, range_to=date_to, n_step=n_step)
+        result_dic = train_on_range(md_loader, train_round_kwargs_iter=train_round_kwargs_iter,
+                                    range_to=date_to, n_step=n_step, pool=pool)
+        if use_pool:
+            results[date_to] = result_dic
+
+    if use_pool:
+        while True:
+            date_to, result_dic = None, {}
+            for date_to, result_dic in results.items():
+                round_n = None
+                for round_n, result in result_dic.items():
+                    try:
+                        df, path = result.get()
+                        logger.debug('%s -> %d  执行结束, final status:\n%s', date_2_str(date_to), round_n, df.iloc[-1, :])
+                    except:
+                        logger.exception("%s -> %d 执行异常", date_2_str(date_to), round_n)
+
+                    break
+
+                if round_n is not None:
+                    del result_dic[round_n]
+
+                break
+
+            if date_to is not None and len(result_dic) == 0:
+                logger.info('%s 所有任务完成', date_2_str(date_to))
+                del results[date_to]
+
+            if len(results) == 0:
+                logger.info('所有任务完成')
+                break
 
 
 if __name__ == '__main__':
     from drl.drl_off_example.d3qn_replay_2019_08_25.train import train_round_iter_func
 
-    train_on_each_period(train_round_kwargs_iter=train_round_iter_func(2))
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    train_on_each_period(
+        md_loader=lambda range_to=None: load_data(
+            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[ohlcav_col_name_list],
+        train_round_kwargs_iter=train_round_iter_func(2), use_pool=True)

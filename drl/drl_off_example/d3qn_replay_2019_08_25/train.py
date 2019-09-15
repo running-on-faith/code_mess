@@ -7,14 +7,16 @@
 @contact : mmmaaaggg@163.com
 @desc    : 用于进行指定日期范围数据训练，以及样本外测试
 """
+import logging
 # if True:
 #     from ibats_common.backend.rl.utils import use_cup_only
 #
 #     use_cup_only()
 import math
+
+from drl import DATA_FOLDER_PATH
 from drl.d3qn_replay_2019_08_25.agent.main import MODEL_NAME, get_agent
 from drl.trainer import train_on_each_period
-import logging
 
 
 def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 5, 7]):
@@ -39,5 +41,11 @@ def _test_train_round_iter_func(round_n_per_target_day=3):
 
 
 if __name__ == '__main__':
-    train_on_each_period(train_round_iter_func(round_n_per_target_day=2), n_step=60)
+    from ibats_common.example.data import load_data
+
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    train_on_each_period(
+        md_loader=lambda: load_data(
+            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')[ohlcav_col_name_list],
+        train_round_kwargs_iter=train_round_iter_func(round_n_per_target_day=2), n_step=60)
     # _test_train_round_iter_func(round_n_per_target_day=2)
