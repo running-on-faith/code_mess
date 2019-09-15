@@ -15,7 +15,7 @@ import pandas as pd
 from ibats_common.analysis.plot import plot_twin
 from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
-from ibats_common.example.data import load_data
+from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
 
 from drl import DATA_FOLDER_PATH
@@ -23,7 +23,7 @@ from drl import DATA_FOLDER_PATH
 
 def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_agent_func,
                                        tail_n=1, show_plot=True, model_path="model/weights_1.h5", key=None):
-    """加载模型，进行样本内训练"""
+    """加载 model_path 模型，对batch_factors计算买卖决策，对 md_df 行情进行模拟，回测检验"""
     logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
         states = batch_factors[-tail_n:]
@@ -62,16 +62,34 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     return reward_df
 
 
-def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
-                   reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60, **analysis_kwargs):
+def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
+                   reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60, in_sample_only=False,
+                   **analysis_kwargs):
+    """
+
+    :param md_loader: 数据加载器
+    :param model_name: 模型名称
+    :param get_agent_func: drl agent 生成器
+    :param in_sample_date_line: 样本内截止日期
+    :param model_folder: 模型目录
+    :param read_csv: 是否读取各 episode 相应 reward_df 的 .csv 文件
+    :param reward_2_csv:  是否生产各 episode 相应 reward_df 的 .csv 文件
+    :param target_round_n_list: 目标 round_n 列表，默认 None 代表全部
+    :param n_step: factor 生成是的 step， 该step 需要与模型训练时 step 值保持一致，否则模型将无法运行
+    :param in_sample_only: 是否只对样本内数据继续验证
+    :param analysis_kwargs: reward 分析相关参数
+    :return:
+    """
     logger = logging.getLogger(__name__)
     analysis_kwargs['in_sample_date_line'] = in_sample_date_line
+    analysis_kwargs['in_sample_only'] = in_sample_only
     # 建立相关数据
-    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
-
-    md_df = load_data('RB.csv',
-                      folder_path=DATA_FOLDER_PATH,
-                      ).set_index('trade_date')[ohlcav_col_name_list]
+    # OHLCAV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
+    # md_df = load_data('RB.csv',
+    #                   folder_path=DATA_FOLDER_PATH,
+    #                   ).set_index('trade_date')[OHLCAV_COL_NAME_LIST]
+    # 如果 in_sample_only 则只加载样本内行情数据
+    md_df = md_loader(in_sample_date_line if in_sample_only else None)
     md_df.index = pd.DatetimeIndex(md_df.index)
     factors_df = get_factor(md_df, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
@@ -131,9 +149,6 @@ def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder
             episode_reward_df_dic[episode] = reward_df
 
         # 创建 word 文档
-        title_header = f"{model_name}_{date_2_str(in_sample_date_line)}_{round_n}"
-        analysis_kwargs['title_header'] = title_header
-        # analysis_rewards(episode_reward_df_dic, md_df, **analysis_kwargs)
         from analysis.summary import summary_rewards_2_docx
         from analysis.analysis import analysis_rewards_with_md
         # 模型相关参数
@@ -143,9 +158,12 @@ def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder
                          model_folder=model_folder,
                          n_step=n_step,
                          )
+        title_header = f"{model_name}_{date_2_str(in_sample_date_line)}{'_i' if in_sample_only else ''}_{round_n}"
+        analysis_kwargs['title_header'] = title_header
         result_dic = analysis_rewards_with_md(
             episode_reward_df_dic, md_df, **analysis_kwargs)
         summary_file_path = summary_rewards_2_docx(param_dic, result_dic, title_header)
+
         round_summary_file_path_dic[round_n] = summary_file_path
         logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
 
@@ -154,8 +172,9 @@ def validate_bunch(model_name, get_agent_func, in_sample_date_line, model_folder
 
 def _test_validate_bunch(auto_open_file=True):
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
-
     round_summary_file_path_dic = validate_bunch(
+        md_loader=lambda range_to=None: load_data(
+            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         model_name=MODEL_NAME, get_agent_func=get_agent,
         model_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-11-08/model',
         # model_folder=r'/home/mg/github/code_mess/drl/d3qn_replay_2019_08_25/agent/model',
@@ -191,6 +210,9 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
     for in_sample_date_line in date_list:
         model_folder = date_model_folder_dic[in_sample_date_line]
         round_summary_file_path_dic = validate_bunch(
+            md_loader=lambda range_to=None: load_data(
+                'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[
+                OHLCAV_COL_NAME_LIST],
             model_name=model_name, get_agent_func=get_agent,
             model_folder=model_folder,
             in_sample_date_line=in_sample_date_line,
