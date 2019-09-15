@@ -18,6 +18,7 @@ from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
 
+from analysis.summary import summary_analysis_result_dic_2_docx
 from drl import DATA_FOLDER_PATH
 
 
@@ -125,7 +126,7 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
     index_col = ['trade_date']
     round_n_list = list(round_n_episode_model_path_dic.keys())
     round_n_list.sort()
-    round_summary_file_path_dic = {}
+    round_results_dic = defaultdict(dict)
     for round_n in round_n_list:
         episode_list = list(round_n_episode_model_path_dic[round_n].keys())
         episode_list.sort()
@@ -160,19 +161,28 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
                          )
         title_header = f"{model_name}_{date_2_str(in_sample_date_line)}{'_i' if in_sample_only else ''}_{round_n}"
         analysis_kwargs['title_header'] = title_header
-        result_dic = analysis_rewards_with_md(
+        analysis_result_dic = analysis_rewards_with_md(
             episode_reward_df_dic, md_df, **analysis_kwargs)
-        summary_file_path = summary_rewards_2_docx(param_dic, result_dic, title_header)
+        summary_file_path = summary_rewards_2_docx(param_dic, analysis_result_dic, title_header)
 
-        round_summary_file_path_dic[round_n] = summary_file_path
         logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
+        round_results_dic[round_n] = dict(
+            param_dic=param_dic,
+            analysis_kwargs=analysis_kwargs,
+            title_header=title_header,
+            summary_file_path=summary_file_path,
+            analysis_result_dic=analysis_result_dic,
+        )
 
-    return round_summary_file_path_dic
+    title_header = f"{model_name}_{date_2_str(in_sample_date_line)}{'_i' if in_sample_only else ''}"
+    file_path = summary_analysis_result_dic_2_docx(round_results_dic, title_header)
+
+    return round_results_dic, file_path
 
 
 def _test_validate_bunch(auto_open_file=True):
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
-    round_summary_file_path_dic = validate_bunch(
+    round_results_dic, file_path = validate_bunch(
         md_loader=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         model_name=MODEL_NAME, get_agent_func=get_agent,
@@ -182,7 +192,11 @@ def _test_validate_bunch(auto_open_file=True):
         reward_2_csv=True,
         target_round_n_list=[1],
     )
-    for _, file_path in round_summary_file_path_dic.items():
+    if auto_open_file and file_path is not None:
+        open_file_with_system_app(file_path)
+
+    for _, result_dic in round_results_dic.items():
+        file_path = result_dic['summary_file_path']
         if auto_open_file and file_path is not None:
             open_file_with_system_app(file_path)
 
@@ -209,7 +223,7 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
     date_list.sort()
     for in_sample_date_line in date_list:
         model_folder = date_model_folder_dic[in_sample_date_line]
-        round_summary_file_path_dic = validate_bunch(
+        round_results_dic, file_path = validate_bunch(
             md_loader=lambda range_to=None: load_data(
                 'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[
                 OHLCAV_COL_NAME_LIST],
@@ -219,7 +233,10 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
             reward_2_csv=True,
             show_plot_141=False
         )
-        for _, file_path in round_summary_file_path_dic.items():
+        if auto_open_file and file_path is not None:
+            open_file_with_system_app(file_path)
+        for _, result_dic in round_results_dic.items():
+            file_path = result_dic['summary_file_path']
             if auto_open_file and file_path is not None:
                 open_file_with_system_app(file_path)
 
