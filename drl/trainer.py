@@ -14,7 +14,7 @@ import os
 
 import numpy as np
 import pandas as pd
-from ibats_common.example.data import load_data
+from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 from ibats_utils.mess import date_2_str
 
 from drl import DATA_FOLDER_PATH
@@ -174,9 +174,9 @@ def train_on_range(md_loader, train_round_kwargs_iter, range_to=None, n_step=60,
     """在日期范围内进行模型训练"""
     logger = logging.getLogger(__name__)
     # 建立相关数据
-    # ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    # OHLCAV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
     # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
-    #                   )[ohlcav_col_name_list]
+    #                   )[OHLCAV_COL_NAME_LIST]
     md_df = md_loader(range_to)
     # 参数及环境设置
     range_to = max(md_df.index[md_df.index <= pd.to_datetime(range_to)]) if range_to is not None else max(md_df.index)
@@ -285,8 +285,7 @@ def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=100
 if __name__ == '__main__':
     from drl.drl_off_example.d3qn_replay_2019_08_25.train import train_round_iter_func
 
-    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     train_on_each_period(
         md_loader=lambda range_to=None: load_data(
-            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[ohlcav_col_name_list],
+            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         train_round_kwargs_iter=train_round_iter_func(2), use_pool=True)
