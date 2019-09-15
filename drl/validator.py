@@ -201,7 +201,7 @@ def _test_validate_bunch(auto_open_file=True):
             open_file_with_system_app(file_path)
 
 
-def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=False):
+def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=False, auto_open_summary_file=True):
     logger = logging.getLogger(__name__)
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
@@ -233,7 +233,7 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
             reward_2_csv=True,
             show_plot_141=False
         )
-        if auto_open_file and file_path is not None:
+        if auto_open_summary_file and file_path is not None:
             open_file_with_system_app(file_path)
         for _, result_dic in round_results_dic.items():
             file_path = result_dic['summary_file_path']
