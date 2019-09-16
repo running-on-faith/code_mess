@@ -41,7 +41,12 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
 
     def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
         df = reward_df[['value', 'value_fee0', 'close', 'action_count']]
-        df['avg_holding'] = df['action_count'] / df.shape[0]
+        avg_holding_s = df.shape[0] / df['action_count'] * 2
+        # 部分无效数据奇高导致凸显显示不变，因此，对超过阈值的数据进行一定的处理
+        threashold = 20
+        is_fit = avg_holding_s > threashold
+        avg_holding_s[is_fit] = threashold + np.log(avg_holding_s[is_fit] - threashold + 1)
+        df['avg_holding'] = avg_holding_s
         if baseline is not None:
             df = df[df.index <= baseline]
         ret_s = df.iloc[-1, :].copy()
@@ -91,9 +96,9 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     analysis_result_dic['episode_trend_in_sample_summary_df'] = episode_value_df
     title = f'{title_header}_episode_trend_in_sample_summary'
     file_path = plot_twin([episode_value_df[['value', 'value_fee0']], episode_value_df['close']],
-                          episode_value_df['action_count'],
+                          episode_value_df['avg_holding'],
                           # folder_path=cache_folder_path,
-                          name=title, y_scales_log=[False, True], **enable_kwargs)
+                          name=title, y_scales_log=[False, False], **enable_kwargs)
     # logger.debug("predict_result_df=\n%s", predict_result_df)
     analysis_result_dic['episode_trend_in_sample_summary_plot'] = file_path
 
@@ -125,9 +130,9 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
 
     title = f'{title_header}_episode_trend_summary'
     file_path = plot_twin([episode_value_df[['value', 'value_fee0']], episode_value_df[['close']]],
-                          episode_value_df['action_count'],
+                          episode_value_df['avg_holding'],
                           # folder_path=cache_folder_path,
-                          name=title, y_scales_log=[False, True], **enable_kwargs)
+                          name=title, y_scales_log=[False, False], **enable_kwargs)
     # logger.debug("predict_result_df=\n%s", predict_result_df)
     analysis_result_dic['episode_trend_summary_plot'] = file_path
     analysis_result_dic['episode_trend_summary_df'] = episode_value_df
