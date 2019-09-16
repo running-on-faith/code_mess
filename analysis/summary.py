@@ -29,7 +29,7 @@ FORMAT_2_FLOAT4 = r"{0:.4f}"
 FORMAT_2_MONEY = r"{0:,.2f}"
 
 
-def dic_2_table(doc, param_dic: dict, col_group_num, format_dic: (dict, None)=None):
+def dic_2_table(doc, param_dic: dict, col_group_num=1, format_dic: (dict, None)=None):
     # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
     from docx.oxml.ns import nsdecls
     from docx.oxml import parse_xml
@@ -174,6 +174,16 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
     document.add_paragraph('')
 
     heading_count += 1
+    sub_heading_count = 0
+    key = 'available_episode_model_path_dic'
+    document.add_heading(f'{heading_count}、各轮次训练有效的 episode 模型路径', 1)
+    for num, (round_n, result_dic) in enumerate(round_results_dic.items()):
+        if key in result_dic:
+            sub_heading_count += 1
+            document.add_heading(f'{heading_count}.{sub_heading_count}、第 {round_n} 轮训练 ', 2)
+            dic_2_table(document, result_dic[key], col_group_num=1)
+
+    heading_count += 1
     document.add_heading(f'{heading_count}、各轮次训练 episode 与 value 变化趋势', 1)
     for num, (round_n, result_dic) in enumerate(round_results_dic.items()):
         document.add_heading(f'{heading_count}.{num}、Round {round_n} ', 2)
@@ -189,7 +199,7 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
                 format_dic = {}
                 dic_2_table(document, param_dic, col_group_num=1, format_dic=format_dic)
 
-        key, key1 = 'analysis_result_dic', 'episode_trend_in_sample_summary_plot'
+        key, key1 = 'analysis_result_dic', 'episode_in_sample_value_plot'
         if key in result_dic and key1 in result_dic[key]:
             sub_heading_count += 1
             document.add_heading(f'{heading_count}.{num}.{sub_heading_count}、趋势变化 ', 3)
@@ -290,18 +300,18 @@ def summary_rewards_2_docx(param_dic, analysis_result_dic, title_header, enable_
     # 展示训练曲线 随 Episode 增长，value 结果变化曲线
     heading_count += 1
     document.add_heading(f'{heading_count}、展示训练曲线', 1)
-    key = 'episode_trend_in_sample_summary_df'
+    key = 'episode_in_sample_value_df'
     if key in analysis_result_dic:
         document.add_heading(f'{heading_count}.{sub_heading_count}、随 Episode 增长，value 结果变化曲线（样本内）'
                              f'{in_sample_date_line_str}', 2)
-        document.add_picture(analysis_result_dic['episode_trend_in_sample_summary_plot'])
+        document.add_picture(analysis_result_dic['episode_in_sample_value_plot'])
         document.add_paragraph('')
 
-    key = 'episode_trend_summary_df'
+    key = 'episode_value_df'
     if key in analysis_result_dic:
         sub_heading_count += 1
         document.add_heading(f'{heading_count}.{sub_heading_count}、随 Episode 增长，value 结果变化曲线', 2)
-        document.add_picture(analysis_result_dic['episode_trend_summary_plot'])  # , width=docx.shared.Inches(1.25)
+        document.add_picture(analysis_result_dic['episode_value_plot'])  # , width=docx.shared.Inches(1.25)
         document.add_paragraph('详细数据')
         data_df = analysis_result_dic[key]
 

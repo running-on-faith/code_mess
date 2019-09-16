@@ -161,6 +161,8 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
                          )
         title_header = f"{model_name}_{date_2_str(in_sample_date_line)}{'_i' if in_sample_only else ''}_{round_n}"
         analysis_kwargs['title_header'] = title_header
+        analysis_kwargs['round_n'] = round_n
+        analysis_kwargs['episode_model_path_dic'] = round_n_episode_model_path_dic[round_n]
         analysis_result_dic = analysis_rewards_with_md(
             episode_reward_df_dic, md_df, **analysis_kwargs)
         summary_file_path = summary_rewards_2_docx(param_dic, analysis_result_dic, title_header)

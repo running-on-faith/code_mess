@@ -89,18 +89,43 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
 
     # 随 Episode 增长，value 结果变化曲线
     episode_list.sort()
-    episode_value_df = pd.DataFrame({episode: calc_reward_nav_value(reward_df, in_sample_date_line)
-                                     for episode, reward_df in episode_reward_df_dic.items()
-                                     if reward_df.shape[0] > 0}).T.sort_index()
+    episode_in_sample_value_df = pd.DataFrame({episode: calc_reward_nav_value(reward_df, in_sample_date_line)
+                                               for episode, reward_df in episode_reward_df_dic.items()
+                                               if reward_df.shape[0] > 0}).T.sort_index()
+
+    def check_available_reward(reward_df):
+        """筛选出有效的 模型"""
+        df_len = reward_df.shape[0]
+        if df_len == 0:
+            return False
+        last_s, first_s = df.iloc[-1, :], df.iloc[0, :]
+        if first_s['value'] >= last_s['value']:
+            return False
+        if last_s['action_count'] <= 0:
+            return False
+        avg_holding = df_len / last_s['action_count'] * 2
+        if avg_holding <= 3 or 20 <= avg_holding:
+            return False
+        return True
+
+    # 筛选出有效的 模型
+    available_episode_list = [episode for episode, reward_df in episode_reward_df_dic.items()
+                              if check_available_reward(reward_df)]
+    analysis_result_dic['available_episode_list'] = available_episode_list
+    episode_model_path_dic = analysis_result_dic.setdefault('episode_model_path_dic', None)
+    if episode_model_path_dic is None:
+        analysis_result_dic['available_episode_model_path_dic'] = [
+            episode_model_path_dic[episode] for episode in available_episode_list]
+
     # 将 value 净值化，以方便与 close 进行比对
-    analysis_result_dic['episode_trend_in_sample_summary_df'] = episode_value_df
-    title = f'{title_header}_episode_trend_in_sample_summary'
-    file_path = plot_twin([episode_value_df[['value', 'value_fee0']], episode_value_df['close']],
-                          episode_value_df['avg_holding'],
+    analysis_result_dic['episode_in_sample_value_df'] = episode_in_sample_value_df
+    title = f'{title_header}_episode_in_sample_value'
+    file_path = plot_twin([episode_in_sample_value_df[['value', 'value_fee0']], episode_in_sample_value_df['close']],
+                          episode_in_sample_value_df['avg_holding'],
                           # folder_path=cache_folder_path,
                           name=title, y_scales_log=[False, False], **enable_kwargs)
     # logger.debug("predict_result_df=\n%s", predict_result_df)
-    analysis_result_dic['episode_trend_in_sample_summary_plot'] = file_path
+    analysis_result_dic['episode_in_sample_value_plot'] = file_path
 
     # 各个 episod 样本外 5日、10日、20日，60日、120日收益率 变化
     episode_value_dic = {episode: calc_reward_nav_value(reward_df)
@@ -128,14 +153,14 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         episode_rr_df = pd.DataFrame(days_rr_dic)
         episode_value_df = pd.merge(episode_value_df, episode_rr_df, left_index=True, right_index=True)
 
-    title = f'{title_header}_episode_trend_summary'
+    title = f'{title_header}_episode_value'
     file_path = plot_twin([episode_value_df[['value', 'value_fee0']], episode_value_df[['close']]],
                           episode_value_df['avg_holding'],
                           # folder_path=cache_folder_path,
                           name=title, y_scales_log=[False, False], **enable_kwargs)
     # logger.debug("predict_result_df=\n%s", predict_result_df)
-    analysis_result_dic['episode_trend_summary_plot'] = file_path
-    analysis_result_dic['episode_trend_summary_df'] = episode_value_df
+    analysis_result_dic['episode_value_plot'] = file_path
+    analysis_result_dic['episode_value_df'] = episode_value_df
 
     # value，value_fee0 走势图
     # 每一个 reward 一张图
