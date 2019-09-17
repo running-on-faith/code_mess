@@ -92,6 +92,7 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     episode_in_sample_value_df = pd.DataFrame({episode: calc_reward_nav_value(reward_df, in_sample_date_line)
                                                for episode, reward_df in episode_reward_df_dic.items()
                                                if reward_df.shape[0] > 0}).T.sort_index()
+    # 筛选出有效的 模型
 
     def check_available_reward(reward_df):
         """筛选出有效的 模型"""
@@ -108,14 +109,13 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
             return False
         return True
 
-    # 筛选出有效的 模型
     available_episode_list = [episode for episode, reward_df in episode_reward_df_dic.items()
                               if check_available_reward(reward_df)]
     analysis_result_dic['available_episode_list'] = available_episode_list
     episode_model_path_dic = kwargs.setdefault('episode_model_path_dic', None)
     if episode_model_path_dic is not None:
-        analysis_result_dic['available_episode_model_path_dic'] = [
-            episode_model_path_dic[episode] for episode in available_episode_list]
+        analysis_result_dic['available_episode_model_path_dic'] = {
+            episode: episode_model_path_dic[episode] for episode in available_episode_list}
 
     # 将 value 净值化，以方便与 close 进行比对
     analysis_result_dic['episode_in_sample_value_df'] = episode_in_sample_value_df
