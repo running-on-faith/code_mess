@@ -98,7 +98,7 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         df_len = reward_df.shape[0]
         if df_len == 0:
             return False
-        last_s, first_s = df.iloc[-1, :], df.iloc[0, :]
+        last_s, first_s = reward_df.iloc[-1, :], reward_df.iloc[0, :]
         if first_s['value'] >= last_s['value']:
             return False
         if last_s['action_count'] <= 0:
@@ -112,8 +112,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     available_episode_list = [episode for episode, reward_df in episode_reward_df_dic.items()
                               if check_available_reward(reward_df)]
     analysis_result_dic['available_episode_list'] = available_episode_list
-    episode_model_path_dic = analysis_result_dic.setdefault('episode_model_path_dic', None)
-    if episode_model_path_dic is None:
+    episode_model_path_dic = kwargs.setdefault('episode_model_path_dic', None)
+    if episode_model_path_dic is not None:
         analysis_result_dic['available_episode_model_path_dic'] = [
             episode_model_path_dic[episode] for episode in available_episode_list]
 
