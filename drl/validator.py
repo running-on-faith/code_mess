@@ -122,12 +122,12 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
         logger.info('target_round_n=%d 没有可加载的模型', target_round_n_list)
         return
 
-    episode_reward_df_dic = {}
     index_col = ['trade_date']
     round_n_list = list(round_n_episode_model_path_dic.keys())
     round_n_list.sort()
     round_results_dic = defaultdict(dict)
     for round_n in round_n_list:
+        episode_reward_df_dic = {}
         episode_list = list(round_n_episode_model_path_dic[round_n].keys())
         episode_list.sort()
         episode_count = len(episode_list)
