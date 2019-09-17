@@ -11,10 +11,10 @@
 import datetime
 import logging
 import os
-
+import itertools
 import docx
 import pandas as pd
-from docx.shared import Pt
+from docx.shared import Pt, Inches
 from ibats_common.analysis.plot import clean_cache
 from ibats_common.analysis.summary import df_2_table, stats_df_2_docx_table
 from ibats_common.backend.mess import get_report_folder_path
@@ -29,7 +29,20 @@ FORMAT_2_FLOAT4 = r"{0:.4f}"
 FORMAT_2_MONEY = r"{0:,.2f}"
 
 
-def dic_2_table(doc, param_dic: dict, col_group_num=1, format_dic: (dict, None)=None):
+def format_2_str(value, formator):
+    """根据 formator 将对象格式化成 str"""
+    if formator is None:
+        text = str(value)
+    elif isinstance(formator, str):
+        text = str.format(formator, value)
+    elif callable(formator):
+        text = formator(value)
+    else:
+        raise ValueError('%s: %s 无效', value, formator)
+    return text
+
+
+def dic_2_table(doc, param_dic: dict, col_group_num=1, format_key=None, format_dic: (dict, None)=None, col_width=[1.75, 4.25]):
     # Highlight all cells limegreen (RGB 32CD32) if cell contains text "0.5"
     from docx.oxml.ns import nsdecls
     from docx.oxml import parse_xml
@@ -62,12 +75,15 @@ def dic_2_table(doc, param_dic: dict, col_group_num=1, format_dic: (dict, None)=
     # format table style to be a grid
     t.style = 'TableGrid'
 
+    # write key value
     for num, (key, value) in enumerate(param_dic.items()):
         row_num, col_num = num // col_group_num + 1, num % col_group_num * 2
 
         paragraph = t.cell(row_num, col_num).paragraphs[0]
         # populate the table with the dataframe
-        paragraph.add_run(key).bold = True
+        text = format_2_str(key, format_key)
+
+        paragraph.add_run(text).bold = True
         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
         if format_dic is not None and key in format_dic:
@@ -75,15 +91,7 @@ def dic_2_table(doc, param_dic: dict, col_group_num=1, format_dic: (dict, None)=
         else:
             format_cell = None
 
-        if format_cell is None:
-            text = str(value)
-        elif isinstance(format_cell, str):
-            text = str.format(format_cell, value)
-        elif callable(format_cell):
-            text = format_cell(value)
-        else:
-            raise ValueError('%s: %s 无效', key, format_cell)
-
+        text = format_2_str(value, format_cell)
         paragraph = t.cell(row_num, col_num + 1).paragraphs[0]
         paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         try:
@@ -92,11 +100,26 @@ def dic_2_table(doc, param_dic: dict, col_group_num=1, format_dic: (dict, None)=
             logger.exception('param_dic[%s] = %s', key, text)
             raise exp from exp
 
+    # set alternative color
     for i in range(1, row_num_max):
         for j in range(col_num_max):
             if i % 2 == 0:
                 t.cell(i, j)._tc.get_or_add_tcPr().append(
                     parse_xml(r'<w:shd {} w:fill="A3D9EA"/>'.format(nsdecls('w'))))
+
+    # 如果出现多列，则将列的宽度 / 列数
+    widths = (Inches(col_width[0] / col_group_num), Inches(col_width[1] / col_group_num))
+    width_in_row = itertools.chain.from_iterable(itertools.repeat(widths, col_group_num))
+    t.autofit = False
+    # set col width
+    # https://stackoverflow.com/questions/43051462/python-docx-how-to-set-cell-width-in-tables
+    # It's not work
+    # for row in t.rows:
+    #     for cell, width in zip(row.cells, width_in_row):
+    #         cell.width = width
+    # it's work
+    for idx, width in enumerate(width_in_row):
+        t.columns[idx].width = width
 
 
 def _test_dic_2_table():
@@ -178,10 +201,11 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
     key = 'available_episode_model_path_dic'
     document.add_heading(f'{heading_count}、各轮次训练有效的 episode 模型路径', 1)
     for num, (round_n, result_dic) in enumerate(round_results_dic.items()):
-        if key in result_dic:
+        analysis_result_dic = result_dic['analysis_result_dic']
+        if key in analysis_result_dic:
             sub_heading_count += 1
             document.add_heading(f'{heading_count}.{sub_heading_count}、第 {round_n} 轮训练 ', 2)
-            dic_2_table(document, result_dic[key], col_group_num=1)
+            dic_2_table(document, analysis_result_dic[key], col_group_num=1)
 
     heading_count += 1
     document.add_heading(f'{heading_count}、各轮次训练 episode 与 value 变化趋势', 1)
