@@ -253,7 +253,8 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
                 for episode, model_path in result_dic['analysis_result_dic'][key].items():
                     df_dic_list.append(
                         dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
-    df = pd.DataFrame(df_dic_list)['date', 'round', 'episode', 'file_path']
+
+    df = pd.DataFrame(df_dic_list)[['date', 'round', 'episode', 'file_path']]
     file_name = f'available_model_path.csv'
     file_path = os.path.join(output_folder, file_name)
     df.to_csv(file_path, index=False)
