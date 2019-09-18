@@ -38,12 +38,15 @@ def valid_model(auto_open_file=True, auto_open_summary_file=True):
             open_file_with_system_app(file_path)
 
 
-def valid_whole(output_folder, auto_open_file=False):
-    auto_valid_and_report(output_folder, MODEL_NAME, get_agent, auto_open_file=auto_open_file)
+def valid_whole(output_folder, auto_open_file=False, auto_open_summary_file=False):
+    auto_valid_and_report(output_folder, MODEL_NAME, get_agent,
+                          auto_open_file=auto_open_file, auto_open_summary_file=auto_open_summary_file)
 
 
 if __name__ == "__main__":
     # valid_model()
     valid_whole(
-        output_folder=r'd:\WSPych\code_mess\drl\drl_off_example\d3qn_replay_2019_08_25\output',
-        auto_open_file=False)
+        output_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output',
+        auto_open_file=False,
+        auto_open_summary_file=False
+    )
