@@ -36,7 +36,7 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     if episode_count == 0:
         return analysis_result_dic
     episode_list.sort()
-    enable_kwargs = dict(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, figsize=(5.4, 6.8))
+    enable_kwargs = dict(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, figsize=(5.4, 5.0))
     in_sample_date_line = pd.to_datetime(in_sample_date_line)
 
     def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
@@ -94,8 +94,10 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
                                                if reward_df.shape[0] > 0}).T.sort_index()
     # 筛选出有效的 模型
 
-    def check_available_reward(reward_df):
+    def check_available_reward(episode, reward_df):
         """筛选出有效的 模型"""
+        if episode < 1000:
+            return False
         df_len = reward_df.shape[0]
         if df_len == 0:
             return False
@@ -105,12 +107,12 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         if last_s['action_count'] <= 0:
             return False
         avg_holding = df_len / last_s['action_count'] * 2
-        if avg_holding <= 3 or 20 <= avg_holding:
+        if avg_holding <= 3 or 10 <= avg_holding:
             return False
         return True
 
     available_episode_list = [episode for episode, reward_df in episode_reward_df_dic.items()
-                              if check_available_reward(reward_df)]
+                              if check_available_reward(episode, reward_df)]
     analysis_result_dic['available_episode_list'] = available_episode_list
     episode_model_path_dic = kwargs.setdefault('episode_model_path_dic', None)
     if episode_model_path_dic is not None:

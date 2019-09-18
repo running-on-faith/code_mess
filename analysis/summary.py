@@ -63,17 +63,27 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
     sub_heading_count = 0
     key = 'available_episode_model_path_dic'
     document.add_heading(f'{heading_count}、各轮次训练有效的 episode 模型路径', 1)
+    available_round_set = set()
     for num, (round_n, result_dic) in enumerate(round_results_dic.items()):
         analysis_result_dic = result_dic['analysis_result_dic']
         if key in analysis_result_dic:
+            key_count = len(analysis_result_dic[key])
             sub_heading_count += 1
-            document.add_heading(f'{heading_count}.{sub_heading_count}、第 {round_n} 轮训练 ', 2)
-            dic_2_table(document, analysis_result_dic[key], col_group_num=1)
+            run = document.add_heading('', 2).add_run(
+                f'{heading_count}.{sub_heading_count}、第 {round_n} 轮训练[ {key_count} ]个')
+            if key_count == 0:
+                run.font.double_strike = True
+            else:
+                available_round_set.add(round_n)
+            dic_2_table(document, analysis_result_dic[key], col_group_num=1, col_width=[0.6, 5.4])
 
+    document.add_page_break()
     heading_count += 1
     document.add_heading(f'{heading_count}、各轮次训练 episode 与 value 变化趋势', 1)
     for num, (round_n, result_dic) in enumerate(round_results_dic.items()):
-        document.add_heading(f'{heading_count}.{num}、Round {round_n} ', 2)
+        run = document.add_heading('', 2).add_run(f'{heading_count}.{num}、Round {round_n} ')
+        if round_n not in available_round_set:
+            run.font.double_strike = True
         sub_heading_count = 0
         key = 'param_dic'
         if key in result_dic:
@@ -92,7 +102,8 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
             document.add_heading(f'{heading_count}.{num}.{sub_heading_count}、趋势变化 ', 3)
             file_path = result_dic[key][key1]
             document.add_picture(file_path)  # , width=docx.shared.Inches(1.25)
-            document.add_paragraph('')
+            if num > 0:  # 第一段前面由于多了一个二级标题，导致最后一行分页时总是多出一个空白页
+                document.add_page_break()
 
     # 保存文件
     if doc_file_path is not None:

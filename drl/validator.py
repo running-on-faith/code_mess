@@ -207,22 +207,23 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
     logger = logging.getLogger(__name__)
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
-        file_path = os.path.join(output_folder, file_name)
-        if not os.path.isdir(file_path):
+        folder_path = os.path.join(output_folder, file_name)
+        if not os.path.isdir(folder_path):
             continue
         try:
             in_sample_date_line = str_2_date(file_name)
         except:
-            logger.debug('跳过 %s 目录', file_path)
+            logger.debug('跳过 %s 目录', folder_path)
             continue
         import datetime
         if not isinstance(in_sample_date_line, datetime.date):
             continue
-        model_folder = os.path.join(file_path, 'model')
+        model_folder = os.path.join(folder_path, 'model')
         date_model_folder_dic[in_sample_date_line] = model_folder
 
     date_list = list(date_model_folder_dic.keys())
     date_list.sort()
+    date_round_results_dic = {}
     for in_sample_date_line in date_list:
         model_folder = date_model_folder_dic[in_sample_date_line]
         round_results_dic, file_path = validate_bunch(
@@ -235,12 +236,28 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
             reward_2_csv=True,
             show_plot_141=False
         )
+        date_round_results_dic[in_sample_date_line] = round_results_dic
         if auto_open_summary_file and file_path is not None:
             open_file_with_system_app(file_path)
         for _, result_dic in round_results_dic.items():
             file_path = result_dic['summary_file_path']
             if auto_open_file and file_path is not None:
                 open_file_with_system_app(file_path)
+
+    # 将各个日期的有效 model 路径合并成一个 DataFrame
+    # date  round   episode file_path
+    df_dic_list, key = [], 'available_episode_model_path_dic'
+    for in_sample_date_line, round_results_dic in date_round_results_dic.items():
+        for round_n, result_dic in round_results_dic.items():
+            if key in result_dic['analysis_result_dic']:
+                for episode, model_path in result_dic['analysis_result_dic'][key].items():
+                    df_dic_list.append(
+                        dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
+    df = pd.DataFrame(df_dic_list)
+    file_name = f'available_model_path.csv'
+    file_path = os.path.join(output_folder, file_name)
+    df.to_csv(file_path, index=False)
+    logger.info('有效模型路径输出到文件： %s', file_path)
 
 
 def _test_auto_valid_and_report(output_folder, auto_open_file=True):
