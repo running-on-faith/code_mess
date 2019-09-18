@@ -7,29 +7,28 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-import os
-import re
+import multiprocessing
 from collections import defaultdict
-from datetime import datetime, timedelta
 
 import ffn
-import numpy as np
-from ibats_utils.mess import date_2_str, get_last, datetime_2_str, copy_file_to, get_module_file_path, copy_folder_to
-
-from ibats_common.analysis.plot import show_drl_accuracy
-from ibats_common.analysis.summary import summary_release_2_docx
 from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.common import BacktestTradeMode, ContextKey, CalcMode
 from ibats_common.example import get_trade_date_series, get_delivery_date_series
-from drl.d3qn_replay_2019_08_25.agent.main import Agent, get_agent
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
 from ibats_local_trader.agent.md_agent import *
 from ibats_local_trader.agent.td_agent import *
+from ibats_utils.mess import date_2_str, get_last
+from collections import Counter
+from drl.d3qn_replay_2019_08_25.agent.main import Agent, get_agent
 
 logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)
+
+
+def predict_action(agent: Agent, inputs):
+    return agent.choose_action_deterministic(inputs)
 
 
 class DRL_LSTM_Stg(StgBase):
@@ -41,11 +40,13 @@ class DRL_LSTM_Stg(StgBase):
         # 模型运行所需参数
         self.model_file_csv_path = model_file_csv_path  # 模型路径.csv 文件路径
         self.date_file_path_list_dic = defaultdict(list)
+        self.model_date_list = []
         self.retrain_period = 60  # 60 每隔60天重新训练一次，0 则为不进行重新训练
-        self.trade_date_last_train = None
+        self._model_date_curr = None  # 当前预测使用的模型日期
         self.do_nothing_on_min_bar = False  # 仅供调试使用
         self._env = None
-        self._agent = get_agent()
+        self._agent_list = None  # 当前模型 Agent list
+        self._pool = multiprocessing.Pool(multiprocessing.cpu_count())
         # 模型因子构建所需参数
         self.input_shape = [None, 12, 93, 5]
         self.action_size = 2  # close, long, short, keep 如果是3的话，则没有keep
@@ -53,18 +54,60 @@ class DRL_LSTM_Stg(StgBase):
         self.trade_date_series = get_trade_date_series()
         self.delivery_date_series = get_delivery_date_series(instrument_type)
 
+    def load_model_list(self):
+        df = pd.read_csv(self.model_file_csv_path)
+        self.model_date_list = []
+        for _, data_df in df.groupby('date'):
+            self.date_file_path_list_dic[_] = list(data_df['file_path'])
+            self.model_date_list.append(_)
+        self.model_date_list.sort()
+
     def on_prepare_min1(self, md_df, context):
         # 加载模型列表
         self.load_model_list()
 
-    def predict_latest_action(self, md_df):
+    @property
+    def agent_param_iter(self):
+        latest_state = self._env.latest_state()
+        for agent in self._agent_list:
+            yield agent, latest_state
+
+    def predict_latest_action(self, indexed_df):
         """
         对最新状态进行预测
         :return: action: 0 long, 1, short, 0, close
         """
-        self._env = Account(md_df, data_factors=batch_factors)
-        # TODO: 加入强化学习机制，目前只做action计算，没有进行状态更新
-        action = self._agent.choose_action_deterministic(latest_state)
+        # 获取最新交易日
+        trade_date_latest = str_2_date(indexed_df.index[-1])
+        # 获取因子
+        factors_df = get_factor(
+            indexed_df,
+            trade_date_series=self.trade_date_series,
+            delivery_date_series=self.delivery_date_series,
+            dropna=True)
+        df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=self.n_step)
+        # 构建环境
+        self._env = Account(indexed_df, data_factors=data_arr_batch, state_with_flag=True)
+        model_date = get_last(self.model_date_list, lambda x: x < trade_date_latest)
+        if model_date is None:
+            raise ValueError(f'{date_2_str(trade_date_latest)} 以前没有有效的模型，最小的模型日期未 '
+                             f'{date_2_str(min(self.model_date_list))}')
+        if self._model_date_curr is None or self._model_date_curr != model_date:
+            self._model_date_curr = model_date
+            model_path_list = self.date_file_path_list_dic[model_date]
+            # 构建 Agent list
+            self._agent_list = []
+            for model_path in model_path_list:
+                agent = get_agent()
+                agent.restore_model(model_path)
+                self._agent_list.append(agent)
+
+        # 多进程进行模型预测
+        results = self._pool.map(lambda _agent, _inputs: _agent.choose_action_deterministic(_inputs),
+                                 self.agent_param_iter)
+        action_count_dic = Counter(results)
+        action = action_count_dic.most_common(1)[0]
+        self.logger.debug('%s action=%d, 各个 action 次数', date_2_str(trade_date_latest), action, action_count_dic)
         return action
 
     def on_min1(self, md_df, context):
@@ -74,12 +117,8 @@ class DRL_LSTM_Stg(StgBase):
         # 数据整理
         indexed_df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
         indexed_df.index = pd.DatetimeIndex(indexed_df.index)
-        # 获取最新交易日
-        trade_date_latest = str_2_date(indexed_df.index[-1])
-        # 加载最新的模型
-        self.load_model_env(indexed_df)
-        # 预测
-        action = self.predict_latest_action(md_df)
+        # 预测最新动作
+        action = self.predict_latest_action(indexed_df)
         is_empty, is_buy, is_sell = action == 2, action == 0, action == 1
         # logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
@@ -93,31 +132,12 @@ class DRL_LSTM_Stg(StgBase):
         if is_empty:
             self.keep_empty(instrument_id, close)
 
-    def load_model_list(self):
-        df = pd.read_csv(self.model_file_csv_path)
-        for _, data_df in df.groupby('date'):
-            self.date_file_path_list_dic[_] = list(data_df['file_path'])
-
-    def load_model_env(self, indexed_df):
-        # 获取最新交易日
-        trade_date_latest = str_2_date(indexed_df.index[-1])
-        # 获取因子
-        factors_df = get_factor(
-            indexed_df,
-            trade_date_series=self.trade_date_series,
-            delivery_date_series=self.delivery_date_series,
-            dropna=True)
-        df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=self.n_step)
-        # 构建环境
-        self._env = Account(indexed_df, data_factors=data_arr_batch)
-        # 构建 Agent
-        self._agent.restore_model()
-
 
 def _test_use(is_plot):
     from drl import DATA_FOLDER_PATH
     import os
     instrument_type, backtest_date_from, backtest_date_to = 'RB', '2013-05-14', '2018-10-18'
+    model_file_csv_path = ''
     # 参数设置
     run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal
@@ -133,6 +153,7 @@ def _test_use(is_plot):
     }]
     if run_mode == RunMode.Realtime:
         trade_agent_params = {
+            "model_file_csv_path": model_file_csv_path,
         }
         strategy_handler_param = {
         }
@@ -141,6 +162,7 @@ def _test_use(is_plot):
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 1000000,
             "calc_mode": calc_mode,
+            "model_file_csv_path": model_file_csv_path,
         }
         strategy_handler_param = {
             'date_from': backtest_date_from,  # 策略回测历史数据，回测指定时间段的历史行情
@@ -151,6 +173,7 @@ def _test_use(is_plot):
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             "calc_mode": calc_mode,
+            "model_file_csv_path": model_file_csv_path,
         }
         strategy_handler_param = {
             'date_from': backtest_date_from,  # 策略回测历史数据，回测指定时间段的历史行情
