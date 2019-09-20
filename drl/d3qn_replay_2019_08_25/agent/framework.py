@@ -112,7 +112,6 @@ class Framework(object):
         # cache for state, action, reward, next_state, done
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
-        self.weights = None  # 用于 _get_samples 基于权重提取数据
         self.logger = logging.getLogger(str(self.__class__))
         K.clear_session()
         tf.reset_default_graph()
@@ -174,8 +173,10 @@ class Framework(object):
         return model
 
     def get_deterministic_policy(self, inputs):
+        action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
+        # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+                                                'flag': to_categorical(action, self.flag_size)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
