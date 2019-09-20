@@ -93,8 +93,9 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
     md_df = md_loader(in_sample_date_line if in_sample_only else None)
     md_df.index = pd.DatetimeIndex(md_df.index)
     factors_df = get_factor(md_df, dropna=True)
-    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
-    data_factors, shape = data_arr_batch, data_arr_batch.shape
+    df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step)
+    data_factors, shape = batch_factors, batch_factors.shape
+    logger.info('batch_factors.shape=%s', shape)
     max_date = max(md_df.index)
     max_date_str = date_2_str(max_date)
     # shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
@@ -137,15 +138,16 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
             reward_file_path = os.path.join(model_folder, f'reward_{round_n}_{episode}.csv')
             if read_csv and os.path.exists(reward_file_path):
                 reward_df = pd.read_csv(reward_file_path, index_col=index_col, parse_dates=index_col)
+                if reward_df.shape[0] == 0:
+                    continue
             else:
                 reward_df = load_model_and_predict_through_all(
                     md_df, data_factors, model_name, get_agent_func,
                     tail_n=0, model_path=file_path, key=episode, show_plot=False)
-
-            if reward_df.shape[0] == 0:
-                continue
-            if reward_2_csv:
-                reward_df.to_csv(reward_file_path)
+                if reward_df.shape[0] == 0:
+                    continue
+                if reward_2_csv:
+                    reward_df.to_csv(reward_file_path)
 
             episode_reward_df_dic[episode] = reward_df
 
