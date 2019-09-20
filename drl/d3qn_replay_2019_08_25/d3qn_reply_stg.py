@@ -8,6 +8,7 @@
 @desc    : 
 """
 import multiprocessing
+from collections import Counter
 from collections import defaultdict
 
 import ffn
@@ -15,25 +16,38 @@ from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.common import BacktestTradeMode, ContextKey, CalcMode
 from ibats_common.example import get_trade_date_series, get_delivery_date_series
+from ibats_common.example.data import OHLCAV_COL_NAME_LIST
 from ibats_common.strategy import StgBase
 from ibats_common.strategy_handler import strategy_handler_factory
 from ibats_local_trader.agent.md_agent import *
 from ibats_local_trader.agent.td_agent import *
 from ibats_utils.mess import date_2_str, get_last
-from collections import Counter
-from drl.d3qn_replay_2019_08_25.agent.main import Agent, get_agent
+
+from drl import DATA_FOLDER_PATH
+from drl.d3qn_replay_2019_08_25.agent.main import get_agent
 
 logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)
 
 
-def predict_action(agent: Agent, inputs):
+def predict(params):
+    """加载模型，加载权重，预测action"""
+    # model_path, inputs, agent=None, input_shape=None
+    model_path, inputs, agent, input_shape = params
+    # print('input_shape=%s' % (input_shape, ))
+    if agent is None:
+        agent = get_agent(input_shape=input_shape)
+    # print('agent.restore_model(model_path) %s' % (model_path, ))
+    agent.restore_model(model_path)
+    # logger.info('agent predict state.shape=%s, action=%s', inputs[0].shape, inputs[1])
+    # print('agent predict state.shape=%s, action=%s' % (inputs[0].shape, inputs[1]))
+    # return 1
     return agent.choose_action_deterministic(inputs)
 
 
-class DRL_LSTM_Stg(StgBase):
+class DRLStg(StgBase):
 
-    def __init__(self, instrument_type, model_file_csv_path, unit=1):
+    def __init__(self, instrument_type, model_file_csv_path, unit=1, use_pool=False):
         super().__init__()
         self.unit = unit
         self.instrument_type = instrument_type
@@ -46,17 +60,16 @@ class DRL_LSTM_Stg(StgBase):
         self.do_nothing_on_min_bar = False  # 仅供调试使用
         self._env = None
         self._agent_list = None  # 当前模型 Agent list
-        self._pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        self._pool = multiprocessing.Pool(multiprocessing.cpu_count() // 2) if use_pool else None
         # 模型因子构建所需参数
-        self.input_shape = [None, 12, 93, 5]
-        self.action_size = 2  # close, long, short, keep 如果是3的话，则没有keep
         self.n_step = 60
-        self.trade_date_series = get_trade_date_series()
-        self.delivery_date_series = get_delivery_date_series(instrument_type)
+        self.trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+        self.delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+        self._last_action = 0
 
     def load_model_list(self):
-        df = pd.read_csv(self.model_file_csv_path)
-        self.model_date_list = []
+        df = pd.read_csv(self.model_file_csv_path, parse_dates=['date'])
+        self.model_date_list, self.date_file_path_list_dic = [], {}
         for _, data_df in df.groupby('date'):
             self.date_file_path_list_dic[_] = list(data_df['file_path'])
             self.model_date_list.append(_)
@@ -66,11 +79,10 @@ class DRL_LSTM_Stg(StgBase):
         # 加载模型列表
         self.load_model_list()
 
-    @property
-    def agent_param_iter(self):
+    def predict_param_iter(self, model_path_list, shape):
         latest_state = self._env.latest_state()
-        for agent in self._agent_list:
-            yield agent, latest_state
+        for model_path in model_path_list:
+            yield model_path, latest_state, None, shape
 
     def predict_latest_action(self, indexed_df):
         """
@@ -78,36 +90,43 @@ class DRL_LSTM_Stg(StgBase):
         :return: action: 0 long, 1, short, 0, close
         """
         # 获取最新交易日
-        trade_date_latest = str_2_date(indexed_df.index[-1])
+        trade_date_latest = pd.to_datetime(indexed_df.index[-1])
         # 获取因子
+        # 2019-09-19 当期训练模型没有 trade_date_series， delivery_date_series 两种因子，因此预测时需要注释掉
         factors_df = get_factor(
             indexed_df,
-            trade_date_series=self.trade_date_series,
-            delivery_date_series=self.delivery_date_series,
+            # trade_date_series=self.trade_date_series,
+            # delivery_date_series=self.delivery_date_series,
             dropna=True)
-        df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=self.n_step)
+        df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=self.n_step)
         # 构建环境
-        self._env = Account(indexed_df, data_factors=data_arr_batch, state_with_flag=True)
+        self._env = Account(indexed_df, data_factors=batch_factors, state_with_flag=True)
+        # 设置最新的 action
+        self._env.step(self._last_action)
         model_date = get_last(self.model_date_list, lambda x: x < trade_date_latest)
         if model_date is None:
             raise ValueError(f'{date_2_str(trade_date_latest)} 以前没有有效的模型，最小的模型日期未 '
                              f'{date_2_str(min(self.model_date_list))}')
         if self._model_date_curr is None or self._model_date_curr != model_date:
             self._model_date_curr = model_date
-            model_path_list = self.date_file_path_list_dic[model_date]
-            # 构建 Agent list
-            self._agent_list = []
-            for model_path in model_path_list:
-                agent = get_agent()
-                agent.restore_model(model_path)
-                self._agent_list.append(agent)
+        model_path_list = self.date_file_path_list_dic[model_date]
 
         # 多进程进行模型预测
-        results = self._pool.map(lambda _agent, _inputs: _agent.choose_action_deterministic(_inputs),
-                                 self.agent_param_iter)
+        if self._pool is None:
+            latest_state = self._env.latest_state()
+            agent = get_agent(input_shape=batch_factors.shape)
+            results = [predict([model_path, latest_state, agent, None])
+                       for model_path in model_path_list]
+        else:
+            # 无法实现多进程？
+            # results = self._pool.map(
+            #     predict,  # lambda _agent, _inputs: _agent.choose_action_deterministic(_inputs),
+            #     self.predict_param_iter(model_path_list, batch_factors.shape))
+            results = [self._pool.apply(predict, (_, ))
+                       for _ in self.predict_param_iter(model_path_list, batch_factors.shape)]
         action_count_dic = Counter(results)
-        action = action_count_dic.most_common(1)[0]
-        self.logger.debug('%s action=%d, 各个 action 次数', date_2_str(trade_date_latest), action, action_count_dic)
+        action = action_count_dic.most_common(1)[0][0]
+        self.logger.debug('%s action=%d, 各个 action 次数 %s', date_2_str(trade_date_latest), action, action_count_dic)
         return action
 
     def on_min1(self, md_df, context):
@@ -115,33 +134,36 @@ class DRL_LSTM_Stg(StgBase):
             return
 
         # 数据整理
-        indexed_df = md_df.set_index('trade_date').drop('instrument_type', axis=1)
+        indexed_df = md_df.set_index('trade_date')[OHLCAV_COL_NAME_LIST]
         indexed_df.index = pd.DatetimeIndex(indexed_df.index)
         # 预测最新动作
         action = self.predict_latest_action(indexed_df)
-        is_empty, is_buy, is_sell = action == 2, action == 0, action == 1
-        # logger.info('%s is_buy=%s, is_sell=%s', trade_date, str(is_buy), str(is_sell))
         close = md_df['close'].iloc[-1]
         instrument_id = context[ContextKey.instrument_id_list][0]
-        if is_buy:  # is_buy
+        if action == 1:  # is_buy
             self.keep_long(instrument_id, close, self.unit)
 
-        if is_sell:  # is_sell
+        elif action == 2:  # is_sell
             self.keep_short(instrument_id, close, self.unit)
 
-        if is_empty:
+        elif action == 0:
             self.keep_empty(instrument_id, close)
+
+        self._last_action = action
 
 
 def _test_use(is_plot):
     from drl import DATA_FOLDER_PATH
     import os
     instrument_type, backtest_date_from, backtest_date_to = 'RB', '2013-05-14', '2018-10-18'
-    model_file_csv_path = ''
+    model_file_csv_path = r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/available_model_path.csv'
     # 参数设置
     run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal
-    strategy_params = {'instrument_type': instrument_type, 'unit': 1}
+    strategy_params = {'instrument_type': instrument_type,
+                       'unit': 1,
+                       "model_file_csv_path": model_file_csv_path
+                       }
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
         'instrument_id_list': [instrument_type],
@@ -153,16 +175,15 @@ def _test_use(is_plot):
     }]
     if run_mode == RunMode.Realtime:
         trade_agent_params = {
-            "model_file_csv_path": model_file_csv_path,
         }
         strategy_handler_param = {
+
         }
     elif run_mode == RunMode.Backtest:
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             'init_cash': 1000000,
             "calc_mode": calc_mode,
-            "model_file_csv_path": model_file_csv_path,
         }
         strategy_handler_param = {
             'date_from': backtest_date_from,  # 策略回测历史数据，回测指定时间段的历史行情
@@ -173,7 +194,6 @@ def _test_use(is_plot):
         trade_agent_params = {
             'trade_mode': BacktestTradeMode.Order_2_Deal,
             "calc_mode": calc_mode,
-            "model_file_csv_path": model_file_csv_path,
         }
         strategy_handler_param = {
             'date_from': backtest_date_from,  # 策略回测历史数据，回测指定时间段的历史行情
@@ -182,7 +202,7 @@ def _test_use(is_plot):
 
     # 初始化策略处理器
     stghandler = strategy_handler_factory(
-        stg_class=DRL_LSTM_Stg,
+        stg_class=DRLStg,
         strategy_params=strategy_params,
         md_agent_params_list=md_agent_params_list,
         exchange_name=ExchangeName.LocalFile,
