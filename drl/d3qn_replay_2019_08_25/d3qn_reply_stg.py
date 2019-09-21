@@ -12,6 +12,7 @@ from collections import Counter
 from collections import defaultdict
 
 import ffn
+from config import config
 from ibats_common.backend.factor import get_factor, transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.common import BacktestTradeMode, ContextKey, CalcMode
@@ -156,7 +157,11 @@ def _test_use(is_plot):
     from drl import DATA_FOLDER_PATH
     import os
     instrument_type, backtest_date_from, backtest_date_to = 'RB', '2013-05-14', '2018-10-18'
-    model_file_csv_path = r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/available_model_path.csv'
+    from ibats_utils.mess import is_windows_os
+    if is_windows_os():
+        model_file_csv_path = r'D:\WSPych\code_mess\drl\drl_off_example\d3qn_replay_2019_08_25\output\available_model_path.csv'
+    else:
+        model_file_csv_path = r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/available_model_path.csv'
     # 参数设置
     run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal

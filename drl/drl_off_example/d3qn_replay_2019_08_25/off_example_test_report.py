@@ -44,9 +44,14 @@ def valid_whole(output_folder, auto_open_file=False, auto_open_summary_file=Fals
 
 
 if __name__ == "__main__":
+    from ibats_utils.mess import is_windows_os
+    if is_windows_os():
+        output_folder = r'D:\WSPych\code_mess\drl\drl_off_example\d3qn_replay_2019_08_25\output'
+    else:
+        output_folder = r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output'
     # valid_model()
     valid_whole(
-        output_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output',
+        output_folder=output_folder,
         auto_open_file=False,
         auto_open_summary_file=False
     )
