@@ -23,33 +23,7 @@
 import logging
 
 import numpy as np
-import tensorflow as tf
 from ibats_utils.mess import iter_2_range
-from keras import metrics, backend as K
-from keras.callbacks import TensorBoard, Callback
-from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-from keras.models import Model
-from keras.optimizers import Adam, Nadam
-from keras.utils import to_categorical
-
-
-class LogFit(Callback):
-
-    def __init__(self):
-        super().__init__()
-        self.logs_list = []
-        self.epsilon = 1.
-        self.logger = logging.getLogger(str(self.__class__))
-
-    def on_epoch_end(self, epoch, logs=None):
-        if logs is not None and len(logs) > 0:
-            # self.logger.debug('%s', logs)
-            # self.loss_list.append(logs['loss'] if 'loss' in logs else np.nan)
-            # self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
-            # self.acc_list.append(logs['categorical_accuracy'] if 'categorical_accuracy' in logs else np.nan)
-            # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
-            logs['epsilon'] = self.epsilon
-            self.logs_list.append(logs)
 
 
 class EpsilonMaker:
@@ -84,6 +58,28 @@ class Framework(object):
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
                  cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057):
+        import tensorflow as tf
+        from keras import backend as K
+        from keras.callbacks import Callback
+
+        class LogFit(Callback):
+
+            def __init__(self):
+                super().__init__()
+                self.logs_list = []
+                self.epsilon = 1.
+                self.logger = logging.getLogger(str(self.__class__))
+
+            def on_epoch_end(self, epoch, logs=None):
+                if logs is not None and len(logs) > 0:
+                    # self.logger.debug('%s', logs)
+                    # self.loss_list.append(logs['loss'] if 'loss' in logs else np.nan)
+                    # self.acc_list.append(logs['acc'] if 'acc' in logs else np.nan)
+                    # self.acc_list.append(logs['categorical_accuracy'] if 'categorical_accuracy' in logs else np.nan)
+                    # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
+                    logs['epsilon'] = self.epsilon
+                    self.logs_list.append(logs)
+
         self.input_shape = input_shape
         self.action_size = action_size
         if action_size == 2:
@@ -136,12 +132,17 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
+        import tensorflow as tf
+        from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+        from keras.models import Model
+        from keras import metrics, backend as K
+        from keras.optimizers import Nadam
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
         net = LSTM(self.input_shape[-1] * 2)(input)
         net = Dense(self.input_shape[-1] // 2)(net)
         net = Dropout(0.2)(net)
-        net = Dense(self.input_shape[-1] // 4)(net)    # 减少一层，降低网络复杂度
+        net = Dense(self.input_shape[-1] // 4)(net)  # 减少一层，降低网络复杂度
         net = Dropout(0.2)(net)
         # net = Dense(self.action_size * 4, activation='relu')(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
@@ -173,6 +174,7 @@ class Framework(object):
         return model
 
     def get_deterministic_policy(self, inputs):
+        from keras.utils import to_categorical
         action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
@@ -186,6 +188,7 @@ class Framework(object):
             return np.argmax(act_values[0])  # returns action
 
     def get_stochastic_policy(self, inputs):
+        from keras.utils import to_categorical
         if np.random.rand() <= self.epsilon:
             if self.last_action is None:
                 action = np.random.choice(self.actions)
@@ -228,6 +231,8 @@ class Framework(object):
 
     # train, update value network params
     def update_value_net(self):
+        from keras.utils import to_categorical
+        from keras.callbacks import TensorBoard
 
         self.tot_update_count += 1
         if self.tot_update_count % self.update_target_net_period == 0:
@@ -362,7 +367,8 @@ def _test_epsilon_maker():
     epsilon_maker = EpsilonMaker(sin_step=0.05, epsilon_decay=0.996, epsilon_min=0.05)
     epsilon_list = [epsilon_maker.epsilon_next for _ in range(2000)]
     plt.plot(epsilon_list)
-    plt.suptitle(f'epsilon_decay={epsilon_maker.epsilon_decay:.3f} sin_step={epsilon_maker.sin_step:.2f}, epsilon_min={epsilon_maker.epsilon_min:.2f}')
+    plt.suptitle(
+        f'epsilon_decay={epsilon_maker.epsilon_decay:.3f} sin_step={epsilon_maker.sin_step:.2f}, epsilon_min={epsilon_maker.epsilon_min:.2f}')
     plt.show()
 
 

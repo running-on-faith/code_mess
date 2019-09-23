@@ -13,18 +13,19 @@ dm-sonnet==1.19 对应 tensorflow==1.5.1
 
 2019-08-08
 action_size 4 -> 2 多空 only
+2019-09-23
+文件开头使用 use_curp_only() 将回导致无法使用 多进程执行训练，建议将 use_curp_only() 移入训练类内部
 
 """
-from ibats_common.backend.rl.utils import use_cup_only
-
+# from ibats_common.backend.rl.utils import use_cup_only
+#
 # devices = show_device()
 # logger.debug("%s devices len:%s", type(devices), len(devices))
-use_cup_only()
+# use_curp_only()
 
 import logging
 
 import numpy as np
-import tensorflow as tf
 
 from drl.d3qn_replay_2019_08_25.agent.framework import Framework
 
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 class Agent(object):
     def __init__(self, input_shape=None, **kwargs):
+        import tensorflow as tf
         tf.reset_default_graph()
         if input_shape is not None:
             input_shape = list(input_shape)
