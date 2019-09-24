@@ -8,8 +8,10 @@
 @desc    : 
 """
 import logging
+import multiprocessing
 import os
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
+from functools import partial
 
 import pandas as pd
 from ibats_common.analysis.plot import plot_twin
@@ -63,11 +65,19 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     return reward_df
 
 
+def _callback_func(reward_df, reward_2_csv, episode, episode_reward_df_dic, reward_file_path):
+    if reward_df.shape[0] == 0:
+        return
+    if reward_2_csv:
+        reward_df.to_csv(reward_file_path)
+    episode_reward_df_dic[episode] = reward_df
+
+
 def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
                    reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60, in_sample_only=False,
-                   **analysis_kwargs):
+                   ignore_if_exist=False, pool_worker_num=multiprocessing.cpu_count(), **analysis_kwargs):
     """
-
+    分别验证 model 目录下 各个 round 的模型预测结果
     :param md_loader: 数据加载器
     :param model_name: 模型名称
     :param get_agent_func: drl agent 生成器
@@ -78,17 +88,14 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
     :param target_round_n_list: 目标 round_n 列表，默认 None 代表全部
     :param n_step: factor 生成是的 step， 该step 需要与模型训练时 step 值保持一致，否则模型将无法运行
     :param in_sample_only: 是否只对样本内数据继续验证
+    :param ignore_if_exist: 如果 docx 文件以及存在则不再生成
     :param analysis_kwargs: reward 分析相关参数
     :return:
     """
+    pool = None if pool_worker_num is None or pool_worker_num == 0 else multiprocessing.Pool(pool_worker_num)
     logger = logging.getLogger(__name__)
     analysis_kwargs['in_sample_date_line'] = in_sample_date_line
     analysis_kwargs['in_sample_only'] = in_sample_only
-    # 建立相关数据
-    # OHLCAV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
-    # md_df = load_data('RB.csv',
-    #                   folder_path=DATA_FOLDER_PATH,
-    #                   ).set_index('trade_date')[OHLCAV_COL_NAME_LIST]
     # 如果 in_sample_only 则只加载样本内行情数据
     md_df = md_loader(in_sample_date_line if in_sample_only else None)
     md_df.index = pd.DatetimeIndex(md_df.index)
@@ -128,7 +135,7 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
     round_n_list.sort()
     round_results_dic = defaultdict(dict)
     for round_n in round_n_list:
-        episode_reward_df_dic = {}
+        episode_reward_df_dic, episode_params_dic = {}, OrderedDict()
         episode_list = list(round_n_episode_model_path_dic[round_n].keys())
         episode_list.sort()
         episode_count = len(episode_list)
@@ -141,15 +148,31 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
                 if reward_df.shape[0] == 0:
                     continue
             else:
-                reward_df = load_model_and_predict_through_all(
-                    md_df, data_factors, model_name, get_agent_func,
-                    tail_n=0, model_path=file_path, key=episode, show_plot=False)
-                if reward_df.shape[0] == 0:
-                    continue
-                if reward_2_csv:
-                    reward_df.to_csv(reward_file_path)
+                if pool is None:
+                    reward_df = load_model_and_predict_through_all(
+                        md_df=md_df, batch_factors=data_factors, model_name=model_name, get_agent_func=get_agent_func,
+                        tail_n=0, model_path=file_path, key=episode, show_plot=False)
+                    if reward_df.shape[0] == 0:
+                        continue
+                    if reward_2_csv:
+                        reward_df.to_csv(reward_file_path)
 
-            episode_reward_df_dic[episode] = reward_df
+                    episode_reward_df_dic[episode] = reward_df
+                else:
+                    callback = partial(_callback_func,
+                                       reward_2_csv=reward_2_csv, episode=episode,
+                                       episode_reward_df_dic=episode_reward_df_dic, reward_file_path=reward_file_path)
+                    pool.apply_async(
+                        load_model_and_predict_through_all,
+                        kwds=dict(md_df=md_df, batch_factors=data_factors, model_name=model_name,
+                                  get_agent_func=get_agent_func,
+                                  tail_n=0, model_path=file_path, key=episode, show_plot=False),
+                        callback=callback
+                    )
+
+        if pool is not None:
+            pool.close()
+            pool.join()
 
         # 创建 word 文档
         from analysis.summary import summary_rewards_2_docx
@@ -179,12 +202,13 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
         )
 
     title_header = f"{model_name}_{date_2_str(in_sample_date_line)}{'_i' if in_sample_only else ''}"
-    file_path = summary_analysis_result_dic_2_docx(round_results_dic, title_header)
+    file_path = summary_analysis_result_dic_2_docx(round_results_dic, title_header, ignore_if_exist=ignore_if_exist)
 
     return round_results_dic, file_path
 
 
 def _test_validate_bunch(auto_open_file=True):
+    """分别验证 model 目录下 各个 round 的模型预测结果"""
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
     round_results_dic, file_path = validate_bunch(
         md_loader=lambda range_to=None: load_data(
@@ -194,7 +218,9 @@ def _test_validate_bunch(auto_open_file=True):
         # model_folder=r'/home/mg/github/code_mess/drl/d3qn_replay_2019_08_25/agent/model',
         in_sample_date_line='2013-11-08',
         reward_2_csv=True,
-        target_round_n_list=[1],
+        # target_round_n_list=[1],
+        ignore_if_exist=True,
+        pool_worker_num=2,
     )
     if auto_open_file and file_path is not None:
         open_file_with_system_app(file_path)
