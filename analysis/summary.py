@@ -31,8 +31,33 @@ FORMAT_2_MONEY = r"{0:,.2f}"
 
 
 def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
-                                       enable_clean_cache=False, doc_file_path=None):
+                                       enable_clean_cache=False, doc_file_path=None, ignore_if_exist=False):
     """对各个 round 分析结果进行汇总生产 docx 文件"""
+    # 生成文件名
+    if doc_file_path is not None:
+        if os.path.isdir(doc_file_path):
+            folder_path, file_name = doc_file_path, ''
+        else:
+            folder_path, file_name = os.path.split(doc_file_path)
+    else:
+        folder_path, file_name = None, ''
+
+    if folder_path is None or folder_path == "":
+        folder_path = get_report_folder_path()
+
+    if folder_path != '' and not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+    if file_name == '':
+        file_name = f"{title_header}_" \
+            f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
+        file_path = os.path.join(folder_path, file_name)
+    else:
+        file_path = doc_file_path
+
+    if ignore_if_exist and os.path.exists(file_path):
+        return file_path
+
     # 生成 docx 文档将所需变量
     heading_title = f'Rewards 汇总分析报告[{title_header}] '
 
@@ -106,27 +131,6 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
                 document.add_page_break()
 
     # 保存文件
-    if doc_file_path is not None:
-        if os.path.isdir(doc_file_path):
-            folder_path, file_name = doc_file_path, ''
-        else:
-            folder_path, file_name = os.path.split(doc_file_path)
-    else:
-        folder_path, file_name = None, ''
-
-    if folder_path is None or folder_path == "":
-        folder_path = get_report_folder_path()
-
-    if folder_path != '' and not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-
-    if file_name == '':
-        file_name = f"{title_header}_" \
-            f"{datetime_2_str(datetime.datetime.now(), STR_FORMAT_DATETIME_4_FILE_NAME)}.docx"
-        file_path = os.path.join(folder_path, file_name)
-    else:
-        file_path = doc_file_path
-
     document.save(file_path)
     if enable_clean_cache:
         clean_cache()
