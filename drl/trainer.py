@@ -219,15 +219,16 @@ def train_on_range(md_loader, train_round_kwargs_iter, range_to=None, n_step=60,
     return result_dic
 
 
-def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=1000, offset=180, n_step=60,
-                         use_pool=True, max_process_count=multiprocessing.cpu_count()):
+def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=1000, offset='1M', n_step=60,
+                         date_train_from=None, use_pool=True, max_process_count=multiprocessing.cpu_count()):
     """
     间隔指定周期进行训练
     :param md_loader: 数据加载器
     :param train_round_kwargs_iter:训练参数迭代器
     :param base_data_count: 初始训练数据长度
-    :param offset: 训练数据步进长度
+    :param offset: 训练数据步进长度，采样间隔 D日 W周 M月 Y年
     :param n_step: 训练数据 step
+    :param date_train_from: 当 date_train_from 不为空时 base_data_count 参数失效，从指定日期开始进行训练
     :param use_pool: 是否使用进程池
     :param max_process_count:最大进程数（默认 cup 数量）
     :return:
@@ -237,46 +238,50 @@ def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=100
     # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
     md_df = md_loader()
     logger.info('加载数据，提取日期序列')
-    date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index[:-30])
-    md_df = None  # 释放内存
+    if date_train_from is not None:
+        date_min = pd.to_datetime(date_train_from)
+        date_max = max(md_df.index)
+    else:
+        date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index)
     if use_pool:
         pool = multiprocessing.Pool(max_process_count)
     else:
         pool = None
-    results = {}
-    for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
-        result_dic = train_on_range(md_loader, train_round_kwargs_iter=train_round_kwargs_iter,
-                                    range_to=date_to, n_step=n_step, pool=pool)
+    date_results_dict, tot_count = {}, 0
+    # for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
+    for date_to, data_count in md_df[(date_min <= md_df.index) & (md_df.index <= date_max)]['close'].resample(
+            offset).count().items():
+        if data_count <= 0:
+            continue
+        round_result_dic = train_on_range(md_loader, train_round_kwargs_iter=train_round_kwargs_iter,
+                                          range_to=date_to, n_step=n_step, pool=pool)
         if use_pool:
-            results[date_to] = result_dic
+            date_results_dict[date_to] = round_result_dic
+            tot_count += len(round_result_dic)
 
     # 池化操作，异步运行，因此需要在程序结束前阻塞，等待所有进程运行结束
     if use_pool:
-        while True:
-            date_to, result_dic = None, {}
-            for date_to, result_dic in results.items():
-                round_n = None
-                for round_n, result in result_dic.items():
-                    try:
-                        df = result.get()
-                        logger.debug('%s -> %d  执行结束, final status:\n%s', date_2_str(date_to), round_n, df.iloc[-1, :])
-                    except:
-                        logger.exception("%s -> %d 执行异常", date_2_str(date_to), round_n)
+        finished_count, error_count = 0, 0
+        for num, date_to in enumerate(list(date_results_dict.keys()), start=1):
+            round_result_dic = date_results_dict[date_to]
+            for round_n in list(round_result_dic.keys()):
+                result = round_result_dic[round_n]
+                try:
+                    df = result.get()
+                    finished_count += 1
+                    logger.debug('%d/%d) %s -> %d  执行结束，累计执行成功 %d 个，执行失败 %d 个，当前任务执行最终状态:\n%s',
+                                 num, tot_count, date_2_str(date_to), round_n,
+                                 finished_count, error_count, df.iloc[-1, :])
+                except:
+                    error_count += 1
+                    logger.exception("%d/%d) %s -> %d 执行异常", num, tot_count, date_2_str(date_to), round_n,
+                                     finished_count, error_count)
 
-                    break
-
+                # 释放内存
                 if round_n is not None:
-                    del result_dic[round_n]
+                    del round_result_dic[round_n]
 
-                break
-
-            if date_to is not None and len(result_dic) == 0:
-                logger.info('%s 所有任务完成', date_2_str(date_to))
-                del results[date_to]
-
-            if len(results) == 0:
-                logger.info('所有任务完成')
-                break
+    logger.info('所有任务完成')
 
 
 def _test_train_on_each_period():
@@ -296,11 +301,6 @@ def _test_train_on_range(use_pool=False):
     date_to = pd.to_datetime('2014-11-04')
     md_loader = lambda range_to=None: load_data(
         'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST]
-    # 建立相关数据
-    # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
-    md_df = md_loader()
-    logger.info('加载数据，提取日期序列')
-    md_df = None  # 释放内存
     if use_pool:
         pool = multiprocessing.Pool(2)
     else:
@@ -322,7 +322,9 @@ def _test_train_on_range(use_pool=False):
                     try:
                         df = result.get()
                         logger.debug('%s -> %d  执行结束, final status:\n%s', date_2_str(date_to), round_n, df.iloc[-1, :])
-                    except:
+                    except Exception as exp:
+                        if isinstance(exp, KeyboardInterrupt):
+                            raise exp from exp
                         logger.exception("%s -> %d 执行异常", date_2_str(date_to), round_n)
 
                     break
