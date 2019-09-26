@@ -41,11 +41,12 @@ def _test_train_round_iter_func(round_n_per_target_day=3):
 
 
 if __name__ == '__main__':
-    from ibats_common.example.data import load_data
+    from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 
-    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     train_on_each_period(
-        md_loader=lambda: load_data(
-            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')[ohlcav_col_name_list],
-        train_round_kwargs_iter=train_round_iter_func(round_n_per_target_day=2), n_step=60)
+        md_loader=lambda range_to=None: load_data(
+            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
+        train_round_kwargs_iter=train_round_iter_func(round_n_per_target_day=2), n_step=60,
+        date_train_from='2019-01-10'
+    )
     # _test_train_round_iter_func(round_n_per_target_day=2)
