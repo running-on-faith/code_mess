@@ -119,12 +119,11 @@ class DRLStg(StgBase):
             results = [predict([model_path, latest_state, agent, None])
                        for model_path in model_path_list]
         else:
-            # 无法实现多进程？
-            # results = self._pool.map(
-            #     predict,  # lambda _agent, _inputs: _agent.choose_action_deterministic(_inputs),
-            #     self.predict_param_iter(model_path_list, batch_factors.shape))
-            results = [self._pool.apply(predict, (_, ))
-                       for _ in self.predict_param_iter(model_path_list, batch_factors.shape)]
+            results = self._pool.map(
+                predict,  # lambda _agent, _inputs: _agent.choose_action_deterministic(_inputs),
+                self.predict_param_iter(model_path_list, batch_factors.shape))
+            # results = [self._pool.apply(predict, (_, ))
+            #            for _ in self.predict_param_iter(model_path_list, batch_factors.shape)]
         action_count_dic = Counter(results)
         action = action_count_dic.most_common(1)[0][0]
         self.logger.debug('%s action=%d, 各个 action 次数 %s', date_2_str(trade_date_latest), action, action_count_dic)
