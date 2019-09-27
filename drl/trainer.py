@@ -166,7 +166,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     return reward_df
 
 
-def train_on_range(md_loader, train_round_kwargs_iter, range_to=None, n_step=60, pool: multiprocessing.Pool = None):
+def train_on_range(md_loader, train_round_kwargs_iter_func, range_to=None, n_step=60, pool: multiprocessing.Pool = None):
     """在日期范围内进行模型训练"""
     logger = logging.getLogger(__name__)
     # 建立相关数据
@@ -192,7 +192,7 @@ def train_on_range(md_loader, train_round_kwargs_iter, range_to=None, n_step=60,
     md_df = md_df.loc[df_index, :]
 
     logger.info('开始训练，样本截止日期：%s, n_step=%d', range_to_str, n_step)
-    round_list = list(train_round_kwargs_iter)
+    round_list = list(train_round_kwargs_iter_func())
     round_max = len(round_list)
     result_dic = {}
     for round_n, env_kwargs, agent_kwargs, train_kwargs in round_list:
@@ -219,12 +219,12 @@ def train_on_range(md_loader, train_round_kwargs_iter, range_to=None, n_step=60,
     return result_dic
 
 
-def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=1000, offset='1M', n_step=60,
+def train_on_each_period(md_loader, train_round_kwargs_iter_func, base_data_count=1000, offset='1M', n_step=60,
                          date_train_from=None, use_pool=True, max_process_count=multiprocessing.cpu_count()):
     """
     间隔指定周期进行训练
     :param md_loader: 数据加载器
-    :param train_round_kwargs_iter:训练参数迭代器
+    :param train_round_kwargs_iter_func:训练参数迭代器函数
     :param base_data_count: 初始训练数据长度
     :param offset: 训练数据步进长度，采样间隔 D日 W周 M月 Y年
     :param n_step: 训练数据 step
@@ -253,7 +253,7 @@ def train_on_each_period(md_loader, train_round_kwargs_iter, base_data_count=100
             offset).count().items():
         if data_count <= 0:
             continue
-        round_result_dic = train_on_range(md_loader, train_round_kwargs_iter=train_round_kwargs_iter,
+        round_result_dic = train_on_range(md_loader, train_round_kwargs_iter_func=train_round_kwargs_iter_func,
                                           range_to=date_to, n_step=n_step, pool=pool)
         if use_pool:
             date_results_dict[date_to] = round_result_dic
@@ -290,7 +290,7 @@ def _test_train_on_each_period():
     train_on_each_period(
         md_loader=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
-        train_round_kwargs_iter=train_round_iter_func(2), use_pool=True)
+        train_round_kwargs_iter_func=train_round_iter_func(2), use_pool=True)
 
 
 def _test_train_on_range(use_pool=False):
@@ -307,7 +307,7 @@ def _test_train_on_range(use_pool=False):
         pool = None
     results = {}
 
-    result_dic = train_on_range(md_loader, train_round_kwargs_iter=train_round_iter_func(2),
+    result_dic = train_on_range(md_loader, train_round_kwargs_iter_func=train_round_iter_func(2),
                                 range_to=date_to, n_step=n_step, pool=pool)
     if use_pool:
         results[date_to] = result_dic
