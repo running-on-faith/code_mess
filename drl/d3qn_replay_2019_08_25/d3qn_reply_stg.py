@@ -31,14 +31,8 @@ logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)
 
 
-def predict(params):
+def predict(model_path, inputs, agent):
     """加载模型，加载权重，预测action"""
-    # model_path, inputs, agent=None, input_shape=None
-    model_path, inputs, agent, input_shape = params
-    # print('input_shape=%s' % (input_shape, ))
-    if agent is None:
-        agent = get_agent(input_shape=input_shape)
-    # print('agent.restore_model(model_path) %s' % (model_path, ))
     agent.restore_model(model_path)
     # logger.info('agent predict state.shape=%s, action=%s', inputs[0].shape, inputs[1])
     # print('agent predict state.shape=%s, action=%s' % (inputs[0].shape, inputs[1]))
@@ -48,7 +42,7 @@ def predict(params):
 
 class DRLStg(StgBase):
 
-    def __init__(self, instrument_type, model_file_csv_path, unit=1, use_pool=False):
+    def __init__(self, instrument_type, model_file_csv_path, unit=1, pool_worker_num=multiprocessing.cpu_count()):
         super().__init__()
         self.unit = unit
         self.instrument_type = instrument_type
@@ -60,8 +54,11 @@ class DRLStg(StgBase):
         self._model_date_curr = None  # 当前预测使用的模型日期
         self.do_nothing_on_min_bar = False  # 仅供调试使用
         self._env = None
-        self._agent_list = None  # 当前模型 Agent list
-        self._pool = multiprocessing.Pool(multiprocessing.cpu_count() // 2) if use_pool else None
+        # 供进程池使用
+        self.pool_worker_num = pool_worker_num
+        self._pool, self.task_kwargs_queue, self.task_result_queue = None, None, None
+        # 供串行执行使用
+        self.agent = None
         # 模型因子构建所需参数
         self.n_step = 60
         self.trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
@@ -79,6 +76,40 @@ class DRLStg(StgBase):
     def on_prepare_min1(self, md_df, context):
         # 加载模型列表
         self.load_model_list()
+        if self.pool_worker_num is not None and self.pool_worker_num > 0:
+            # 建立进程池
+            self._pool = multiprocessing.Pool(self.pool_worker_num)
+            self.task_kwargs_queue, self.task_result_queue = multiprocessing.JoinableQueue(), multiprocessing.Queue()
+
+
+        def predict_worker(queues):
+            """加载模型，加载权重，预测action"""
+            import queue
+            task_kwargs_queue, task_result_queue = queues
+            agent = None
+            while True:
+                try:
+                    # model_path, inputs, agent=None, input_shape=None
+                    model_path, inputs, input_shape = task_kwargs_queue.get(True, 5)
+                except queue.Empty:
+                    continue
+                try:
+                    if agent is None:
+                        agent = get_agent(input_shape=input_shape)
+                        logger.debug('建立模型 input_shape=%s', input_shape)
+
+                    # 加载模型参数
+                    agent.restore_model(model_path)
+                    result = agent.choose_action_deterministic(inputs)
+                    task_result_queue.put(result)
+                except:
+                    logger.exception("%s, input_shape=%s 模型执行异常", model_path, input_shape)
+                    task_result_queue.put(None)
+                finally:
+                    task_kwargs_queue.task_done()
+
+        self._pool.imap(predict_worker, [(self.task_kwargs_queue, self.task_result_queue)
+                                         for _ in range(self.pool_worker_num)])
 
     def predict_param_iter(self, model_path_list, shape):
         latest_state = self._env.latest_state()
@@ -114,16 +145,26 @@ class DRLStg(StgBase):
 
         # 多进程进行模型预测
         if self._pool is None:
+            # 串行执行
             latest_state = self._env.latest_state()
-            agent = get_agent(input_shape=batch_factors.shape)
-            results = [predict([model_path, latest_state, agent, None])
+            if self.agent is None:
+                self.agent = get_agent(input_shape=batch_factors.shape)
+            results = [predict(model_path, latest_state, self.agent)
                        for model_path in model_path_list]
         else:
-            results = self._pool.map(
-                predict,  # lambda _agent, _inputs: _agent.choose_action_deterministic(_inputs),
-                self.predict_param_iter(model_path_list, batch_factors.shape))
-            # results = [self._pool.apply(predict, (_, ))
-            #            for _ in self.predict_param_iter(model_path_list, batch_factors.shape)]
+            # 多进程执行
+            task_count, finished_count, results = 0, 0, []
+            for _ in self.predict_param_iter(model_path_list, batch_factors.shape):
+                self.task_kwargs_queue.put(_)
+                task_count += 1
+            while True:
+                result = self.task_result_queue.get()
+                if result is not None:
+                    results.append(result)
+                finished_count += 1
+                if finished_count == task_count:
+                    break
+
         action_count_dic = Counter(results)
         action = action_count_dic.most_common(1)[0][0]
         self.logger.debug('%s action=%d, 各个 action 次数 %s', date_2_str(trade_date_latest), action, action_count_dic)
@@ -166,7 +207,8 @@ def _test_use(is_plot):
     calc_mode = CalcMode.Normal
     strategy_params = {'instrument_type': instrument_type,
                        'unit': 1,
-                       "model_file_csv_path": model_file_csv_path
+                       "model_file_csv_path": model_file_csv_path,
+                       "pool_worker_num": 2,
                        }
     md_agent_params_list = [{
         'md_period': PeriodType.Min1,
