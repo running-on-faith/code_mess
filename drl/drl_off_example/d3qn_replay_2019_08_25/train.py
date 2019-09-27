@@ -47,6 +47,7 @@ if __name__ == '__main__':
         md_loader=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         train_round_kwargs_iter=train_round_iter_func(round_n_per_target_day=2), n_step=60,
-        date_train_from='2019-01-10'
+        date_train_from='2019-01-10',
+        max_process_count=3
     )
     # _test_train_round_iter_func(round_n_per_target_day=2)
