@@ -92,7 +92,6 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
     :param analysis_kwargs: reward 分析相关参数
     :return:
     """
-    pool = None if pool_worker_num is None or pool_worker_num == 0 else multiprocessing.Pool(pool_worker_num)
     logger = logging.getLogger(__name__)
     analysis_kwargs['in_sample_date_line'] = in_sample_date_line
     analysis_kwargs['in_sample_only'] = in_sample_only
@@ -130,10 +129,35 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
         logger.info('target_round_n=%d 没有可加载的模型', target_round_n_list)
         return
 
+    # 建立进程池
+    pool = None if pool_worker_num is None or pool_worker_num == 0 else multiprocessing.Pool(
+        pool_worker_num)
+    task_queue = multiprocessing.JoinableQueue()
+    result_queue = multiprocessing.Queue()
+    if pool is not None:
+
+        def predict_worker(queues):
+            task_queue, result_queue = queues
+            while True:
+                kwds, reward_file_path = task_queue.get()
+                try:
+                    reward_df = load_model_and_predict_through_all(**kwds)
+                    if reward_file_path is not None and reward_df.shape[0] > 0:
+                        reward_df.to_csv(reward_file_path)
+                    result_queue.put((kwds['key'], reward_df))
+                except:
+                    result_queue.put((kwds['key'], None))
+                    logger.exception("线程任务执行异常，参数：%s", kwds)
+                finally:
+                    task_queue.task_done()
+
+        pool.imap(predict_worker, [(task_queue, result_queue) for _ in range(pool_worker_num)])
+
     index_col = ['trade_date']
     round_n_list = list(round_n_episode_model_path_dic.keys())
     round_n_list.sort()
     round_results_dic = defaultdict(dict)
+    pool, task_tot_count = None, 0
     for round_n in round_n_list:
         episode_reward_df_dic, episode_params_dic = {}, OrderedDict()
         episode_list = list(round_n_episode_model_path_dic[round_n].keys())
@@ -141,14 +165,17 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
         episode_count = len(episode_list)
         for num, episode in enumerate(episode_list, start=1):
             file_path = str(round_n_episode_model_path_dic[round_n][episode])
-            logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
             reward_file_path = os.path.join(model_folder, f'reward_{round_n}_{episode}.csv')
             if read_csv and os.path.exists(reward_file_path):
+                logger.debug('%2d/%2d ) %4d -> %s exist', num, episode_count, episode, file_path)
                 reward_df = pd.read_csv(reward_file_path, index_col=index_col, parse_dates=index_col)
                 if reward_df.shape[0] == 0:
                     continue
+                episode_reward_df_dic[episode] = reward_df
             else:
                 if pool is None:
+                    # 串行执行
+                    logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
                     reward_df = load_model_and_predict_through_all(
                         md_df=md_df, batch_factors=data_factors, model_name=model_name, get_agent_func=get_agent_func,
                         tail_n=0, model_path=file_path, key=episode, show_plot=False)
@@ -159,20 +186,38 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
 
                     episode_reward_df_dic[episode] = reward_df
                 else:
-                    callback = partial(_callback_func,
-                                       reward_2_csv=reward_2_csv, episode=episode,
-                                       episode_reward_df_dic=episode_reward_df_dic, reward_file_path=reward_file_path)
-                    pool.apply_async(
-                        load_model_and_predict_through_all,
-                        kwds=dict(md_df=md_df, batch_factors=data_factors, model_name=model_name,
-                                  get_agent_func=get_agent_func,
-                                  tail_n=0, model_path=file_path, key=episode, show_plot=False),
-                        callback=callback
-                    )
+                    # 多进程执行
+                    logger.debug('%2d/%2d ) %4d -> %s in pool', num, episode_count, episode, file_path)
+                    # callback = partial(_callback_func,
+                    #                    reward_2_csv=reward_2_csv, episode=episode,
+                    #                    episode_reward_df_dic=episode_reward_df_dic, reward_file_path=reward_file_path)
+                    kwds = dict(md_df=md_df, batch_factors=data_factors, model_name=model_name,
+                                get_agent_func=get_agent_func,
+                                tail_n=0, model_path=file_path, key=episode, show_plot=False)
+                    task_queue.put((kwds, reward_file_path if reward_2_csv else None))
+                    task_tot_count += 1
 
         if pool is not None:
-            pool.close()
-            pool.join()
+            task_count_finished, task_queue_empty = 0, False
+            import queue
+            while True:
+                try:
+                    episode, reward_df = result_queue.get(True, 5)
+                    if reward_df.shape[0] > 0:
+                        episode_reward_df_dic[episode] = reward_df
+                    task_count_finished += 1
+                except queue.Empty:
+                    pass
+
+                if task_count_finished == task_tot_count:
+                    logger.info("%d 个任务已经全部被执行，且处理完成", task_tot_count)
+                    break
+
+                if not task_queue_empty and task_queue.qsize() == 0:
+                    logger.info("%d 个任务已经全部被执行", task_tot_count)
+                    # 等待所有任务结束
+                    task_queue.join()
+                    task_queue_empty = True
 
         # 创建 word 文档
         from analysis.summary import summary_rewards_2_docx
