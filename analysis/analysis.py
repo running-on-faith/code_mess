@@ -9,7 +9,7 @@
 """
 import logging
 import os
-
+import math
 import ffn
 import numpy as np
 import pandas as pd
@@ -92,8 +92,8 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     episode_in_sample_value_df = pd.DataFrame({episode: calc_reward_nav_value(reward_df, in_sample_date_line)
                                                for episode, reward_df in episode_reward_df_dic.items()
                                                if reward_df.shape[0] > 0}).T.sort_index()
-    # 筛选出有效的 模型
 
+    # 筛选出有效的 模型
     def check_available_reward(episode, reward_df):
         """筛选出有效的 模型"""
         if episode < 1000:
@@ -111,8 +111,19 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
             return False
         return True
 
-    available_episode_list = [episode for episode, reward_df in episode_reward_df_dic.items()
-                              if check_available_reward(episode, reward_df)]
+    episode_value_pair_list = [(episode, reward_df['value'].iloc[-1])
+                               for episode, reward_df in episode_reward_df_dic.items()
+                               if check_available_reward(episode, reward_df)]
+    episode_value_pair_list_len = len(episode_value_pair_list)
+    # 对于筛选后，有效模型数量过多的情况，采取剔除前、后20%的方式缩减数量的同时，剔除极端数据
+    if episode_value_pair_list_len >= 10:
+        # 剔除分位数前 20%，以及后20%的数字
+        episode_value_pair_list.sort(key=lambda x: x[1])
+        episode_value_pair_list = episode_value_pair_list[
+                                  math.ceil(episode_value_pair_list_len * 0.2):
+                                  math.floor(episode_value_pair_list_len * 0.8)]
+    available_episode_list = [_[0] for _ in episode_value_pair_list]
+    available_episode_list.sort()
     analysis_result_dic['available_episode_list'] = available_episode_list
     episode_model_path_dic = kwargs.setdefault('episode_model_path_dic', None)
     if episode_model_path_dic is not None:
