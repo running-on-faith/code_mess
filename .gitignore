@@ -186,3 +186,4 @@ checkpoint
 *.csv
 *.doc
 *.docx
+*.docx#
