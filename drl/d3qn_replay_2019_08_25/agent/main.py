@@ -105,7 +105,7 @@ def _test_agent(n_step=60):
     reward_df.to_csv('reward_df.csv')
 
 
-def get_agent(action_size=2, dueling=True, batch_size=512, epochs=1, epsilon_decay=0.995, epsilon_min=0.03,
+def get_agent(action_size=2, dueling=True, batch_size=256, epochs=1, epsilon_decay=0.995, epsilon_min=0.03,
               **kwargs):
     # np.log(0.03)/np.log(0.995) = 699.
     # np.log(0.05)/np.log(0.998) = 1496.

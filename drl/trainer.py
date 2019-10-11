@@ -270,12 +270,15 @@ def train_on_each_period(md_loader, train_round_kwargs_iter_func, base_data_coun
                     df = result.get()
                     finished_count += 1
                     logger.debug('%d/%d) %s -> %d  执行结束，累计执行成功 %d 个，执行失败 %d 个，当前任务执行最终状态:\n%s',
-                                 num, tot_count, date_2_str(date_to), round_n,
+                                 finished_count + error_count, tot_count, date_2_str(date_to), round_n,
                                  finished_count, error_count, df.iloc[-1, :])
-                except:
+                except Exception as exp:
                     error_count += 1
-                    logger.exception("%d/%d) %s -> %d 执行异常", num, tot_count, date_2_str(date_to), round_n,
+                    logger.exception("%d/%d) %s -> %d 执行异常，累计执行成功 %d 个，执行失败 %d 个",
+                                     finished_count + error_count, tot_count, date_2_str(date_to), round_n,
                                      finished_count, error_count)
+                    if isinstance(exp, KeyboardInterrupt):
+                        raise exp from exp
 
                 # 释放内存
                 if round_n is not None:
