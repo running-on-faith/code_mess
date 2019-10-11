@@ -19,6 +19,9 @@
 7) 当 epsilon 的概率选择随机动作时，有 keep_last_action 的概率，选择延续上一个动作
 2019-08-25
 将eval target net分离，提高回测阶段的输出稳定性
+2019-10-11
+为了提高历史数据（近期数据权重）（降低远期数据权重），将历史数据进行重复叠加训练
+方法：input output 安装 0.5**N 指数方式split，然后叠加，进行统一训练
 """
 import logging
 
@@ -242,15 +245,6 @@ class Framework(object):
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
         reward_tot = calc_cum_reward(self.cache_reward, self.cum_reward_back_step)
         tot_reward = np.sum(self.cache_reward)
-        if len(self.cache_list_tot_reward) >= self.epsilon_memory_size:
-            if np.random.random() < self.random_drop_best_cache_rate:
-                # 有一定几率随机drop
-                pop_index = np.random.randint(0, self.epsilon_memory_size)
-            else:
-                pop_index = int(np.argmin(self.cache_list_tot_reward))
-            self.cache_list_tot_reward.pop(pop_index)
-        else:
-            pop_index = None
         self.cache_list_tot_reward.append(tot_reward)
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
@@ -264,7 +258,15 @@ class Framework(object):
         self.cache_list_state.append(_state)
         self.cache_list_flag.append(_flag)
         self.cache_list_q_target.append(q_target)
-        if pop_index is not None:
+        # 随机删除一组训练样本
+        if len(self.cache_list_tot_reward) >= self.epsilon_memory_size:
+            if np.random.random() < self.random_drop_best_cache_rate:
+                # 有一定几率随机drop
+                pop_index = np.random.randint(0, self.epsilon_memory_size - 1)
+            else:
+                pop_index = int(np.argmin(self.cache_list_tot_reward))
+
+            self.cache_list_tot_reward.pop(pop_index)
             self.cache_list_state.pop(pop_index)
             self.cache_list_flag.pop(pop_index)
             self.cache_list_q_target.pop(pop_index)
@@ -317,37 +319,6 @@ def _test_calc_cum_reward():
     print(reward_tot)
     target_reward = np.array([1.875, 1.875, 1.875, 1.75, 1.625, 1.375, 0.875, 1.75, 1.5, 1.125, 0.375, 0.875,
                               1.75, 1.5, 1.])
-    assert all(target_reward == reward_tot)
-
-
-def calc_tot_reward(action, reward):
-    """计算 reward 值，以每次空仓为界限，将收益以log递减形式向前传导"""
-    index_list = [num for num, _ in enumerate(action) if _ == 0]
-    if index_list[0] != 0:
-        index_list.insert(0, 0)
-    if index_list[-1] != (len(action) - 1):
-        index_list.append(len(action) - 1)
-    range_iter = iter_2_range(index_list, has_right_outer=False, has_left_outer=False)
-    reward_tot = np.array(reward, dtype='float32')
-    for idx_start, idx_end in range_iter:
-        # 下边接 + 1 因为 [idx_start, idx_end)
-        for idx in range(idx_start, idx_end):
-            data_num = idx_end - idx
-            weights = np.logspace(1, data_num, num=data_num, base=0.5)
-            reward_tot[idx] += sum(reward_tot[(idx + 1):(idx_end + 1)] * weights)
-
-    return reward_tot
-
-
-def _test_calc_tot_reward():
-    """验证 calc_tot_reward 函数"""
-    actions = [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
-    rewards = [1 for _ in range(len(actions))]
-    reward_tot = calc_tot_reward(actions, rewards)
-    target_reward = np.array([1.984375, 1.96875, 1.9375, 1.875, 1.75, 1.5,
-                              1.9375, 1.875, 1.75, 1.5, 1.5, 1.875,
-                              1.75, 1.5, 1.])
-
     assert all(target_reward == reward_tot)
 
 
