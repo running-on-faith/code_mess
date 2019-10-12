@@ -265,12 +265,17 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv',
+    instrument_type = 'RB'
+    md_df = load_data(f'{instrument_type}.csv',
                       folder_path=DATA_FOLDER_PATH,
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
-    factors_df = get_factor(md_df, dropna=True)
+    from ibats_common.example import get_trade_date_series, get_delivery_date_series
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    factors_df = get_factor(md_df, trade_date_series=trade_date_series,
+                            delivery_date_series=delivery_date_series, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     batch_factors = data_arr_batch
     # shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
@@ -296,4 +301,4 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
 
 if __name__ == '__main__':
     # _test_agent()
-    _test_agent2(round_from=0, increase=500, batch_size=2048, n_step=120)
+    _test_agent2(round_from=0, increase=500, batch_size=512, n_step=60)
