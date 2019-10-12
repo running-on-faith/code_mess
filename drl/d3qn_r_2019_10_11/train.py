@@ -43,12 +43,20 @@ def _test_train_round_iter_func(round_n_per_target_day=3):
 if __name__ == '__main__':
     from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
     import functools
+    from ibats_common.backend.factor import get_factor
+    from ibats_common.example import get_trade_date_series, get_delivery_date_series
+    instrument_type = 'RB'
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    get_factor_func = functools.partial(get_factor,
+                                        trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
 
     train_on_each_period(
-        md_loader=lambda range_to=None: load_data(
+        md_loader_func=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
+        get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2), n_step=60,
-        date_train_from='2019-01-10',
-        max_process_count=3
+        date_train_from='2017-01-1', offset='4M',
+        max_process_count=2
     )
     # _test_train_round_iter_func(round_n_per_target_day=2)

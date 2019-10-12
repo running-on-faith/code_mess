@@ -8,6 +8,7 @@
 @desc    : 用于进行指定日期范围数据训练
 在 drl/d3qn_replay_2019_08_25/agent/main.py 基础上改进
 """
+import functools
 import logging
 import multiprocessing
 import os
@@ -166,25 +167,32 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     return reward_df
 
 
-def train_on_range(md_loader, train_round_kwargs_iter_func, range_to=None, n_step=60, pool: multiprocessing.Pool = None):
+def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func, range_to=None, n_step=60,
+                   pool: multiprocessing.Pool = None, max_train_data_len=1000):
     """在日期范围内进行模型训练"""
     logger = logging.getLogger(__name__)
     # 建立相关数据
     # OHLCAV_COL_NAME_LIST = ["open", "high", "low", "close", "amount", "volume"]
     # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
     #                   )[OHLCAV_COL_NAME_LIST]
-    md_df = md_loader(range_to)
+    md_df = md_loader_func(range_to)
     # 参数及环境设置
     range_to = max(md_df.index[md_df.index <= pd.to_datetime(range_to)]) if range_to is not None else max(md_df.index)
+    # 如果 max_train_data_len 有效且数据长度过长，则求 range_from
+    if max_train_data_len is not None and md_df.shape[0] > max_train_data_len > 0:
+        range_from = min(md_df.sort_index().index[-max_train_data_len:])
+    else:
+        range_from = None
+
     range_to_str = date_2_str(range_to)
     root_folder_path = os.path.abspath(os.path.join(os.path.curdir, 'output', range_to_str))
     os.makedirs(os.path.join(root_folder_path, 'model'), exist_ok=True)
     os.makedirs(os.path.join(root_folder_path, 'images'), exist_ok=True)
     os.makedirs(os.path.join(root_folder_path, 'rewards'), exist_ok=True)
 
-    from ibats_common.backend.factor import get_factor, transfer_2_batch
-    factors_df = get_factor(md_df, dropna=True)
-    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    from ibats_common.backend.factor import transfer_2_batch
+    factors_df = get_factor_func(md_df)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step, date_from=range_from)
     batch_factors = data_arr_batch
     # shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     # batch_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
@@ -219,11 +227,13 @@ def train_on_range(md_loader, train_round_kwargs_iter_func, range_to=None, n_ste
     return result_dic
 
 
-def train_on_each_period(md_loader, train_round_kwargs_iter_func, base_data_count=1000, offset='1M', n_step=60,
+def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_iter_func, base_data_count=1000,
+                         offset='1M', n_step=60,
                          date_train_from=None, use_pool=True, max_process_count=multiprocessing.cpu_count()):
     """
     间隔指定周期进行训练
-    :param md_loader: 数据加载器
+    :param md_loader_func: 数据加载器
+    :param get_factor_func: 因子生成器
     :param train_round_kwargs_iter_func:训练参数迭代器函数
     :param base_data_count: 初始训练数据长度
     :param offset: 训练数据步进长度，采样间隔 D日 W周 M月 Y年
@@ -236,7 +246,7 @@ def train_on_each_period(md_loader, train_round_kwargs_iter_func, base_data_coun
     logger = logging.getLogger(__name__)
     # 建立相关数据
     # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
-    md_df = md_loader()
+    md_df = md_loader_func()
     logger.info('加载数据，提取日期序列')
     if date_train_from is not None:
         date_min = pd.to_datetime(date_train_from)
@@ -247,13 +257,15 @@ def train_on_each_period(md_loader, train_round_kwargs_iter_func, base_data_coun
         pool = multiprocessing.Pool(max_process_count)
     else:
         pool = None
+
     date_results_dict, tot_count = {}, 0
     # for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
     for date_to, data_count in md_df[(date_min <= md_df.index) & (md_df.index <= date_max)]['close'].resample(
             offset).count().items():
         if data_count <= 0:
             continue
-        round_result_dic = train_on_range(md_loader, train_round_kwargs_iter_func=train_round_kwargs_iter_func,
+        round_result_dic = train_on_range(md_loader_func, get_factor_func,
+                                          train_round_kwargs_iter_func=train_round_kwargs_iter_func,
                                           range_to=date_to, n_step=n_step, pool=pool)
         if use_pool:
             date_results_dict[date_to] = round_result_dic
@@ -289,10 +301,19 @@ def train_on_each_period(md_loader, train_round_kwargs_iter_func, base_data_coun
 
 def _test_train_on_each_period():
     from drl.drl_off_example.d3qn_replay_2019_08_25.train import train_round_iter_func
+    from ibats_common.backend.factor import get_factor
+    from ibats_common.example import get_trade_date_series, get_delivery_date_series
+    instrument_type = 'RB'
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    get_factor_func = functools.partial(get_factor,
+                                        trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
 
     train_on_each_period(
-        md_loader=lambda range_to=None: load_data(
-            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
+        md_loader_func=lambda range_to=None: load_data(
+            f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
+        )[OHLCAV_COL_NAME_LIST],
+        get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=train_round_iter_func(2), use_pool=True)
 
 
@@ -302,16 +323,26 @@ def _test_train_on_range(use_pool=False):
     logger = logging.getLogger(__name__)
     base_data_count, n_step, max_process_count = 1000, 60, multiprocessing.cpu_count() // 2
     date_to = pd.to_datetime('2014-11-04')
-    md_loader = lambda range_to=None: load_data(
-        'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST]
+    instrument_type = 'RB'
+    md_loader_func = lambda range_to=None: load_data(
+        f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
+    )[OHLCAV_COL_NAME_LIST]
     if use_pool:
         pool = multiprocessing.Pool(2)
     else:
         pool = None
     results = {}
 
-    result_dic = train_on_range(md_loader, train_round_kwargs_iter_func=train_round_iter_func(2),
-                                range_to=date_to, n_step=n_step, pool=pool)
+    from ibats_common.backend.factor import get_factor
+    from ibats_common.example import get_trade_date_series, get_delivery_date_series
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    get_factor_func = functools.partial(get_factor,
+                                        trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
+    result_dic = train_on_range(
+        md_loader_func=md_loader_func, get_factor_func=get_factor_func,
+        train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2),
+        range_to=date_to, n_step=n_step, pool=pool)
     if use_pool:
         results[date_to] = result_dic
 
@@ -347,5 +378,5 @@ def _test_train_on_range(use_pool=False):
 
 
 if __name__ == '__main__':
-    _test_train_on_range(use_pool=True)
+    _test_train_on_range(use_pool=False)
     # _test_train_on_each_period()
