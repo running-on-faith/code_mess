@@ -26,7 +26,6 @@
 import logging
 
 import numpy as np
-from ibats_utils.mess import iter_2_range
 
 
 class EpsilonMaker:
@@ -60,7 +59,8 @@ class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
-                 cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057):
+                 cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057,
+                 min_data_len_4_multiple_date=30):
         import tensorflow as tf
         from keras import backend as K
         from keras.callbacks import Callback
@@ -128,6 +128,7 @@ class Framework(object):
         self.epochs = epochs
         self.update_target_net_period = update_target_net_period
         self.tot_update_count = 0
+        self.min_data_len_4_multiple_date = min_data_len_4_multiple_date
 
     @property
     def acc_loss_lists(self):
@@ -254,10 +255,11 @@ class Framework(object):
         q_target = self.model_target.predict(x=inputs)
         index = np.arange(q_target.shape[0])
         q_target[index, self.cache_action] = reward_tot
+        # 将训练及进行复制叠加
         # 加入缓存，整理缓存
-        self.cache_list_state.append(_state)
-        self.cache_list_flag.append(_flag)
-        self.cache_list_q_target.append(q_target)
+        self.cache_list_state.append(multiple_data(_state, self.min_data_len_4_multiple_date))
+        self.cache_list_flag.append(multiple_data(_flag, self.min_data_len_4_multiple_date))
+        self.cache_list_q_target.append(multiple_data(q_target, self.min_data_len_4_multiple_date))
         # 随机删除一组训练样本
         if len(self.cache_list_tot_reward) >= self.epsilon_memory_size:
             if np.random.random() < self.random_drop_best_cache_rate:
@@ -343,8 +345,50 @@ def _test_epsilon_maker():
     plt.show()
 
 
+def multiple_data(data_list, min_data_len):
+    """用于对数据采用二分法复制"""
+    data_len, tmp_list = len(data_list), [data_list]
+    start_idx = data_len // 2
+    while start_idx >= min_data_len:
+        tmp_list.append(data_list[-start_idx:])
+        start_idx //= 2
+
+    new_data_list = np.concatenate(tmp_list)
+    return new_data_list
+
+
+def _test_multiple_data():
+    data_list = [[_, _ * 2] for _ in range(12)]
+    new_data_list = multiple_data(data_list, 3)
+    # print(new_data_list)
+    new_data_list_target = np.array([[0, 0],
+                                     [1, 2],
+                                     [2, 4],
+                                     [3, 6],
+                                     [4, 8],
+                                     [5, 10],
+                                     [6, 12],
+                                     [7, 14],
+                                     [8, 16],
+                                     [9, 18],
+                                     [10, 20],
+                                     [11, 22],
+                                     [6, 12],
+                                     [7, 14],
+                                     [8, 16],
+                                     [9, 18],
+                                     [10, 20],
+                                     [11, 22],
+                                     [9, 18],
+                                     [10, 20],
+                                     [11, 22],
+                                     ])
+    assert np.all(new_data_list == new_data_list_target)
+
+
 if __name__ == '__main__':
     # _test_calc_tot_reward()
-    _test_show_model()
+    # _test_show_model()
     # _test_calc_cum_reward()
     # _test_epsilon_maker()
+    _test_multiple_data()
