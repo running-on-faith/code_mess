@@ -15,7 +15,7 @@ from functools import partial
 
 import pandas as pd
 from ibats_common.analysis.plot import plot_twin
-from ibats_common.backend.factor import get_factor, transfer_2_batch
+from ibats_common.backend.factor import transfer_2_batch
 from ibats_common.backend.rl.emulator.account import Account
 from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
@@ -73,12 +73,13 @@ def _callback_func(reward_df, reward_2_csv, episode, episode_reward_df_dic, rewa
     episode_reward_df_dic[episode] = reward_df
 
 
-def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
+def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
                    reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60, in_sample_only=False,
                    ignore_if_exist=False, pool_worker_num=multiprocessing.cpu_count(), **analysis_kwargs):
     """
     分别验证 model 目录下 各个 round 的模型预测结果
-    :param md_loader: 数据加载器
+    :param md_loader_func: 数据加载器
+    :param get_factor_func: 因子生成器
     :param model_name: 模型名称
     :param get_agent_func: drl agent 生成器
     :param in_sample_date_line: 样本内截止日期
@@ -96,9 +97,9 @@ def validate_bunch(md_loader, model_name, get_agent_func, in_sample_date_line, m
     analysis_kwargs['in_sample_date_line'] = in_sample_date_line
     analysis_kwargs['in_sample_only'] = in_sample_only
     # 如果 in_sample_only 则只加载样本内行情数据
-    md_df = md_loader(in_sample_date_line if in_sample_only else None)
+    md_df = md_loader_func(in_sample_date_line if in_sample_only else None)
     md_df.index = pd.DatetimeIndex(md_df.index)
-    factors_df = get_factor(md_df, dropna=True)
+    factors_df = get_factor_func(md_df)
     df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step)
     data_factors, shape = batch_factors, batch_factors.shape
     logger.info('batch_factors.shape=%s', shape)
@@ -256,7 +257,7 @@ def _test_validate_bunch(auto_open_file=True):
     """分别验证 model 目录下 各个 round 的模型预测结果"""
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
     round_results_dic, file_path = validate_bunch(
-        md_loader=lambda range_to=None: load_data(
+        md_loader_func=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         model_name=MODEL_NAME, get_agent_func=get_agent,
         model_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-11-08/model',
@@ -276,7 +277,8 @@ def _test_validate_bunch(auto_open_file=True):
             open_file_with_system_app(file_path)
 
 
-def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=False, auto_open_summary_file=True):
+def auto_valid_and_report(output_folder, md_loader_func, get_factor_func, model_name, get_agent_func,
+                          auto_open_file=False, auto_open_summary_file=True):
     logger = logging.getLogger(__name__)
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
@@ -300,10 +302,9 @@ def auto_valid_and_report(output_folder, model_name, get_agent, auto_open_file=F
     for in_sample_date_line in date_list:
         model_folder = date_model_folder_dic[in_sample_date_line]
         round_results_dic, file_path = validate_bunch(
-            md_loader=lambda range_to=None: load_data(
-                'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[
-                OHLCAV_COL_NAME_LIST],
-            model_name=model_name, get_agent_func=get_agent,
+            md_loader_func=md_loader_func,
+            get_factor_func=get_factor_func,
+            model_name=model_name, get_agent_func=get_agent_func,
             model_folder=model_folder,
             in_sample_date_line=in_sample_date_line,
             reward_2_csv=True,

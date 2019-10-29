@@ -21,7 +21,7 @@ from drl.validator import validate_bunch, auto_valid_and_report
 
 def valid_models_and_summary_report(auto_open_file=True, auto_open_summary_file=True):
     round_results_dic, file_path = validate_bunch(
-        md_loader=lambda range_to=None: load_data(
+        md_loader_func=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         model_name=MODEL_NAME, get_agent_func=get_agent,
         model_folder=r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/2013-11-08/model',
