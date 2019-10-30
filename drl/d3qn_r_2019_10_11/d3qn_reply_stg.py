@@ -130,8 +130,8 @@ class DRLStg(StgBase):
         # 2019-09-19 当期训练模型没有 trade_date_series， delivery_date_series 两种因子，因此预测时需要注释掉
         factors_df = get_factor(
             indexed_df,
-            # trade_date_series=self.trade_date_series,
-            # delivery_date_series=self.delivery_date_series,
+            trade_date_series=self.trade_date_series,
+            delivery_date_series=self.delivery_date_series,
             dropna=True)
         df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=self.n_step)
         # 构建环境
@@ -178,8 +178,9 @@ class DRLStg(StgBase):
         #     action = action_count_dic.most_common(2)[1][0]
         # else:
         #     action = action_count_dic.most_common(1)[0][0]
-
+        # 表决多数者获胜
         action = action_count_dic.most_common(1)[0][0]
+
         self.logger.debug('%s action=%d, 各个 action 次数 %s', date_2_str(trade_date_latest), action, action_count_dic)
         return action
 
@@ -209,12 +210,12 @@ class DRLStg(StgBase):
 def _test_use(is_plot):
     from drl import DATA_FOLDER_PATH
     import os
-    instrument_type, backtest_date_from, backtest_date_to = 'RB', '2013-05-14', '2018-10-18'
+    instrument_type, backtest_date_from, backtest_date_to = 'RB', '2017-01-26', '2019-5-23'
     from ibats_utils.mess import is_windows_os
     if is_windows_os():
         model_file_csv_path = r'D:\WSPych\code_mess\drl\drl_off_example\d3qn_replay_2019_08_25\output\available_model_path.csv'
     else:
-        model_file_csv_path = r'/home/mg/github/code_mess/drl/drl_off_example/d3qn_replay_2019_08_25/output/available_model_path.csv'
+        model_file_csv_path = r'/home/mg/github/code_mess/drl/d3qn_r_2019_10_11/output/available_model_path.csv'
     # 参数设置
     run_mode = RunMode.Backtest_FixPercent
     calc_mode = CalcMode.Normal
