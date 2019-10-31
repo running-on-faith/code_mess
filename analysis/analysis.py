@@ -109,6 +109,15 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
         avg_holding = df_len / last_s['action_count'] * 2
         if avg_holding <= 3 or 10 <= avg_holding:
             return False
+        # 卡玛比 大于 1
+        net_value = reward_df['net_value']
+        cal_mar = net_value.calc_calmar_ratio()
+        if np.isnan(cal_mar) or cal_mar <= 1:
+            return False
+        # 复合年华收益率大于 0.05
+        # cagr = net_value.calc_cagr()
+        # if np.isnan(cagr) or cagr < 0.05:
+        #     return False
         return True
 
     episode_value_pair_list = [(episode, reward_df['value'].iloc[-1])
