@@ -11,13 +11,12 @@ import logging
 import multiprocessing
 import os
 from collections import defaultdict, OrderedDict
-from functools import partial
 
 import pandas as pd
 from ibats_common.analysis.plot import plot_twin
-from ibats_common.backend.factor import transfer_2_batch
+from ibats_common.backend.factor import transfer_2_batch, get_factor
 from ibats_common.backend.rl.emulator.account import Account
-from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
+from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST, get_trade_date_series, get_delivery_date_series
 from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
 
 from analysis.summary import summary_analysis_result_dic_2_docx
@@ -73,9 +72,11 @@ def _callback_func(reward_df, reward_2_csv, episode, episode_reward_df_dic, rewa
     episode_reward_df_dic[episode] = reward_df
 
 
-def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, in_sample_date_line, model_folder='model', read_csv=True,
+def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, in_sample_date_line,
+                   model_folder='model', read_csv=False,
                    reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60, in_sample_only=False,
-                   ignore_if_exist=False, pool_worker_num=multiprocessing.cpu_count(), **analysis_kwargs):
+                   ignore_if_exist=False, pool_worker_num=multiprocessing.cpu_count(),
+                   enable_summary_rewards_2_docx=True, max_valid_data_len=None, **analysis_kwargs):
     """
     分别验证 model 目录下 各个 round 的模型预测结果
     :param md_loader_func: 数据加载器
@@ -90,6 +91,9 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     :param n_step: factor 生成是的 step， 该step 需要与模型训练时 step 值保持一致，否则模型将无法运行
     :param in_sample_only: 是否只对样本内数据继续验证
     :param ignore_if_exist: 如果 docx 文件以及存在则不再生成
+    :param pool_worker_num: 0 代表顺序执行，默认 multiprocessing.cpu_count()
+    :param enable_summary_rewards_2_docx: 调用 summary_rewards_2_docx 生成文档
+    :param max_valid_data_len: 验证样本长度。从 in_sample_date_line 向前计算长度。默认为 None
     :param analysis_kwargs: reward 分析相关参数
     :return:
     """
@@ -99,15 +103,18 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     # 如果 in_sample_only 则只加载样本内行情数据
     md_df = md_loader_func(in_sample_date_line if in_sample_only else None)
     md_df.index = pd.DatetimeIndex(md_df.index)
+    # 如果 max_train_data_len 有效且数据长度过长，则求 range_from
+    if max_valid_data_len is not None and \
+            md_df[md_df.index <= pd.to_datetime(in_sample_date_line)].shape[0] > max_valid_data_len > 0:
+        date_from = min(md_df.sort_index().index[-max_valid_data_len:])
+    else:
+        date_from = None
+    # 生成因子
     factors_df = get_factor_func(md_df)
-    df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step)
+    df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step, date_from=date_from)
     data_factors, shape = batch_factors, batch_factors.shape
     logger.info('batch_factors.shape=%s', shape)
-    max_date = max(md_df.index)
-    max_date_str = date_2_str(max_date)
-    # shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
-    # data_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
-    # print(data_arr_batch.shape, '->', shape, '->', data_factors.shape)
+
     md_df = md_df.loc[df_index, :]
     round_n_episode_model_path_dic = defaultdict(dict)
     for file_name in os.listdir(model_folder):
@@ -133,9 +140,9 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     # 建立进程池
     pool = None if pool_worker_num is None or pool_worker_num == 0 else multiprocessing.Pool(
         pool_worker_num)
-    task_queue = multiprocessing.JoinableQueue()
-    result_queue = multiprocessing.Queue()
     if pool is not None:
+        task_queue = multiprocessing.JoinableQueue()
+        result_queue = multiprocessing.Queue()
 
         def predict_worker(queues):
             task_queue, result_queue = queues
@@ -153,10 +160,14 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                     task_queue.task_done()
 
         pool.imap(predict_worker, [(task_queue, result_queue) for _ in range(pool_worker_num)])
+    else:
+        task_queue = None
+        result_queue = None
 
     index_col = ['trade_date']
     round_n_list = list(round_n_episode_model_path_dic.keys())
     round_n_list.sort()
+    round_n_list_len = len(round_n_list)
     round_results_dic = defaultdict(dict)
     pool, task_tot_count = None, 0
     for round_n in round_n_list:
@@ -164,11 +175,14 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
         episode_list = list(round_n_episode_model_path_dic[round_n].keys())
         episode_list.sort()
         episode_count = len(episode_list)
+        logger.debug('round: %2d/%2d ) %d episode', round_n, round_n_list_len, episode_count)
         for num, episode in enumerate(episode_list, start=1):
             file_path = str(round_n_episode_model_path_dic[round_n][episode])
-            reward_file_path = os.path.join(model_folder, f'reward_{round_n}_{episode}.csv')
+            file_name = f'reward_{round_n}_{episode}.csv'
+            reward_file_path = os.path.join(model_folder, file_name)
             if read_csv and os.path.exists(reward_file_path):
-                logger.debug('%2d/%2d ) %4d -> %s exist', num, episode_count, episode, file_path)
+                logger.debug('%2d/%2d ) %4d -> %s -> reward file %s exist',
+                             num, episode_count, episode, file_path, file_name)
                 reward_df = pd.read_csv(reward_file_path, index_col=index_col, parse_dates=index_col)
                 if reward_df.shape[0] == 0:
                     continue
@@ -176,7 +190,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             else:
                 if pool is None:
                     # 串行执行
-                    logger.debug('%2d/%2d ) %4d -> %s', num, episode_count, episode, file_path)
+                    logger.debug('%2d/%2d ) %4d -> %s -> reward file %s',
+                                 num, episode_count, episode, file_path, file_name)
                     reward_df = load_model_and_predict_through_all(
                         md_df=md_df, batch_factors=data_factors, model_name=model_name, get_agent_func=get_agent_func,
                         tail_n=0, model_path=file_path, key=episode, show_plot=False)
@@ -234,11 +249,16 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
         analysis_kwargs['title_header'] = title_header
         analysis_kwargs['round_n'] = round_n
         analysis_kwargs['episode_model_path_dic'] = round_n_episode_model_path_dic[round_n]
+        # 分析模型预测结果
         analysis_result_dic = analysis_rewards_with_md(
             episode_reward_df_dic, md_df, **analysis_kwargs)
-        summary_file_path = summary_rewards_2_docx(param_dic, analysis_result_dic, title_header)
+        if enable_summary_rewards_2_docx:
+            logger.debug("summary rewards to docx [%d] %s", round_n, title_header)
+            summary_file_path = summary_rewards_2_docx(param_dic, analysis_result_dic, title_header)
+            logger.debug('summary rewards to docx [%d] %s', round_n, summary_file_path)
+        else:
+            summary_file_path = None
 
-        logger.debug('文件路径[%d]：%s', round_n, summary_file_path)
         round_results_dic[round_n] = dict(
             param_dic=param_dic,
             analysis_kwargs=analysis_kwargs,
@@ -277,8 +297,28 @@ def _test_validate_bunch(auto_open_file=True):
             open_file_with_system_app(file_path)
 
 
-def auto_valid_and_report(output_folder, md_loader_func, get_factor_func, model_name, get_agent_func,
-                          auto_open_file=False, auto_open_summary_file=True):
+def get_available_episode_model_path_dic(round_results_dic, in_sample_date_line):
+    in_sample_date_line = str_2_date(in_sample_date_line)
+    df_dic_list, key = [], 'available_episode_model_path_dic'
+    for round_n, result_dic in round_results_dic.items():
+        if key in result_dic['analysis_result_dic']:
+            for episode, model_path in result_dic['analysis_result_dic'][key].items():
+                df_dic_list.append(
+                    dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
+    return df_dic_list
+
+
+def auto_valid_and_report(output_folder, auto_open_file=False, auto_open_summary_file=True, **validate_bunch_kwargs):
+    """
+    自动验证 output_folder 目录下的 各个日期基线（in_sample_date_line）目录下的模型
+    汇总生成报告
+    将有效模型的路径生csv文件
+    :param output_folder:
+    :param auto_open_file:
+    :param auto_open_summary_file:
+    :param validate_bunch_kwargs:
+    :return:
+    """
     logger = logging.getLogger(__name__)
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
@@ -302,13 +342,10 @@ def auto_valid_and_report(output_folder, md_loader_func, get_factor_func, model_
     for in_sample_date_line in date_list:
         model_folder = date_model_folder_dic[in_sample_date_line]
         round_results_dic, file_path = validate_bunch(
-            md_loader_func=md_loader_func,
-            get_factor_func=get_factor_func,
-            model_name=model_name, get_agent_func=get_agent_func,
             model_folder=model_folder,
             in_sample_date_line=in_sample_date_line,
-            reward_2_csv=True,
-            show_plot_141=False
+            show_plot_141=False,
+            **validate_bunch_kwargs
         )
         date_round_results_dic[in_sample_date_line] = round_results_dic
         if auto_open_summary_file and file_path is not None:
@@ -322,11 +359,12 @@ def auto_valid_and_report(output_folder, md_loader_func, get_factor_func, model_
     # date  round   episode file_path
     df_dic_list, key = [], 'available_episode_model_path_dic'
     for in_sample_date_line, round_results_dic in date_round_results_dic.items():
-        for round_n, result_dic in round_results_dic.items():
-            if key in result_dic['analysis_result_dic']:
-                for episode, model_path in result_dic['analysis_result_dic'][key].items():
-                    df_dic_list.append(
-                        dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
+        df_dic_list.extend(get_available_episode_model_path_dic(round_results_dic, in_sample_date_line))
+        # for round_n, result_dic in round_results_dic.items():
+        #     if key in result_dic['analysis_result_dic']:
+        #         for episode, model_path in result_dic['analysis_result_dic'][key].items():
+        #             df_dic_list.append(
+        #                 dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
 
     df = pd.DataFrame(df_dic_list)[['date', 'round', 'episode', 'file_path']]
     file_name = f'available_model_path.csv'
@@ -335,9 +373,30 @@ def auto_valid_and_report(output_folder, md_loader_func, get_factor_func, model_
     logger.info('有效模型路径输出到文件： %s', file_path)
 
 
-def _test_auto_valid_and_report(output_folder, auto_open_file=True):
+def _test_auto_valid_and_report(output_folder, auto_open_file=True, in_sample_only=True):
     from drl.d3qn_replay_2019_08_25.agent.main import get_agent, MODEL_NAME
-    auto_valid_and_report(output_folder, MODEL_NAME, get_agent, auto_open_file=auto_open_file)
+    import functools
+
+    instrument_type = 'RB'
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    get_factor_func = functools.partial(get_factor,
+                                        trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
+
+    def md_loader_func(range_to=None):
+        return load_data(
+            'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST]
+
+    auto_valid_and_report(
+        output_folder,
+        md_loader_func=md_loader_func,
+        get_factor_func=get_factor_func,
+        model_name=MODEL_NAME,
+        get_agent_func=get_agent,
+        in_sample_only=in_sample_only,
+        reward_2_csv=True,
+        read_csv=False,
+        auto_open_file=auto_open_file)
 
 
 if __name__ == "__main__":
