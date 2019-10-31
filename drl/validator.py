@@ -181,8 +181,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             file_name = f'reward_{round_n}_{episode}.csv'
             reward_file_path = os.path.join(model_folder, file_name)
             if read_csv and os.path.exists(reward_file_path):
-                logger.debug('%2d/%2d ) %4d -> %s -> reward file %s exist',
-                             num, episode_count, episode, file_path, file_name)
+                logger.debug('%2d/%2d ) %2d/%2d ) %4d -> %s -> reward file %s exist',
+                             round_n, round_n_list_len, num, episode_count, episode, file_path, file_name)
                 reward_df = pd.read_csv(reward_file_path, index_col=index_col, parse_dates=index_col)
                 if reward_df.shape[0] == 0:
                     continue
@@ -190,8 +190,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             else:
                 if pool is None:
                     # 串行执行
-                    logger.debug('%2d/%2d ) %4d -> %s -> reward file %s',
-                                 num, episode_count, episode, file_path, file_name)
+                    logger.debug('%2d/%2d ) %2d/%2d ) %4d -> %s -> reward file %s',
+                                 round_n, round_n_list_len, num, episode_count, episode, file_path, file_name)
                     reward_df = load_model_and_predict_through_all(
                         md_df=md_df, batch_factors=data_factors, model_name=model_name, get_agent_func=get_agent_func,
                         tail_n=0, model_path=file_path, key=episode, show_plot=False)
@@ -203,7 +203,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                     episode_reward_df_dic[episode] = reward_df
                 else:
                     # 多进程执行
-                    logger.debug('%2d/%2d ) %4d -> %s in pool', num, episode_count, episode, file_path)
+                    logger.debug('%2d/%2d ) %2d/%2d ) %4d -> %s in pool',
+                                 round_n, round_n_list_len, num, episode_count, episode, file_path)
                     # callback = partial(_callback_func,
                     #                    reward_2_csv=reward_2_csv, episode=episode,
                     #                    episode_reward_df_dic=episode_reward_df_dic, reward_file_path=reward_file_path)
