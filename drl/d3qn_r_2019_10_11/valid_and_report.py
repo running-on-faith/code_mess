@@ -104,10 +104,10 @@ def valid_whole_episodes_and_summary_report(auto_open_file=False, auto_open_summ
 
 
 if __name__ == "__main__":
-    # valid_whole_episodes_and_summary_report(
-    #     auto_open_file=False,
-    #     auto_open_summary_file=False
-    # )
-    valid_models_and_summary_report(
-        in_sample_date_line='2017-01-26',
-        target_round_n_list=None)  # target_round_n_list=[1]
+    valid_whole_episodes_and_summary_report(
+        auto_open_file=False,
+        auto_open_summary_file=False
+    )
+    # valid_models_and_summary_report(
+    #     in_sample_date_line='2017-01-26',
+    #     target_round_n_list=None)  # target_round_n_list=[1]
