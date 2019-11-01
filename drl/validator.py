@@ -134,8 +134,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
         round_n_episode_model_path_dic[round_n][episode] = file_path
 
     if len(round_n_episode_model_path_dic) == 0:
-        logger.info('target_round_n=%d 没有可加载的模型', target_round_n_list)
-        return
+        logger.info('%s 没有可加载的模型', model_folder)
+        return None, None
 
     # 建立进程池
     pool = None if pool_worker_num is None or pool_worker_num == 0 else multiprocessing.Pool(
@@ -175,13 +175,13 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
         episode_list = list(round_n_episode_model_path_dic[round_n].keys())
         episode_list.sort()
         episode_count = len(episode_list)
-        logger.debug('round: %2d/%2d ) %d episode', round_n, round_n_list_len, episode_count)
+        logger.debug('round: %2d/%2d) %d episode', round_n, round_n_list_len, episode_count)
         for num, episode in enumerate(episode_list, start=1):
             file_path = str(round_n_episode_model_path_dic[round_n][episode])
             file_name = f'reward_{round_n}_{episode}.csv'
             reward_file_path = os.path.join(model_folder, file_name)
             if read_csv and os.path.exists(reward_file_path):
-                logger.debug('%2d/%2d ) %2d/%2d ) %4d -> %s -> reward file %s exist',
+                logger.debug('%2d/%2d) %2d/%2d) %4d -> %s -> reward file %s exist',
                              round_n, round_n_list_len, num, episode_count, episode, file_path, file_name)
                 reward_df = pd.read_csv(reward_file_path, index_col=index_col, parse_dates=index_col)
                 if reward_df.shape[0] == 0:
@@ -190,7 +190,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             else:
                 if pool is None:
                     # 串行执行
-                    logger.debug('%2d/%2d ) %2d/%2d ) %4d -> %s -> reward file %s',
+                    logger.debug('%2d/%2d) %2d/%2d) %4d -> %s -> reward file %s',
                                  round_n, round_n_list_len, num, episode_count, episode, file_path, file_name)
                     reward_df = load_model_and_predict_through_all(
                         md_df=md_df, batch_factors=data_factors, model_name=model_name, get_agent_func=get_agent_func,
@@ -203,7 +203,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                     episode_reward_df_dic[episode] = reward_df
                 else:
                     # 多进程执行
-                    logger.debug('%2d/%2d ) %2d/%2d ) %4d -> %s in pool',
+                    logger.debug('%2d/%2d) %2d/%2d) %4d -> %s in pool',
                                  round_n, round_n_list_len, num, episode_count, episode, file_path)
                     # callback = partial(_callback_func,
                     #                    reward_2_csv=reward_2_csv, episode=episode,
@@ -321,6 +321,7 @@ def auto_valid_and_report(output_folder, auto_open_file=False, auto_open_summary
     :return:
     """
     logger = logging.getLogger(__name__)
+    logger.debug("validate_bunch_kwargs keys: %s", validate_bunch_kwargs.keys())
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
         folder_path = os.path.join(output_folder, file_name)
@@ -340,14 +341,18 @@ def auto_valid_and_report(output_folder, auto_open_file=False, auto_open_summary
     date_list = list(date_model_folder_dic.keys())
     date_list.sort()
     date_round_results_dic = {}
-    for in_sample_date_line in date_list:
+    date_list_len = len(date_list)
+    for num, in_sample_date_line in enumerate(date_list, start=1):
         model_folder = date_model_folder_dic[in_sample_date_line]
+        logger.debug('%2d/%2d) in_sample_date_line: %s valid forder: %s', num, date_list_len, in_sample_date_line, model_folder)
         round_results_dic, file_path = validate_bunch(
             model_folder=model_folder,
             in_sample_date_line=in_sample_date_line,
             show_plot_141=False,
             **validate_bunch_kwargs
         )
+        if round_results_dic is None:
+            continue
         date_round_results_dic[in_sample_date_line] = round_results_dic
         if auto_open_summary_file and file_path is not None:
             open_file_with_system_app(file_path)
