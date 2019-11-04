@@ -171,15 +171,17 @@ class DRLStg(StgBase):
                 if finished_count == task_count:
                     break
 
-        # 表决多数者获胜
         action_count_dic = Counter(results)
-        # 表决少数者获胜
-        # if len(action_count_dic) > 1:
-        #     action = action_count_dic.most_common(2)[1][0]
-        # else:
-        #     action = action_count_dic.most_common(1)[0][0]
-        # 表决多数者获胜
-        action = action_count_dic.most_common(1)[0][0]
+        most_is_winner = False
+        if most_is_winner:
+            # 表决多数者获胜
+            action = action_count_dic.most_common(1)[0][0]
+        else:
+            # 表决少数者获胜
+            if len(action_count_dic) > 1:
+                action = action_count_dic.most_common(2)[1][0]
+            else:
+                action = action_count_dic.most_common(1)[0][0]
 
         self.logger.debug('%s action=%d, 各个 action 次数 %s', date_2_str(trade_date_latest), action, action_count_dic)
         return action
@@ -210,7 +212,7 @@ class DRLStg(StgBase):
 def _test_use(is_plot):
     from drl import DATA_FOLDER_PATH
     import os
-    instrument_type, backtest_date_from, backtest_date_to = 'RB', '2017-01-26', '2019-5-23'
+    instrument_type, backtest_date_from, backtest_date_to = 'RB', '2017-01-27', '2019-5-23'
     from ibats_utils.mess import is_windows_os
     if is_windows_os():
         model_file_csv_path = r'D:\WSPych\code_mess\drl\drl_off_example\d3qn_replay_2019_08_25\output\available_model_path.csv'
