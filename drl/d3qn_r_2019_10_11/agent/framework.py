@@ -60,7 +60,7 @@ class Framework(object):
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
                  cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057,
-                 min_data_len_4_multiple_date=30):
+                 min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01):
         import tensorflow as tf
         from keras import backend as K
         from keras.callbacks import Callback
@@ -120,7 +120,7 @@ class Framework(object):
         # self.epsilon_decay = epsilon_decay
         self.epsilon_maker = EpsilonMaker(epsilon_decay, sin_step, epsilon_min,
                                           epsilon_sin_max=1 / (cum_reward_back_step * 2))
-        self.random_drop_best_cache_rate = 0.01
+        self.random_drop_best_cache_rate = random_drop_best_cache_rate
         self.flag_size = 3
         self.model_eval = self._build_model()
         self.model_target = self._build_model()

@@ -19,14 +19,15 @@ from drl.d3qn_r_2019_10_11.agent.main import MODEL_NAME, get_agent
 from drl.trainer import train_on_each_period
 
 
-def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 5, 7]):
+def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 6, 8]):
     # 作为训练起始随机动作时，平均换仓天数，该参数可能导致训练后的模型调仓频率变化
     round_n = 1
     for round_n_sub in range(round_n_per_target_day):
         for days in target_avg_holding_days:
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-            agent_kwargs = dict(keep_last_action=math.pow(0.5, 1 / days), batch_size=512, epsilon_memory_size=20)
-            num_episodes = 2000 + 200 * round_n_sub
+            agent_kwargs = dict(keep_last_action=math.pow(0.5, 1 / days), batch_size=512,
+                                epsilon_memory_size=10, random_drop_best_cache_rate=0.1)
+            num_episodes = 1000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=int(num_episodes / 6),
                                 model_name=MODEL_NAME, get_agent_func=get_agent)
             yield round_n, env_kwargs, agent_kwargs, train_kwargs
@@ -56,7 +57,7 @@ if __name__ == '__main__':
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2), n_step=60,
-        date_train_from='2015-01-1', offset='4M',
+        date_train_from='2015-09-30', offset='4M',
         max_process_count=2
     )
     # _test_train_round_iter_func(round_n_per_target_day=2)
