@@ -125,8 +125,8 @@ def summary_analysis_result_dic_2_docx(round_results_dic: dict, title_header,
         if key in result_dic and key1 in result_dic[key]:
             sub_heading_count += 1
             document.add_heading(f'{heading_count}.{num}.{sub_heading_count}、趋势变化 ', 3)
-            file_path = result_dic[key][key1]
-            document.add_picture(file_path)  # , width=docx.shared.Inches(1.25)
+            image_path = result_dic[key][key1]
+            document.add_picture(image_path)  # , width=docx.shared.Inches(1.25)
             if num > 0:  # 第一段前面由于多了一个二级标题，导致最后一行分页时总是多出一个空白页
                 document.add_page_break()
 
