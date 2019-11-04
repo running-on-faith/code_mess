@@ -42,10 +42,10 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
     def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
         df = reward_df[['value', 'value_fee0', 'close', 'action_count']]
         avg_holding_s = df.shape[0] / df['action_count'] * 2
-        # 部分无效数据奇高导致凸显显示不变，因此，对超过阈值的数据进行一定的处理
-        threashold = 20
-        is_fit = avg_holding_s > threashold
-        avg_holding_s[is_fit] = threashold + np.log(avg_holding_s[is_fit] - threashold + 1)
+        # 部分无效数据奇高导致曲线不变不明显，因此，对超过阈值的数据进行一定的处理
+        threshold = 20
+        is_fit = avg_holding_s > threshold
+        avg_holding_s[is_fit] = threshold + np.log(avg_holding_s[is_fit] - threshold + 1)
         df['avg_holding'] = avg_holding_s
         if baseline is not None:
             df = df[df.index <= baseline]
@@ -111,8 +111,9 @@ def analysis_rewards_with_md(episode_reward_df_dic, md_df, title_header, in_samp
             return False
         # 卡玛比 大于 1
         net_value = reward_df['net_value']
+        cal_mar_threshold = 2.0
         cal_mar = net_value.calc_calmar_ratio()
-        if np.isnan(cal_mar) or cal_mar <= 1:
+        if np.isnan(cal_mar) or cal_mar <= cal_mar_threshold:
             return False
         # 复合年华收益率大于 0.05
         # cagr = net_value.calc_cagr()
