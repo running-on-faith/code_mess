@@ -39,8 +39,8 @@ get_factor_func = functools.partial(get_factor,
 
 
 def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=None, auto_open_file=True,
-                                    auto_open_summary_file=True, enable_summary_rewards_2_docx=False,
-                                    max_valid_data_len=1000):
+                                    auto_open_summary_file=True, enable_summary_rewards_2_docx=True,
+                                    max_valid_data_len=1000, read_csv=True):
     """
     针对model目录进行验证，
     仅样本内验证
@@ -58,8 +58,8 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         pool_worker_num=0,
         enable_summary_rewards_2_docx=enable_summary_rewards_2_docx,
         max_valid_data_len=max_valid_data_len,
-        read_csv=False,
-        in_sample_only=True
+        read_csv=read_csv,
+        in_sample_valid=True
     )
     # 输出有效的模型
     df_dic_list = get_available_episode_model_path_dic(round_results_dic, in_sample_date_line)
@@ -70,6 +70,7 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         open_file_with_system_app(file_path)
     for _, result_dic in round_results_dic.items():
         file_path = result_dic['summary_file_path']
+        logger.debug(file_path)
         if auto_open_file and file_path is not None:
             open_file_with_system_app(file_path)
 
@@ -104,10 +105,12 @@ def valid_whole_episodes_and_summary_report(auto_open_file=False, auto_open_summ
 
 
 if __name__ == "__main__":
-    valid_whole_episodes_and_summary_report(
-        auto_open_file=False,
-        auto_open_summary_file=False
+    # valid_whole_episodes_and_summary_report(
+    #     auto_open_file=False,
+    #     auto_open_summary_file=False
+    # )
+    valid_models_and_summary_report(
+        in_sample_date_line='2017-01-26',
+        target_round_n_list=None,  # target_round_n_list=[1] None
+        read_csv=True,
     )
-    # valid_models_and_summary_report(
-    #     in_sample_date_line='2017-01-26',
-    #     target_round_n_list=None)  # target_round_n_list=[1]
