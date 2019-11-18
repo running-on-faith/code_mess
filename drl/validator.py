@@ -34,8 +34,8 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
     else:
         states = batch_factors
 
-    logger.debug('加载模型执行预测，key=%s, batch_factors.shape=%s, model_name=%s，model_path=%s',
-                 key, batch_factors.shape, model_name, model_path)
+    # logger.debug('加载模型执行预测，key=%s, batch_factors.shape=%s, model_name=%s，model_path=%s',
+    #              key, batch_factors.shape, model_name, model_path)
     env = Account(md_df, data_factors=states, state_with_flag=True)
     agent = get_agent_func(input_shape=states.shape)
     max_date = max(md_df.index)
@@ -62,8 +62,8 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
         plot_twin(value_df, md_df["close"], name=title, folder_path='images')
 
     action_count = reward_df['action_count'].iloc[-1]
-    logger.debug("%s 累计操作 %d 次, 平均持仓时间 %.2f 天, 净值：%.4f, 模型：%s，",
-                 key, action_count, num / action_count * 2, reward_df['value'].iloc[-1] / env.A.init_cash, model_path, )
+    logger.debug("key=%s 累计操作 %d 次, 平均持仓时间 %.2f 天, 净值：%.4f",
+                 key, action_count, num / action_count * 2, reward_df['value'].iloc[-1] / env.A.init_cash)
     return reward_df
 
 
@@ -232,7 +232,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     :return:
     """
     logger = logging.getLogger(__name__)
-
+    in_sample_date_line = pd.to_datetime(in_sample_date_line)
+    in_sample_date_line_str = date_2_str(in_sample_date_line)
     # 加载模型列表[round_n][episode] = model_file_path
     round_n_episode_model_path_dic = defaultdict(lambda: defaultdict(str))
     for file_name in os.listdir(model_folder):
@@ -262,34 +263,10 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     # 每一个 round 分别进行 样本内，样本外测试，并收集测试结果，形成分析报告
     for round_n in round_n_list:
         logger.debug('round %d/%d) start to valid, in_sample_date_line: %s',
-                     round_n, round_n_list_len, in_sample_date_line)
-        date_from_off_example = pd.to_datetime(in_sample_date_line) + pd.DateOffset(1)
+                     round_n, round_n_list_len, in_sample_date_line_str)
+        date_from_off_example = in_sample_date_line + pd.DateOffset(1)
         episode_model_path_dic = round_n_episode_model_path_dic[round_n]
         in_out_example_valid_env_result_dic = {}
-        if off_sample_valid:
-            # 样本外测试
-            md_df = md_loader_func()
-            md_df.index = pd.DatetimeIndex(md_df.index)
-
-            # 生成因子
-            factors_df = get_factor_func(md_df)
-            df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step,
-                                                                   date_from=date_from_off_example)
-            logger.info('batch_factors.shape=%s', batch_factors.shape)
-            md_df = md_df.loc[df_index, :]
-            if md_df.shape[0] > 0:
-                logger.debug('样本外测试起止日期： %s - %s', min(md_df.index), max(md_df.index))
-                episode_reward_df_dic = valid_episode_list(
-                    episode_model_path_dic=episode_model_path_dic,
-                    pool_worker_num=pool_worker_num, round_n=round_n,
-                    md_df=md_df, batch_factors=batch_factors, model_name=model_name,
-                    get_agent_func=get_agent_func, show_plot=False,
-                    read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_off',
-                )
-                in_out_example_valid_env_result_dic['off_example'] = dict(
-                    episode_reward_df_dic=episode_reward_df_dic,
-                    md_df=md_df
-                )
 
         if in_sample_valid:
             # 样本内测试
@@ -297,7 +274,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             md_df.index = pd.DatetimeIndex(md_df.index)
             # 如果 max_train_data_len 有效且数据长度过长，则求 range_from
             if max_valid_data_len is not None and \
-                    md_df[md_df.index <= pd.to_datetime(in_sample_date_line)].shape[0] > max_valid_data_len > 0:
+                    md_df[md_df.index <= in_sample_date_line].shape[0] > max_valid_data_len > 0:
                 date_from = min(md_df.sort_index().index[-max_valid_data_len:])
             else:
                 date_from = None
@@ -309,7 +286,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             logger.info('batch_factors.shape=%s', shape)
             md_df = md_df.loc[df_index, :]
             if md_df.shape[0] > 0:
-                logger.debug('样本内测试起止日期： %s - %s', min(md_df.index), max(md_df.index))
+                logger.debug('样本内测试起止日期： [%s - %s]', date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
                 episode_reward_df_dic = valid_episode_list(
                     episode_model_path_dic=episode_model_path_dic,
                     pool_worker_num=pool_worker_num, round_n=round_n,
@@ -317,13 +294,48 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                     get_agent_func=get_agent_func, show_plot=False,
                     read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_in',
                 )
-                in_out_example_valid_env_result_dic['in_example'] = dict(
-                    episode_reward_df_dic=episode_reward_df_dic,
-                    md_df=md_df
+                if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
+                    logger.warning('round %d/%d) in_sample_date_line: %s 样本内测试起止日期： [%s - %s]，返回结果为空',
+                                   round_n, round_n_list_len, in_sample_date_line_str,
+                                   date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                else:
+                    in_out_example_valid_env_result_dic['in_example'] = dict(
+                        episode_reward_df_dic=episode_reward_df_dic,
+                        md_df=md_df
+                    )
+
+        if off_sample_valid:
+            # 样本外测试
+            md_df = md_loader_func()
+            md_df.index = pd.DatetimeIndex(md_df.index)
+
+            # 生成因子
+            factors_df = get_factor_func(md_df)
+            df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step,
+                                                                   date_from=date_from_off_example)
+            logger.debug('batch_factors.shape=%s', batch_factors.shape)
+            md_df = md_df.loc[df_index, :]
+            if md_df.shape[0] > 0:
+                logger.debug('样本外测试起止日期： [%s - %s]', date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                episode_reward_df_dic = valid_episode_list(
+                    episode_model_path_dic=episode_model_path_dic,
+                    pool_worker_num=pool_worker_num, round_n=round_n,
+                    md_df=md_df, batch_factors=batch_factors, model_name=model_name,
+                    get_agent_func=get_agent_func, show_plot=False,
+                    read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_off',
                 )
+                if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
+                    logger.warning('round %d/%d) in_sample_date_line: %s 样本外测试起止日期： [%s - %s]，返回结果为空',
+                                   round_n, round_n_list_len, in_sample_date_line_str,
+                                   date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                else:
+                    in_out_example_valid_env_result_dic['off_example'] = dict(
+                        episode_reward_df_dic=episode_reward_df_dic,
+                        md_df=md_df
+                    )
 
         # 模型相关参数
-        analysis_kwargs['in_sample_date_line'] = date_2_str(in_sample_date_line)
+        analysis_kwargs['in_sample_date_line'] = in_sample_date_line_str
         analysis_kwargs['round_n'] = round_n
         analysis_kwargs['episode_model_path_dic'] = episode_model_path_dic
         analysis_kwargs['model_param_dic'] = dict(
@@ -332,21 +344,38 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             model_folder=model_folder,
         )
         # 分析模型预测结果
+        logger.info("基准日：%s 展开数据分析并生成分析报告，包括：样本内数据 %d 个，样本外数据 %d 个",
+                    in_sample_date_line_str,
+                    len(in_out_example_valid_env_result_dic['in_example']['episode_reward_df_dic'])
+                    if 'off_example' in in_out_example_valid_env_result_dic else 0,
+                    len(in_out_example_valid_env_result_dic['off_example']['episode_reward_df_dic'])
+                    if 'off_example' in in_out_example_valid_env_result_dic else 0,
+                    )
         analysis_result_dic, round_n_summary_file_path = analysis_in_out_example_valid_env_result(
             in_out_example_valid_env_result_dic, enable_2_docx=enable_summary_rewards_2_docx, **analysis_kwargs)
+        in_sample_available_model_count, off_sample_available_model_count = 0, 0
+        in_off_key = 'in_example'
+        if in_off_key in analysis_result_dic and 'available_episode_model_path_dic' in analysis_result_dic[in_off_key]:
+            in_sample_available_model_count = len(analysis_result_dic[in_off_key]['available_episode_model_path_dic'])
 
+        in_off_key = 'off_example'
+        if in_off_key in analysis_result_dic and 'available_episode_model_path_dic' in analysis_result_dic[in_off_key]:
+            off_sample_available_model_count = len(analysis_result_dic[in_off_key]['available_episode_model_path_dic'])
+
+        logger.info("基准日期：%s 数据分析结果：样本内有效模型数量 %d 个，样本外有效模型数量 %d 个",
+                    in_sample_date_line_str, in_sample_available_model_count, off_sample_available_model_count)
         round_results_dic[round_n] = dict(
             analysis_kwargs=analysis_kwargs,
             summary_file_path=round_n_summary_file_path,
             analysis_result_dic=analysis_result_dic,
         )
 
-    title_header = f"{model_name}_{date_2_str(in_sample_date_line)}"
+    title_header = f"{model_name}_{in_sample_date_line_str}"
     model_param_dic = dict(
-            model_name=model_name,
-            n_step=n_step,
-            model_folder=model_folder,
-        )
+        model_name=model_name,
+        n_step=n_step,
+        model_folder=model_folder,
+    )
     file_path = in_out_example_analysis_result_all_round_2_docx(
         model_param_dic, round_results_dic, title_header, ignore_if_exist=ignore_if_exist)
     return round_results_dic, file_path
@@ -384,14 +413,16 @@ def _test_validate_bunch(auto_open_file=True):
             open_file_with_system_app(file_path)
 
 
-def get_available_episode_model_path_dic(round_results_dic, in_sample_date_line):
+def get_available_episode_model_path_dic(round_results_dic, in_sample_date_line, in_off_key='in_example'):
     in_sample_date_line = str_2_date(in_sample_date_line)
     df_dic_list, key = [], 'available_episode_model_path_dic'
     for round_n, result_dic in round_results_dic.items():
-        if key in result_dic['analysis_result_dic']:
-            for episode, model_path in result_dic['analysis_result_dic'][key].items():
-                df_dic_list.append(
-                    dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
+        analysis_result_dic = result_dic['analysis_result_dic']
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
+            continue
+        for episode, model_path in analysis_result_dic[in_off_key][key].items():
+            df_dic_list.append(
+                dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
     return df_dic_list
 
 
@@ -439,6 +470,8 @@ def auto_valid_and_report(output_folder, auto_open_file=False, auto_open_summary
             **validate_bunch_kwargs
         )
         if round_results_dic is None:
+            logger.warning('%2d/%2d) 验证无效，没有返回验证结果 in_sample_date_line: %s valid folder: %s',
+                           num, date_list_len, in_sample_date_line, model_folder)
             continue
         date_round_results_dic[in_sample_date_line] = round_results_dic
         if auto_open_summary_file and file_path is not None:
@@ -448,22 +481,27 @@ def auto_valid_and_report(output_folder, auto_open_file=False, auto_open_summary
             if auto_open_file and file_path is not None:
                 open_file_with_system_app(file_path)
 
-    # 将各个日期的有效 model 路径合并成一个 DataFrame
-    # date  round   episode file_path
-    df_dic_list, key = [], 'available_episode_model_path_dic'
-    for in_sample_date_line, round_results_dic in date_round_results_dic.items():
-        df_dic_list.extend(get_available_episode_model_path_dic(round_results_dic, in_sample_date_line))
-        # for round_n, result_dic in round_results_dic.items():
-        #     if key in result_dic['analysis_result_dic']:
-        #         for episode, model_path in result_dic['analysis_result_dic'][key].items():
-        #             df_dic_list.append(
-        #                 dict(date=in_sample_date_line, round=round_n, episode=episode, file_path=model_path))
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        # 将各个日期的有效 model 路径合并成一个 DataFrame
+        # date  round   episode file_path
+        df_dic_list, key = [], 'available_episode_model_path_dic'
+        for in_sample_date_line, round_results_dic in date_round_results_dic.items():
+            df_dic_list.extend(get_available_episode_model_path_dic(
+                round_results_dic, in_sample_date_line, in_off_key=in_off_key))
 
-    df = pd.DataFrame(df_dic_list)[['date', 'round', 'episode', 'file_path']]
-    file_name = f'available_model_path.csv'
-    file_path = os.path.join(output_folder, file_name)
-    df.to_csv(file_path, index=False)
-    logger.info('有效模型路径输出到文件： %s', file_path)
+        if len(df_dic_list) == 0:
+            logger.warning("%s 目录，没有找到有效模型", output_folder)
+            continue
+        df = pd.DataFrame(df_dic_list)[['date', 'round', 'episode', 'file_path']]
+        if in_off_key == 'in_example':
+            file_name = f'available_model_path.csv'
+        else:
+            file_name = f'available_model_path_{in_off_key}.csv'
+        file_path = os.path.join(output_folder, file_name)
+        df.to_csv(file_path, index=False)
+        logger.info('%s 有效模型路径输出到文件： %s', in_off_key_str, file_path)
+        logger.info('%s 各个日期下的有效模型数量：\n%s', in_off_key_str, df[['date', 'file_path']].groupby(by='date').count())
 
 
 def _test_auto_valid_and_report(output_folder, auto_open_file=True, in_sample_only=True):

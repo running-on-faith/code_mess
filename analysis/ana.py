@@ -310,69 +310,77 @@ def _test_analysis_rewards_with_md(auto_open_file=True):
     return file_path
 
 
+def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
+    """根据 reward_df 返回 净值，0手续费净值，平均持仓，以及对应的收盘价，供输出plot使用"""
+    if baseline is not None:
+        df = reward_df[reward_df.index <= baseline]
+    else:
+        df = reward_df
+    ret_s = df.iloc[-1, :][['nav', 'nav_fee0', 'close', 'action_count']].copy()
+    ret_s['close'] /= df.iloc[0, :]['close']
+    # 部分无效数据奇高导致曲线变化不明显，因此，对超过阈值的数据进行一定的处理
+    threshold = 20
+    avg_holding = df.shape[0] / ret_s['action_count'] * 2
+    if avg_holding > threshold:
+        avg_holding = threshold + np.log(avg_holding - threshold + 1)
+    ret_s['avg_holding'] = avg_holding
+    return ret_s
+
+
+def check_available_reward(episode, reward_df):
+    """筛选出有效的 模型"""
+    if episode < 200:
+        return False
+    df_len = reward_df.shape[0]
+    if df_len == 0:
+        return False
+    last_s, first_s = reward_df.iloc[-1, :], reward_df.iloc[0, :]
+    if last_s['nav'] <= 1:
+        return False
+    if last_s['action_count'] <= 0:
+        return False
+    avg_holding = df_len / last_s['action_count'] * 2
+    if avg_holding < 3 or 10 < avg_holding:
+        return False
+    # 卡玛比 大于 1
+    nav = reward_df['nav']
+    cal_mar_threshold = 1.0
+    cal_mar = nav.calc_calmar_ratio()
+    if np.isnan(cal_mar) or cal_mar <= cal_mar_threshold:
+        return False
+    # 复合年华收益率大于 0.05
+    # cagr = nav.calc_cagr()
+    # if np.isnan(cagr) or cagr < 0.05:
+    #     return False
+    return True
+
+
 def analysis_in_out_example_valid_env_result(
         in_out_example_valid_env_result_dic, model_param_dic, in_sample_date_line, episode_model_path_dic=None,
         enable_show_plot=False, enable_save_plot=True, enable_2_docx=True,
         round_n=0, show_plot_141=False, risk_free=0.03, available_episode_num_filter=0, **kwargs):
-    """分析 样本内测试，样本外测试，并形成绩效分析报告"""
+    """对 样本内测试/样本外测试结果 及环境信息进行分析，并形成绩效分析报告"""
 
     # 整理参数
     analysis_result_dic = {}
     day_span_list = [5, 10, 20, 30, 60]
+    in_sample_date_line = pd.to_datetime(in_sample_date_line)
+    in_sample_date_line_str = date_2_str(in_sample_date_line)
     model_name = model_param_dic['model_name']
-    title_header = f"{model_name}_{date_2_str(in_sample_date_line)}_{round_n}"
-
-    def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
-        """根据 reward_df 返回 净值，0手续费净值，平均持仓，以及对应的收盘价，供输出plot使用"""
-        df = reward_df[['nav', 'nav_fee0', 'close', 'action_count']]
-        avg_holding_s = df.shape[0] / df['action_count'] * 2
-        # 部分无效数据奇高导致曲线变化不明显，因此，对超过阈值的数据进行一定的处理
-        threshold = 20
-        is_fit = avg_holding_s > threshold
-        avg_holding_s[is_fit] = threshold + np.log(avg_holding_s[is_fit] - threshold + 1)
-        df['avg_holding'] = avg_holding_s
-        if baseline is not None:
-            df = df[df.index <= baseline]
-        ret_s = df.iloc[-1, :].copy()
-        ret_s['close'] /= df.iloc[0, :]['close']
-        return ret_s
-
-    # 筛选出有效的 模型
-    def check_available_reward(episode, reward_df):
-        """筛选出有效的 模型"""
-        if episode < 1000:
-            return False
-        df_len = reward_df.shape[0]
-        if df_len == 0:
-            return False
-        last_s, first_s = reward_df.iloc[-1, :], reward_df.iloc[0, :]
-        if last_s['nav'] <= 1:
-            return False
-        if last_s['action_count'] <= 0:
-            return False
-        avg_holding = df_len / last_s['action_count'] * 2
-        if avg_holding <= 3 or 10 <= avg_holding:
-            return False
-        # 卡玛比 大于 1
-        nav = reward_df['nav']
-        cal_mar_threshold = 2.0
-        cal_mar = nav.calc_calmar_ratio()
-        if np.isnan(cal_mar) or cal_mar <= cal_mar_threshold:
-            return False
-        # 复合年华收益率大于 0.05
-        # cagr = nav.calc_cagr()
-        # if np.isnan(cagr) or cagr < 0.05:
-        #     return False
-        return True
-
-    for key in ('in_example', 'off_example'):
-        if key not in in_out_example_valid_env_result_dic:
+    title_header = f"{model_name}_{in_sample_date_line_str}_{round_n}"
+    episode_reward_df_dic_key = 'episode_reward_df_dic'
+    off_example_available_days = kwargs.setdefault('off_example_available_days', 20)
+    for in_off_key in ('in_example', 'off_example'):
+        if in_off_key not in in_out_example_valid_env_result_dic or \
+                episode_reward_df_dic_key not in in_out_example_valid_env_result_dic[in_off_key]:
             continue
-        analysis_result_dic[key] = analysis_result_dic_tmp = {}
-        episode_reward_df_dic = in_out_example_valid_env_result_dic[key]['episode_reward_df_dic']
-        if episode_reward_df_dic is None:
-            logger.warning("round=%d %s episode_reward_df_dic is None", round_n, key)
-        md_df = in_out_example_valid_env_result_dic[key]['md_df']
+        analysis_result_dic[in_off_key] = analysis_result_dic_tmp = {}
+        episode_reward_df_dic = in_out_example_valid_env_result_dic[in_off_key][episode_reward_df_dic_key]
+        if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
+            logger.warning("基准日期 %s round=%d %s episode_reward_df_dic is None or length is 0",
+                           in_sample_date_line_str, round_n, in_off_key)
+            continue
+        md_df = in_out_example_valid_env_result_dic[in_off_key]['md_df']
         close_s = md_df['close']
         episode_list = [_ for _ in episode_reward_df_dic.keys() if episode_reward_df_dic[_].shape[0] > 0]
         episode_count = len(episode_list),
@@ -380,13 +388,23 @@ def analysis_in_out_example_valid_env_result(
             continue
         episode_list.sort()
         enable_kwargs = dict(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, figsize=(5.4, 5.0))
-        in_sample_date_line = pd.to_datetime(in_sample_date_line)
 
         # 筛选有效的模型保存到 available_episode_list，并将模型路经保存到 available_episode_model_path_dic
-        episode_nav_pair_list = [(episode, reward_df['nav'].iloc[-1])
-                                 for episode, reward_df in episode_reward_df_dic.items()
-                                 if check_available_reward(episode, reward_df)]
+        episode_nav_pair_list = [(
+            episode, reward_df['nav'].iloc[-1] if in_off_key == 'in_example' else
+            reward_df['nav'].iloc[-1 if reward_df.shape[0] < off_example_available_days else off_example_available_days]
+        )
+            for episode, reward_df in episode_reward_df_dic.items() if check_available_reward(episode, reward_df)
+        ]
         episode_nav_pair_list_len = len(episode_nav_pair_list)
+        if episode_nav_pair_list_len == 0:
+            logger.warning("基准日期 %s round=%d %s 共 %d 个 Episode，没有找到有效的模型",
+                           in_sample_date_line_str, round_n, in_off_key, len(episode_reward_df_dic))
+        else:
+            logger.info("基准日期 %s round=%d %s 共 %d 个 Episode，有效的模型 %d 个",
+                        in_sample_date_line_str, round_n, in_off_key, len(episode_reward_df_dic),
+                        episode_nav_pair_list_len)
+
         # 对于筛选后，有效模型数量过多的情况，采取剔除前、后20%的方式缩减数量的同时，剔除极端数据
         if available_episode_num_filter is not None and episode_nav_pair_list_len >= available_episode_num_filter:
             # 剔除分位数前 20%，以及后20%的数字
@@ -405,7 +423,7 @@ def analysis_in_out_example_valid_env_result(
         # 输出文件保存到 episode_in_sample_value_plot
         n_days_file_path_dic = {}
         for n_days in itertools.chain(day_span_list, [-1]):
-            if key == 'in_example' and n_days != -1:
+            if in_off_key == 'in_example' and n_days != -1:
                 # 样本内测试的情况下，值看最后的净值
                 continue
             episode_nav_df = pd.DataFrame({
@@ -414,7 +432,7 @@ def analysis_in_out_example_valid_env_result(
             ).T.sort_index()
             if episode_nav_df.shape[0] == 0:
                 continue
-            title = f'{title_header}_{key}_episode_nav_plot_{n_days if n_days > 0 else ""}'
+            title = f'{title_header}_{in_off_key}_episode_nav_plot_{n_days if n_days > 0 else ""}'
             try:
                 file_path = plot_twin([episode_nav_df[['nav', 'nav_fee0']], episode_nav_df['close']],
                                       episode_nav_df['avg_holding'],
@@ -432,8 +450,8 @@ def analysis_in_out_example_valid_env_result(
             for episode, reward_df in episode_reward_df_dic.items() if reward_df.shape[0] > 0}
         ).T.sort_index()
         if episode_nav_df.shape[0] == 0:
-            logger.warning("round=%d %s episode_reward_df_dic.keys=%s\nepisode_nav_df.shape[0] == 0",
-                           round_n, key, episode_reward_df_dic.keys())
+            logger.warning("round=%d %s episode_reward_df_dic.keys=%s, episode_nav_df.shape[0] == 0",
+                           round_n, in_off_key, episode_reward_df_dic.keys())
             continue
         # 日期索引，episode 列名，记录 value 值的 DataFrame
         date_episode_nav_df = pd.DataFrame({
@@ -443,11 +461,11 @@ def analysis_in_out_example_valid_env_result(
         data_count = date_episode_nav_df.shape[0]
         if data_count == 0:
             logger.warning("round=%d %s episode_reward_df_dic.keys=%s\ndate_episode_nav_df.shape[0] == 0",
-                           round_n, key, episode_reward_df_dic.keys())
+                           round_n, in_off_key, episode_reward_df_dic.keys())
             continue
         baseline_date = date_episode_nav_df.index[0]
         for n_days in day_span_list:
-            if key == 'in_example':
+            if in_off_key == 'in_example':
                 continue
             if data_count <= n_days:
                 continue
@@ -476,7 +494,7 @@ def analysis_in_out_example_valid_env_result(
                                        f'{episode}_0': reward_df['nav_fee0']})
 
                 # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
-                title = f'{title_header}_{key}_nav_{episode}'
+                title = f'{title_header}_{in_off_key}_nav_{episode}'
                 file_path = plot_twin([nav_df[f'{episode}_v'], nav_df[f'{episode}_0']], close_s,
                                       name=title,
                                       # folder_path=cache_folder_path,
@@ -496,7 +514,7 @@ def analysis_in_out_example_valid_env_result(
                                         for num, episode in enumerate(episode_list_sub)})
 
             # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
-            title = f"{title_header}_{key}_nav_episode[{min(episode_list_sub)}-{max(episode_list_sub)}]"
+            title = f"{title_header}_{in_off_key}_nav_episode[{min(episode_list_sub)}-{max(episode_list_sub)}]"
             file_path = plot_twin([nav_df, nav_fee0_df], close_s, name=title,
                                   # folder_path=cache_folder_path,
                                   in_sample_date_line=in_sample_date_line, **enable_kwargs)
@@ -593,6 +611,7 @@ def _test_analysis_in_out_example_valid_env_result():
         n_step=n_step,
         model_folder=model_folder,
     )
+    analysis_kwargs['off_example_available_days'] = 20
     in_out_example_valid_env_result_dic = {}
     for key in ('in_example', 'off_example'):
         md_df = md_loader_func()

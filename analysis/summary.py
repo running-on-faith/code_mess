@@ -211,15 +211,15 @@ def in_out_example_analysis_result_all_round_2_docx(model_param_dic,
     available_round_set = set()
     for num, (round_n, result_dic) in enumerate(round_results_dic.items()):
         analysis_result_dic = result_dic[analysis_result_dic_key]
-        for in_out_key in ('in_example', 'off_example'):
-            in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-            if in_out_key not in analysis_result_dic:
+        for in_off_key in ('in_example', 'off_example'):
+            in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+            if in_off_key not in analysis_result_dic:
                 continue
             title_num_list[1] += 1
-            data_dic = analysis_result_dic[in_out_key][key]
+            data_dic = analysis_result_dic[in_off_key][key]
             data_count = len(data_dic)
             run = document.add_heading('', 2).add_run(
-                f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} 第 {round_n} 轮训练[ {data_count} ]个')
+                f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} 第 {round_n} 轮训练[ {data_count} ]个')
             if data_count == 0:
                 run.font.double_strike = True
             else:
@@ -251,17 +251,17 @@ def in_out_example_analysis_result_all_round_2_docx(model_param_dic,
 
         key, key2 = 'analysis_result_dic', 'episode_nav_plot_file_path_dic'
         if key in result_dic:
-            for in_out_key in ('in_example', 'off_example'):
-                if in_out_key not in result_dic[key]:
+            for in_off_key in ('in_example', 'off_example'):
+                if in_off_key not in result_dic[key]:
                     continue
-                in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
+                in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
                 title_num_list[1] += 1
                 document.add_heading(
-                    f'{title_num_list[0]}.{num}.{title_num_list[1]}、Round {round_n} {in_out_key_str} 趋势变化 ', 3)
-                n_days_file_path_dic = result_dic[key][in_out_key][key2]
+                    f'{title_num_list[0]}.{num}.{title_num_list[1]}、Round {round_n} {in_off_key_str} 趋势变化 ', 3)
+                n_days_file_path_dic = result_dic[key][in_off_key][key2]
                 for n_days, image_path in n_days_file_path_dic.items():
                     document.add_heading(
-                        f'{title_num_list[0]}.{num}.{title_num_list[1]}、Round {round_n} {n_days} 日净值走势变化 ', 4)
+                        f'{title_num_list[0]}.{num}.{title_num_list[1]}、Round {round_n} {in_off_key_str} {"最终" if n_days == -1 else n_days}日净值走势变化 ', 4)
                     document.add_picture(image_path)  # , width=docx.shared.Inches(1.25)
 
                 if num > 0:  # 第一段前面由于多了一个二级标题，导致最后一行分页时总是多出一个空白页
@@ -482,13 +482,13 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     document.add_heading(f'{title_num_list[0]}、有效的 episode 模型路径', 1)
     document.add_paragraph("""本节展示经过一定筛选逻辑后找到的有效模型及路径，其中样本外有效模型路径不具有实际操作价值，仅供参考""")
     key = 'available_episode_model_path_dic'
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} 有效模型', 2)
-        dic_2_table(document, analysis_result_dic[in_out_key][key], col_group_num=1, col_width=[0.6, 5.4])
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} 有效模型', 2)
+        dic_2_table(document, analysis_result_dic[in_off_key][key], col_group_num=1, col_width=[0.6, 5.4])
         document.add_paragraph('')
 
     # 随 Episode 增长，nav 结果变化曲线
@@ -498,22 +498,22 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     document.add_paragraph("""本节展示随 Episode 增长，样本内 value 与 样本外 value 趋势对比，
     目的是查看 样本内表现与样本外表现直接是否存在一定的相关性""")
     key = 'episode_nav_plot_file_path_dic'
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
         title_num_list[2] = 0
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} Episode NAV 走势变化', 2)
-        n_days_file_path_dic = analysis_result_dic[in_out_key][key]
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} Episode NAV 走势变化', 2)
+        n_days_file_path_dic = analysis_result_dic[in_off_key][key]
         for n_days, file_path in n_days_file_path_dic.items():
             title_num_list[2] += 1
             if n_days == -1:
                 document.add_heading(
-                    f'{title_num_list[0]}、{title_num_list[1]}、{title_num_list[2]} {in_out_key_str}最终净值', 3)
+                    f'{title_num_list[0]}、{title_num_list[1]}、{title_num_list[2]} {in_off_key_str}最终净值', 3)
             else:
                 document.add_heading(
-                    f'{title_num_list[0]}、{title_num_list[1]}、{title_num_list[2]} {in_out_key_str}第{n_days}日净值', 3)
+                    f'{title_num_list[0]}、{title_num_list[1]}、{title_num_list[2]} {in_off_key_str}第{n_days}日净值', 3)
             document.add_picture(file_path)  # , width=docx.shared.Inches(1.25)
             document.add_paragraph('')
 
@@ -525,13 +525,13 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     document.add_paragraph("""本节展示随 Episode 增长，样本内 value 与 样本外 value 趋势对比，
     目的是查看 样本内表现与样本外表现直接是否存在一定的相关性""")
     key = 'episode_nav_df'
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} 回测数据 rr,cagr 列表', 2)
-        data_df = analysis_result_dic[in_out_key][key]
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} 回测数据 rr,cagr 列表', 2)
+        data_df = analysis_result_dic[in_off_key][key]
         format_by_col = {_: FORMAT_2_FLOAT4 for _ in data_df.columns if _ in float_col_name_set}
         format_by_col.update({_: FORMAT_2_PERCENT for _ in data_df.columns if _.find('rr') > 0 or _.find('cagr') > 0})
         df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=6,
@@ -543,15 +543,15 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     title_num_list[0] += 1
     title_num_list[1], title_num_list[2] = 0, 0
     document.add_heading(f'{title_num_list[0]}、每一个 episode 分别展示 nav， nav_fee0 走势', 1)
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
         title_num_list[2] = 0
-        episode_nav_plot_path_dic = analysis_result_dic[in_out_key][key]
+        episode_nav_plot_path_dic = analysis_result_dic[in_off_key][key]
         data_count = len(episode_nav_plot_path_dic)
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} {data_count} 个 Episode 走势', 2)
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} {data_count} 个 Episode 走势', 2)
         for episode, file_path in episode_nav_plot_path_dic.items():
             title_num_list[2] += 1
             document.add_heading(f'{title_num_list[0]}、{title_num_list[1]}、{title_num_list[2]} Episode {episode} 走势', 3)
@@ -563,16 +563,16 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     title_num_list[0] += 1
     title_num_list[1], title_num_list[2] = 0, 0
     document.add_heading(f'{title_num_list[0]}、多 Episode 合并 nav 曲线走势', 1)
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
-        nav_plot_file_path_list = analysis_result_dic[in_out_key][key]
+        nav_plot_file_path_list = analysis_result_dic[in_off_key][key]
         data_count = len(nav_plot_file_path_list)
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} {data_count} 张合并后走势图', 2)
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} {data_count} 张合并后走势图', 2)
         for num, file_path in enumerate(nav_plot_file_path_list, start=1):
-            document.add_paragraph(f'{title_num_list[0]}.{title_num_list[1]}.{num} {in_out_key_str} ')
+            document.add_paragraph(f'{title_num_list[0]}.{title_num_list[1]}.{num} {in_off_key_str} ')
             document.add_picture(file_path)
             document.add_paragraph('')
 
@@ -580,13 +580,13 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     title_num_list[0] += 1
     title_num_list[1], title_num_list[2] = 0, 0
     document.add_heading(f'{title_num_list[0]}、各 Episode Reward 列表', 1)
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
-        data_df = analysis_result_dic[in_out_key][key][available_reward_col_name_list]
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} 各Episode 最终净值列表', 2)
+        data_df = analysis_result_dic[in_off_key][key][available_reward_col_name_list]
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} 各Episode 最终净值列表', 2)
         format_by_col = {_: FORMAT_2_FLOAT4 for _ in data_df.columns if _ in float_col_name_set}
         df_2_table(document, data_df, format_by_col=format_by_col, max_col_count=6,
                    mark_top_n=5, mark_top_n_on_cols=data_df.columns)
@@ -599,13 +599,13 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     title_num_list[0] += 1
     title_num_list[1], title_num_list[2] = 0, 0
     document.add_heading(f'{title_num_list[0]}、样本外数据绩效统计数据（Porformance stat）', 1)
-    for in_out_key in ('in_example', 'off_example'):
-        in_out_key_str = '样本内' if in_out_key == 'in_example' else '样本外'
-        if in_out_key not in analysis_result_dic or key not in analysis_result_dic[in_out_key]:
+    for in_off_key in ('in_example', 'off_example'):
+        in_off_key_str = '样本内' if in_off_key == 'in_example' else '样本外'
+        if in_off_key not in analysis_result_dic or key not in analysis_result_dic[in_off_key]:
             continue
         title_num_list[1] += 1
-        stats_df = analysis_result_dic[in_out_key][key].T
-        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_out_key_str} 绩效分析', 2)
+        stats_df = analysis_result_dic[in_off_key][key].T
+        document.add_heading(f'{title_num_list[0]}、{title_num_list[1]} {in_off_key_str} 绩效分析', 2)
         stats_df.drop(['start', 'rf'], axis=1, inplace=True)
         stats_df_2_docx_table(stats_df, document, format_axis='column',
                               mark_top_n=5, mark_top_n_on_cols=[_ for _ in stats_df.columns if _ not in {'end'}])

@@ -8,19 +8,8 @@
 @desc    : 
 """
 
-
-def set_module_root_path():
-    import os
-    import re
-    from ibats_utils.mess import get_folder_path
-    module_root_path = get_folder_path(re.compile(r'^code_mess'), create_if_not_found=False)  # 'ibats_common'
-    import ibats_common
-    ibats_common.module_root_path = module_root_path
-    ibats_common.root_parent_path = os.path.abspath(os.path.join(module_root_path, os.path.pardir)) \
-        if module_root_path is not None else None
+import logging
 
 
-set_module_root_path()
-
-if __name__ == "__main__":
-    pass
+logger = logging.getLogger(__name__)
+logger.debug('loading')

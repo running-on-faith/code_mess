@@ -59,7 +59,8 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         enable_summary_rewards_2_docx=enable_summary_rewards_2_docx,
         max_valid_data_len=max_valid_data_len,
         read_csv=read_csv,
-        in_sample_valid=True
+        in_sample_valid=True,
+        off_example_available_days=20,
     )
     # 输出有效的模型
     df_dic_list = get_available_episode_model_path_dic(round_results_dic, in_sample_date_line)
@@ -75,8 +76,9 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
             open_file_with_system_app(file_path)
 
 
-def valid_whole_episodes_and_summary_report(auto_open_file=False, auto_open_summary_file=False,
-                                            in_sample_only=True, max_valid_data_len=1000, enable_summary_rewards_2_docx=False):
+def valid_whole_episodes_and_summary_report(read_csv=True, auto_open_file=False, auto_open_summary_file=False,
+                                            in_sample_only=True, max_valid_data_len=1000,
+                                            enable_summary_rewards_2_docx=False):
     """针对 output 目录，进行全面验证"""
     from ibats_utils.mess import is_windows_os
     if is_windows_os():
@@ -91,7 +93,7 @@ def valid_whole_episodes_and_summary_report(auto_open_file=False, auto_open_summ
         get_agent_func=get_agent,
         in_sample_only=in_sample_only,
         reward_2_csv=True,
-        read_csv=False,
+        read_csv=read_csv,
         max_valid_data_len=max_valid_data_len,
         enable_summary_rewards_2_docx=enable_summary_rewards_2_docx,
         pool_worker_num=0
@@ -105,12 +107,13 @@ def valid_whole_episodes_and_summary_report(auto_open_file=False, auto_open_summ
 
 
 if __name__ == "__main__":
-    # valid_whole_episodes_and_summary_report(
-    #     auto_open_file=False,
-    #     auto_open_summary_file=False
-    # )
-    valid_models_and_summary_report(
-        in_sample_date_line='2017-01-26',
-        target_round_n_list=None,  # target_round_n_list=[1] None
+    valid_whole_episodes_and_summary_report(
         read_csv=True,
+        auto_open_file=False,
+        auto_open_summary_file=False
     )
+    # valid_models_and_summary_report(
+    #     in_sample_date_line='2017-09-29',
+    #     target_round_n_list=None,  # target_round_n_list=[1] None
+    #     read_csv=True,
+    # )
