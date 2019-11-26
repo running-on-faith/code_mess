@@ -329,7 +329,7 @@ def calc_reward_nav_value(reward_df: pd.DataFrame, baseline=None):
 
 def check_available_reward(episode, reward_df):
     """筛选出有效的 模型"""
-    if episode < 200:
+    if episode < 20:
         return False
     df_len = reward_df.shape[0]
     if df_len == 0:

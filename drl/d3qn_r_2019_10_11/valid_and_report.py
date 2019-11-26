@@ -107,13 +107,15 @@ def valid_whole_episodes_and_summary_report(read_csv=True, auto_open_file=False,
 
 
 if __name__ == "__main__":
+    pass
     valid_whole_episodes_and_summary_report(
         read_csv=True,
+        enable_summary_rewards_2_docx=True,
         auto_open_file=False,
-        auto_open_summary_file=False
+        auto_open_summary_file=False,
     )
     # valid_models_and_summary_report(
-    #     in_sample_date_line='2017-09-29',
+    #     in_sample_date_line='2019-01-31',
     #     target_round_n_list=None,  # target_round_n_list=[1] None
     #     read_csv=True,
     # )

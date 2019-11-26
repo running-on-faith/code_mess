@@ -149,7 +149,7 @@ def model_runner(reward_2_csv=True, pool_worker_num=0):
                 task_queue.join()
                 task_queue_empty = True
 
-        return episode_reward_df_dic
+    return episode_reward_df_dic
 
 
 def _callback_func(reward_df, reward_2_csv, episode, episode_reward_df_dic, reward_file_path):
@@ -282,27 +282,28 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             # 生成因子
             factors_df = get_factor_func(md_df)
             df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step, date_from=date_from)
-            shape = batch_factors.shape
-            logger.info('batch_factors.shape=%s', shape)
-            md_df = md_df.loc[df_index, :]
-            if md_df.shape[0] > 0:
-                logger.debug('样本内测试起止日期： [%s - %s]', date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
-                episode_reward_df_dic = valid_episode_list(
-                    episode_model_path_dic=episode_model_path_dic,
-                    pool_worker_num=pool_worker_num, round_n=round_n,
-                    md_df=md_df, batch_factors=batch_factors, model_name=model_name,
-                    get_agent_func=get_agent_func, show_plot=False,
-                    read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_in',
-                )
-                if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
-                    logger.warning('round %d/%d) in_sample_date_line: %s 样本内测试起止日期： [%s - %s]，返回结果为空',
-                                   round_n, round_n_list_len, in_sample_date_line_str,
-                                   date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
-                else:
-                    in_out_example_valid_env_result_dic['in_example'] = dict(
-                        episode_reward_df_dic=episode_reward_df_dic,
-                        md_df=md_df
+            if df_index is not None:
+                shape = batch_factors.shape
+                logger.info('batch_factors.shape=%s', shape)
+                md_df = md_df.loc[df_index, :]
+                if md_df.shape[0] > 0:
+                    logger.debug('样本内测试起止日期： [%s - %s]', date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                    episode_reward_df_dic = valid_episode_list(
+                        episode_model_path_dic=episode_model_path_dic,
+                        pool_worker_num=pool_worker_num, round_n=round_n,
+                        md_df=md_df, batch_factors=batch_factors, model_name=model_name,
+                        get_agent_func=get_agent_func, show_plot=False,
+                        read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_in',
                     )
+                    if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
+                        logger.warning('round %d/%d) in_sample_date_line: %s 样本内测试起止日期： [%s - %s]，返回结果为空',
+                                       round_n, round_n_list_len, in_sample_date_line_str,
+                                       date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                    else:
+                        in_out_example_valid_env_result_dic['in_example'] = dict(
+                            episode_reward_df_dic=episode_reward_df_dic,
+                            md_df=md_df
+                        )
 
         if off_sample_valid:
             # 样本外测试
@@ -313,26 +314,27 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
             factors_df = get_factor_func(md_df)
             df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step,
                                                                    date_from=date_from_off_example)
-            logger.debug('batch_factors.shape=%s', batch_factors.shape)
-            md_df = md_df.loc[df_index, :]
-            if md_df.shape[0] > 0:
-                logger.debug('样本外测试起止日期： [%s - %s]', date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
-                episode_reward_df_dic = valid_episode_list(
-                    episode_model_path_dic=episode_model_path_dic,
-                    pool_worker_num=pool_worker_num, round_n=round_n,
-                    md_df=md_df, batch_factors=batch_factors, model_name=model_name,
-                    get_agent_func=get_agent_func, show_plot=False,
-                    read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_off',
-                )
-                if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
-                    logger.warning('round %d/%d) in_sample_date_line: %s 样本外测试起止日期： [%s - %s]，返回结果为空',
-                                   round_n, round_n_list_len, in_sample_date_line_str,
-                                   date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
-                else:
-                    in_out_example_valid_env_result_dic['off_example'] = dict(
-                        episode_reward_df_dic=episode_reward_df_dic,
-                        md_df=md_df
+            if df_index is not None:
+                logger.debug('batch_factors.shape=%s', batch_factors.shape)
+                md_df = md_df.loc[df_index, :]
+                if md_df.shape[0] > 0:
+                    logger.debug('样本外测试起止日期： [%s - %s]', date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                    episode_reward_df_dic = valid_episode_list(
+                        episode_model_path_dic=episode_model_path_dic,
+                        pool_worker_num=pool_worker_num, round_n=round_n,
+                        md_df=md_df, batch_factors=batch_factors, model_name=model_name,
+                        get_agent_func=get_agent_func, show_plot=False,
+                        read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_off',
                     )
+                    if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
+                        logger.warning('round %d/%d) in_sample_date_line: %s 样本外测试起止日期： [%s - %s]，返回结果为空',
+                                       round_n, round_n_list_len, in_sample_date_line_str,
+                                       date_2_str(min(md_df.index)), date_2_str(max(md_df.index)))
+                    else:
+                        in_out_example_valid_env_result_dic['off_example'] = dict(
+                            episode_reward_df_dic=episode_reward_df_dic,
+                            md_df=md_df
+                        )
 
         # 模型相关参数
         analysis_kwargs['in_sample_date_line'] = in_sample_date_line_str
