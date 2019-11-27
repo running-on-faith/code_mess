@@ -462,7 +462,7 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
     in_sample_date_line_str = date_2_str(in_sample_date_line) if in_sample_date_line is not None else ""
     int_col_name_set = {'action', 'action_count'}
     money_col_name_set = {'value', 'cash', 'fee_tot', 'value_fee0'}
-    float_col_name_set = {'nav', 'cash', 'close', 'fee_tot', 'nav_fee0'}
+    float_col_name_set = {'nav', 'cash', 'close', 'fee_tot', 'nav_fee0', 'avg_holding'}
     available_reward_col_name_list = ['nav', 'nav_fee0', 'action_count', 'cash', 'fee_tot']
 
     # 生成 docx 文档将所需变量
@@ -630,7 +630,7 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
         document.add_heading(f'{title_num_list[0]}.{title_num_list[1]} {in_off_key_str} 绩效分析', 2)
         stats_df.drop(['start', 'rf'], axis=1, inplace=True)
         stats_df_2_docx_table(stats_df, document, format_axis='column',
-                              mark_top_n=5, mark_top_n_on_cols=[_ for _ in stats_df.columns if _ not in {'end'}])
+                              mark_top_n=10, mark_top_n_on_cols=[_ for _ in stats_df.columns if _ not in {'end'}])
         title_num_list[0] += 1
         document.add_page_break()
 

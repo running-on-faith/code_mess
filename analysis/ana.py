@@ -363,7 +363,7 @@ def analysis_in_out_example_valid_env_result(
 
     # 整理参数
     analysis_result_dic = {}
-    day_span_list = [5, 10, 20, 30, 60]
+    day_span_list = [5, 10, 20, 30, 60, -1]
     in_sample_date_line = pd.to_datetime(in_sample_date_line)
     in_sample_date_line_str = date_2_str(in_sample_date_line)
     model_name = model_param_dic['model_name']
@@ -422,7 +422,7 @@ def analysis_in_out_example_valid_env_result(
         # 随 Episode 增长，nav 结果变化曲线
         # 输出文件保存到 episode_in_sample_value_plot
         n_days_file_path_dic = {}
-        for n_days in itertools.chain(day_span_list, [-1]):
+        for n_days in day_span_list:  # itertools.chain(day_span_list, [-1]):
             if in_off_key == 'in_example' and n_days != -1:
                 # 样本内测试的情况下，值看最后的净值
                 continue
@@ -465,15 +465,15 @@ def analysis_in_out_example_valid_env_result(
             continue
         baseline_date = date_episode_nav_df.index[0]
         for n_days in day_span_list:
-            if in_off_key == 'in_example':
+            if in_off_key == 'in_example' and n_days > 0:
                 continue
-            if data_count <= n_days:
+            if n_days != -1 and data_count <= n_days:
                 continue
             date_curr = date_episode_nav_df.index[n_days]
             nav_s = date_episode_nav_df.iloc[n_days, :]
             days_rr_dic = {
                 f'{n_days}_rr': nav_s - 1,
-                f'{n_days}_cagr': nav_s ** (365 / (date_curr - baseline_date).days) - 1
+                f'{n_days}_cagr': nav_s ** (365 / (date_curr - baseline_date).days) - 1,
             }
             episode_rr_df = pd.DataFrame(days_rr_dic)
             episode_nav_df = pd.merge(episode_nav_df, episode_rr_df, left_index=True, right_index=True)
@@ -527,7 +527,7 @@ def analysis_in_out_example_valid_env_result(
         # 绩效分析
         performance_dic, has_close = {}, False
         for num, episode in enumerate(episode_list):
-            reward_df = episode_reward_df_dic[episode]
+            reward_df = episode_reward_df_dic[episode][['nav', 'nav_fee0']]
             reward_df.rename(columns={'nav': f'{episode}_nav', 'nav_fee0': f'{episode}_nav_fee0'}, inplace=True)
             if not has_close:
                 reward_df = pd.merge(close_s.loc[reward_df.index], reward_df, left_index=True, right_index=True)
