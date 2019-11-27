@@ -77,18 +77,18 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     if log_str1 != "" or log_str2 != "":
                         logger.debug(
-                            "train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%9.5f%%, "
-                            "action_count=%4d, 平均持仓天数 %5.2f%s%s",
+                            "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
+                            "action_count=%4d, 平均持仓%5.2f天%s%s",
                             max_date_str, round_n, episode, num_episodes,
-                            episode_step + 1, env.A.max_step_count, env.A.total_value / env.A.init_cash,
-                            agent.agent.epsilon * 100, env.buffer_action_count[-1],
-                            env.A.max_step_count / env.buffer_action_count[-1] * 2, log_str1, log_str2)
+                            episode_step, env.A.max_step_count, env.A.total_value / env.A.init_cash,
+                            agent.agent.epsilon * 100, env.A.action_count,
+                            env.A.max_step_count / env.A.action_count * 2, log_str1, log_str2)
 
                     break
         except Exception as exp:
             logger.exception("train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%9.5f%%, "
                              "action_count=%4d",
-                             max_date_str, round_n, episode, num_episodes, episode_step + 1, env.A.max_step_count,
+                             max_date_str, round_n, episode, num_episodes, episode_step, env.A.max_step_count,
                              env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
                              )
             raise exp from exp
@@ -96,10 +96,10 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
         if avg_holding_days > 20:
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
-                "train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%9.5f%%, "
-                "action_count=%4d, 平均持仓天数 %5.2f > 20，退出本次训练",
+                "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
+                "action_count=%4d, 平均持仓%5.2f > 20天，退出本次训练",
                 max_date_str, round_n, episode, num_episodes,
-                episode_step + 1, env.A.max_step_count, env.A.total_value / env.A.init_cash,
+                episode_step, env.A.max_step_count, env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
                 avg_holding_days)
             break
