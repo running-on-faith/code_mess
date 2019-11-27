@@ -24,6 +24,7 @@
 方法：input output 安装 0.5**N 指数方式split，然后叠加，进行统一训练
 2019-11-27
 为了解决过度优化问他，降低网络层数以及节点数量
+增加对 LSTM 层的正则化
 """
 import logging
 
@@ -143,9 +144,13 @@ class Framework(object):
         from keras.models import Model
         from keras import metrics, backend as K
         from keras.optimizers import Nadam
+        from keras.regularizers import l2
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
-        net = LSTM(self.input_shape[-1] * 2)(input)
+        # 2019-11-27 增加对 LSTM 层的正则化
+        # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
+        net = LSTM(self.input_shape[-1] * 2,
+                   recurrent_regularizer=l2(1e-6), kernel_regularizer=l2(1e-3))(input)
         net = Dense(int(self.input_shape[-1] / 1.5))(net)
         net = Dropout(0.4)(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
@@ -327,7 +332,7 @@ def _test_calc_cum_reward():
 def _test_show_model():
     from keras.utils import plot_model
     action_size = 2
-    agent = Framework(input_shape=[None, 250, 78], action_size=action_size, dueling=True,
+    agent = Framework(input_shape=[None, 120, 93], action_size=action_size, dueling=True,
                       batch_size=16384)
     file_path = f'model action_size_{action_size}.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
