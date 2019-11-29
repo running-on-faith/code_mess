@@ -37,7 +37,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
     episode, is_broken = 1, False
-    episodes_reward_df_dic, model_path = {}, None
+    episodes_nav_df_dic, model_path = {}, None
     for episode in range(1, num_episodes + 1):
         state = env.reset()
         episode_step = 0
@@ -56,8 +56,8 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     # 加入 reward_df[['value', 'value_fee0']]
                     if episode > 1 and (episode % n_episode_pre_record == 0 or episode == num_episodes - 1):
-                        episodes_reward_df_dic[episode] = env.plot_data()[['value', 'value_fee0']]
-                        log_str1 = f", append to episodes_reward_df_dic[{episode}] len {len(episodes_reward_df_dic)}"
+                        episodes_nav_df_dic[episode] = env.plot_data()[['nav', 'nav_fee0']]
+                        log_str1 = f", append to episodes_reward_df_dic[{episode}] len {len(episodes_nav_df_dic)}"
                     else:
                         log_str1 = ""
 
@@ -80,9 +80,11 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                             "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
                             "action_count=%4d, 平均持仓%5.2f天%s%s",
                             max_date_str, round_n, episode, num_episodes,
-                            episode_step, env.A.max_step_count, env.A.total_value / env.A.init_cash,
+                            episode_step, env.A.max_step_count,
+                            env.A.total_value / env.A.init_cash,
                             agent.agent.epsilon * 100, env.A.action_count,
-                            env.A.max_step_count / env.A.action_count * 2, log_str1, log_str2)
+                            env.A.max_step_count / env.A.action_count * 2, log_str1,
+                            log_str2)
 
                     break
         except Exception as exp:
@@ -99,7 +101,8 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                 "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
                 "action_count=%4d, 平均持仓%5.2f > 20天，退出本次训练",
                 max_date_str, round_n, episode, num_episodes,
-                episode_step, env.A.max_step_count, env.A.total_value / env.A.init_cash,
+                episode_step, env.A.max_step_count,
+                env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
                 avg_holding_days)
             break
@@ -152,17 +155,17 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
     # 展示训练结果——历史
     title = f'{model_name}_r{round_n}_epi{num_episodes}_{max_date_str}_list'
-    value_df = pd.DataFrame({f'{num}_v': df['value']
-                             for num, df in episodes_reward_df_dic.items()
-                             if df.shape[0] > 0})
-    value_fee0_df = pd.DataFrame({f'{num}_0': df['value_fee0']
-                                  for num, df in episodes_reward_df_dic.items()
-                                  if df.shape[0] > 0})
+    nav_df = pd.DataFrame({f'{num}_v': df['nav']
+                           for num, df in episodes_nav_df_dic.items()
+                           if df.shape[0] > 0})
+    nav_fee0_df = pd.DataFrame({f'{num}_0': df['nav_fee0']
+                                for num, df in episodes_nav_df_dic.items()
+                                if df.shape[0] > 0})
     if ax is not None:
         # 说明上面“历史训练曲线” 有输出图像， 因此使用 ax = fig.add_subplot(212)
         ax = fig.add_subplot(212)
 
-    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path=images_folder_path)
+    plot_twin([nav_df, nav_fee0_df], md_df['close'], name=title, ax=ax, folder_path=images_folder_path)
 
     return reward_df
 
@@ -253,7 +256,7 @@ def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_ite
         date_max = max(md_df.index)
     else:
         date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index)
-    if use_pool:
+    if use_pool and max_process_count > 1:
         pool = multiprocessing.Pool(max_process_count)
     else:
         pool = None
