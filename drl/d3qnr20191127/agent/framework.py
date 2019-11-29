@@ -28,7 +28,11 @@
 """
 import logging
 
+import ffn
 import numpy as np
+import pandas as pd
+
+DATE_BASELINE = pd.to_datetime('2018-01-01')
 
 
 class EpsilonMaker:
@@ -62,7 +66,7 @@ class Framework(object):
     def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
-                 cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057,
+                 cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action=0.9057,
                  min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01):
         import tensorflow as tf
         from keras import backend as K
@@ -122,7 +126,7 @@ class Framework(object):
         # self.epsilon_min = epsilon_min
         # self.epsilon_decay = epsilon_decay
         self.epsilon_maker = EpsilonMaker(epsilon_decay, sin_step, epsilon_min,
-                                          epsilon_sin_max=1 / (cum_reward_back_step * 2))
+                                          epsilon_sin_max=0.05)
         self.random_drop_best_cache_rate = random_drop_best_cache_rate
         self.flag_size = 3
         self.model_eval = self._build_model()
@@ -144,13 +148,15 @@ class Framework(object):
         from keras.models import Model
         from keras import metrics, backend as K
         from keras.optimizers import Nadam
-        from keras.regularizers import l2
+        from keras.regularizers import l2, l1_l2
         # Neural Net for Deep-Q learning Model
         input = Input(batch_shape=self.input_shape, name=f'state')
         # 2019-11-27 增加对 LSTM 层的正则化
         # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
+        # 使用 L1L2 混合正则项（又称：Elastic Net）
+        # TODO: 参数尚未优化
         net = LSTM(self.input_shape[-1] * 2,
-                   recurrent_regularizer=l2(1e-6), kernel_regularizer=l2(1e-3))(input)
+                   recurrent_regularizer=l1_l2(l1=1e-7, l2=1e-7), kernel_regularizer=l2(1e-3))(input)
         net = Dense(int(self.input_shape[-1] / 1.5))(net)
         net = Dropout(0.4)(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
@@ -249,7 +255,10 @@ class Framework(object):
 
         # 以平仓动作为标识，将持仓期间的收益进行反向传递
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
-        reward_tot = calc_cum_reward(self.cache_reward, self.cum_reward_back_step)
+        # 以收益率向前叠加的奖励函数
+        reward_tot = calc_cum_reward_with_rr(self.cache_reward, self.cum_reward_back_step)
+        # 以未来N日calmar为奖励函数（目前发现优化有问题，暂时不清楚原有）
+        # reward_tot = calc_cum_reward_with_calmar(self.cache_reward, self.cum_reward_back_step)
         tot_reward = np.sum(self.cache_reward)
         self.cache_list_tot_reward.append(tot_reward)
         # 以 reward_tot 为奖励进行训练
@@ -262,9 +271,12 @@ class Framework(object):
         q_target[index, self.cache_action] = reward_tot
         # 将训练及进行复制叠加
         # 加入缓存，整理缓存
-        self.cache_list_state.append(multiple_data(_state, self.min_data_len_4_multiple_date))
-        self.cache_list_flag.append(multiple_data(_flag, self.min_data_len_4_multiple_date))
-        self.cache_list_q_target.append(multiple_data(q_target, self.min_data_len_4_multiple_date))
+        self.cache_list_state.append(multiple_data(
+            _state[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
+        self.cache_list_flag.append(multiple_data(
+            _flag[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
+        self.cache_list_q_target.append(multiple_data(
+            q_target[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
         # 随机删除一组训练样本
         if len(self.cache_list_tot_reward) >= self.epsilon_memory_size:
             if np.random.random() < self.random_drop_best_cache_rate:
@@ -306,27 +318,72 @@ class Framework(object):
         return self.acc_loss_lists
 
 
-def calc_cum_reward(reward, step):
+def calc_cum_reward_with_rr(reward, step):
     """计算 reward 值，将未来 step 步的 reward 以log递减形式向前传导"""
     reward_tot = np.array(reward, dtype='float32')
     tot_len = len(reward_tot)
+    data_num, weights = 0, None
     for idx in range(1, tot_len):
         idx_end = min(idx + step, tot_len)
-        data_num = idx_end - idx
-        weights = np.logspace(1, data_num, num=data_num, base=0.5)
+        _data_num = idx_end - idx
+        if data_num != _data_num:
+            weights = np.logspace(1, _data_num, num=_data_num, base=0.5)
+            data_num = _data_num
+
         reward_tot[idx - 1] += sum(reward_tot[idx:idx_end] * weights)
 
     return reward_tot
 
 
-def _test_calc_cum_reward():
+def _test_calc_cum_reward_with_rr():
     """验证 calc_tot_reward 函数"""
     rewards = [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
-    reward_tot = calc_cum_reward(rewards, 3)
+    reward_tot = calc_cum_reward_with_rr(rewards, 3)
     print(reward_tot)
     target_reward = np.array([1.875, 1.875, 1.875, 1.75, 1.625, 1.375, 0.875, 1.75, 1.5, 1.125, 0.375, 0.875,
                               1.75, 1.5, 1.])
     assert all(target_reward == reward_tot)
+
+
+def calc_cum_reward_with_calmar(rewards, win_size=10, threshold=50):
+    """计算 reward 值，将未来 step 步的 reward 转化成 calmar，然后以log递减形式向前传导"""
+    # 首先将 rewards 转化为 pct，step 返回的 reward 为收益率（带正负值）+1变为 pct
+    tot_len = len(rewards)
+    reward_tot = (np.array(rewards, dtype='float32') + 1).cumprod()
+    # 由于当期状态没有返回日期序列，因此加上从某一日期期按日增加，计算 calmar 值
+    reward_s = pd.Series(reward_tot, index=pd.date_range(DATE_BASELINE, periods=tot_len, freq='1D'))
+    for num in range(tot_len - 1):
+        segment = reward_s[num:num + win_size]
+        calmar = segment.calc_calmar_ratio()
+        # 对无效数据以及异常数据进行过滤
+        if np.inf == calmar:
+            if segment[0] < segment[-1]:
+                calmar = -threshold
+            else:
+                calmar = threshold
+        elif calmar < -threshold:
+            calmar = -threshold
+        elif calmar > threshold:
+            calmar = threshold
+
+        reward_tot[num] = calmar
+
+    # 最后一天无法计算，标记为0
+    reward_tot[tot_len - 1] = 0
+    return reward_tot
+
+
+def _test_calc_cum_reward_with_calmar():
+    """验证 calc_tot_reward 函数"""
+    rewards = np.sin(np.linspace(1.5, 2 * np.pi, 30)) / 20 + 0.005
+    reward_tot = calc_cum_reward_with_calmar(rewards, 20)
+    print(reward_tot)
+    target_reward = np.array([15.158013, -1.242776, -3.0063176, -3.0086293, -2.8377662, -2.6881402,
+                              -2.5780575, -2.5043845, -2.4630232, -2.451551, -2.4515502, -2.4644947,
+                              -2.50748, -2.5832598, -2.6970391, -2.8572276, -3.0767963, -3.375636,
+                              -3.7847366, -4.353864, -5.1664085, -6.3700013, -8.244485, -11.365294,
+                              -17.020409, -28.172022, -47.665047, 50., -50., 0., ])
+    assert all([int(x // 0.001) == int(y // 0.001) for x, y in zip(reward_tot, target_reward)])
 
 
 def _test_show_model():
@@ -392,8 +449,10 @@ def _test_multiple_data():
 
 
 if __name__ == '__main__':
+    print('import', ffn)
     # _test_calc_tot_reward()
-    _test_show_model()
-    # _test_calc_cum_reward()
+    # _test_show_model()
+    # _test_calc_cum_reward_with_rr()
+    _test_calc_cum_reward_with_calmar()
     # _test_epsilon_maker()
     # _test_multiple_data()
