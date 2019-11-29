@@ -64,7 +64,7 @@ def _test_train_on_each_period():
         get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2), n_step=60,
         date_train_from='2017-01-01', offset='3M',
-        max_process_count=2
+        use_pool=True, max_process_count=2
     )
 
 
