@@ -25,6 +25,9 @@
 2019-11-27
 为了解决过度优化问他，降低网络层数以及节点数量
 增加对 LSTM 层的正则化
+2019-12-02
+网络优化总是失败，因此又增加了3层
+同时对正则化进行了参数化
 """
 import logging
 
@@ -62,12 +65,173 @@ class EpsilonMaker:
         return self.epsilon
 
 
+def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001, dueling=True):
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    from keras.regularizers import l2, l1_l2
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    # 2019-11-27 增加对 LSTM 层的正则化
+    # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
+    # 使用 L1L2 混合正则项（又称：Elastic Net）
+    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+        if reg_params[0] is not None and reg_params[1] is not None else None
+    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    net = LSTM(
+        input_shape[-1] * 2,
+        recurrent_regularizer=recurrent_regularizer,
+        kernel_regularizer=kernel_regularizer
+    )(input)
+    net = Dense(int(input_shape[-1]))(net)
+    net = Dropout(0.3)(net)
+    net = Dense(int(input_shape[-1] / 2))(net)
+    net = Dropout(0.3)(net)
+    net = Dense(int(input_shape[-1] / 4))(net)
+    net = Dropout(0.3)(net)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    net = Dense((int(input_shape[-1] / 4) + flag_size) // 2)(net)
+    net = Dropout(0.3)(net)
+    net = Dense((int(input_shape[-1] / 4) + flag_size) // 4)(net)
+    net = Dropout(0.3)(net)
+    # net = Dense(self.action_size * 4, activation='relu')(net)
+    if dueling:
+        net = Dense(action_size + 1, activation='relu')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_size,))(net)
+    else:
+        net = Dense(action_size, activation='linear')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    model.compile(Nadam(learning_rate), loss=_huber_loss,
+                  metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                  )
+    # model.summary()
+    return model
+
+
+def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001, dueling=True):
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    from keras.regularizers import l2, l1_l2
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    # 2019-11-27 增加对 LSTM 层的正则化
+    # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
+    # 使用 L1L2 混合正则项（又称：Elastic Net）
+    # TODO: 参数尚未优化
+    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+        if reg_params[0] is not None and reg_params[1] is not None else None
+    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    input_size = input_shape[-1]
+    net = LSTM(
+        input_size * 2,
+        recurrent_regularizer=recurrent_regularizer,
+        kernel_regularizer=kernel_regularizer)(input)
+    net = Dense(int(input_size / 2))(net)
+    net = Dropout(0.4)(net)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    net = Dense(int((input_size / 2 + flag_size) / 4))(net)
+    net = Dropout(0.4)(net)
+    if dueling:
+        net = Dense(action_size + 1, activation='relu')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_size,))(net)
+    else:
+        net = Dense(action_size, activation='linear')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    model.compile(Nadam(learning_rate), loss=_huber_loss,
+                  metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                  )
+    # model.summary()
+    return model
+
+
+def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001, dueling=True):
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    from keras.regularizers import l2, l1_l2
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    # 2019-11-27 增加对 LSTM 层的正则化
+    # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
+    # 使用 L1L2 混合正则项（又称：Elastic Net）
+    # TODO: 参数尚未优化
+    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+        if reg_params[0] is not None and reg_params[1] is not None else None
+    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    input_size = input_shape[-1]
+    net = LSTM(
+        input_size * 2,
+        recurrent_regularizer=recurrent_regularizer,
+        kernel_regularizer=kernel_regularizer)(input)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    net = Dense(int((input_size + flag_size) / 4))(net)
+    net = Dropout(0.4)(net)
+    if dueling:
+        net = Dense(action_size + 1, activation='relu')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_size,))(net)
+    else:
+        net = Dense(action_size, activation='linear')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    model.compile(Nadam(learning_rate), loss=_huber_loss,
+                  metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                  )
+    # model.summary()
+    return model
+
+
 class Framework(object):
-    def __init__(self, input_shape=[None, 50, 58, 5], dueling=True, action_size=4, batch_size=512,
+    def __init__(self, input_shape=[None, 60, 93], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action=0.9057,
-                 min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01):
+                 min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01,
+                 reg_params=[1e-7, 1e-7, 1e-3]):
         import tensorflow as tf
         from keras import backend as K
         from keras.callbacks import Callback
@@ -90,7 +254,7 @@ class Framework(object):
                     logs['epsilon'] = self.epsilon
                     self.logs_list.append(logs)
 
-        self.input_shape = input_shape
+        self.input_shape = [None if num == 0 else _ for num, _ in enumerate(input_shape)]
         self.action_size = action_size
         if action_size == 2:
             self.actions = [1, 2]
@@ -129,6 +293,7 @@ class Framework(object):
                                           epsilon_sin_max=0.05)
         self.random_drop_best_cache_rate = random_drop_best_cache_rate
         self.flag_size = 3
+        self.reg_params = reg_params
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
         self.has_logged = False
@@ -143,6 +308,11 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
+        return build_model_5_layers(
+            input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+            reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+
+    def _build_model_20191127(self):
         import tensorflow as tf
         from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
         from keras.models import Model
@@ -155,8 +325,13 @@ class Framework(object):
         # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
         # 使用 L1L2 混合正则项（又称：Elastic Net）
         # TODO: 参数尚未优化
-        net = LSTM(self.input_shape[-1] * 2,
-                   recurrent_regularizer=l1_l2(l1=1e-7, l2=1e-7), kernel_regularizer=l2(1e-3))(input)
+        recurrent_regularizer = l1_l2(l1=self.reg_params[0], l2=self.reg_params[1]) \
+            if self.reg_params[0] is not None and self.reg_params[1] is not None else None
+        kernel_regularizer = l2(self.reg_params[2]) if self.reg_params[2] is not None else None
+        net = LSTM(
+            self.input_shape[-1] * 2,
+            recurrent_regularizer=recurrent_regularizer,
+            kernel_regularizer=kernel_regularizer)(input)
         net = Dense(int(self.input_shape[-1] / 1.5))(net)
         net = Dropout(0.4)(net)
         input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
@@ -318,7 +493,7 @@ class Framework(object):
         return self.acc_loss_lists
 
 
-def calc_cum_reward_with_rr(reward, step):
+def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000):
     """计算 reward 值，将未来 step 步的 reward 以log递减形式向前传导"""
     reward_tot = np.array(reward, dtype='float32')
     tot_len = len(reward_tot)
@@ -329,10 +504,12 @@ def calc_cum_reward_with_rr(reward, step):
         if data_num != _data_num:
             weights = np.logspace(1, _data_num, num=_data_num, base=0.5)
             data_num = _data_num
+        if include_curr_day:
+            reward_tot[idx - 1] += sum(reward_tot[idx:idx_end] * weights)
+        else:
+            reward_tot[idx - 1] = sum(reward_tot[idx:idx_end] * weights)
 
-        reward_tot[idx - 1] += sum(reward_tot[idx:idx_end] * weights)
-
-    return reward_tot
+    return reward_tot * mulitplier
 
 
 def _test_calc_cum_reward_with_rr():
@@ -391,7 +568,7 @@ def _test_show_model():
     action_size = 2
     agent = Framework(input_shape=[None, 120, 93], action_size=action_size, dueling=True,
                       batch_size=16384)
-    file_path = f'model action_size_{action_size}.png'
+    file_path = f'model action_size_{action_size}_layer_5.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
     open_file_with_system_app(file_path)
@@ -451,8 +628,8 @@ def _test_multiple_data():
 if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
-    # _test_show_model()
+    _test_show_model()
     # _test_calc_cum_reward_with_rr()
-    _test_calc_cum_reward_with_calmar()
+    # _test_calc_cum_reward_with_calmar()
     # _test_epsilon_maker()
     # _test_multiple_data()

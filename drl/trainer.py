@@ -195,8 +195,7 @@ def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func
 
     from ibats_common.backend.factor import transfer_2_batch
     factors_df = get_factor_func(md_df)
-    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step, date_from=range_from)
-    batch_factors = data_arr_batch
+    df_index, df_columns, batch_factors = transfer_2_batch(factors_df, n_step=n_step, date_from=range_from)
     # shape = [data_arr_batch.shape[0], 5, int(n_step / 5), data_arr_batch.shape[2]]
     # batch_factors = np.transpose(data_arr_batch.reshape(shape), [0, 2, 3, 1])
     # print(data_arr_batch.shape, '->', shape, '->', batch_factors.shape)
