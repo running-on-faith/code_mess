@@ -53,15 +53,16 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
         size = (batch_factors.shape[0], action_size)
         rewards = calc_cum_reward_with_rr(pct, step=10, include_curr_day=False)
         # rewards = calc_cum_reward_with_calmar(pct, win_size=10, threshold=5)
-        y_data = np.zeros(size * 2)
-        y_data[:size, 0] = rewards[is_fit]
-        y_data[:size, 1] = -rewards[is_fit]
-        y_data[size:, :] = - y_data[:size, :]
+        y_data = np.zeros(size)
+        y_data[:, 0] = rewards[is_fit]
+        y_data[:, 1] = -rewards[is_fit]
+        y_data = np.concatenate([y_data, -y_data])
         _flag = to_categorical(
             np.concatenate([
-                np.zeros((batch_factors.shape[0], 1)),
-                np.ones((batch_factors.shape[0], 1)), ]
+                np.zeros((size[0], 1)),
+                np.ones((size[0], 1)), ]
             ), flag_size)
+        batch_factors = np.concatenate([batch_factors, batch_factors])
         x_data = {'state': batch_factors, 'flag': _flag}
         return x_data, y_data
 
@@ -138,6 +139,7 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
         ax.hist(valid_y, normed=True)
         ax = fig.add_subplot(212)
         ax.hist(result_y, normed=True)
+        plt.show()
 
     df = pd.DataFrame(tag_loss_dic)
     df.to_csv(f'loss_layer{layer_num}.csv')
