@@ -17,8 +17,8 @@ kernel_regularizer 参数效果从高到低 None > 1e-4 > 1e-3
 """
 import itertools
 import logging
-from drl.d3qnr20191127.agent.framework import calc_cum_reward_with_rr, build_model_8_layers, build_model_5_layers, \
-    calc_cum_reward_with_calmar, build_model_4_layers
+
+from drl.d3qnr20191127.agent.framework import calc_cum_reward_with_rr, build_model_4_layers
 
 logger = logging.getLogger()
 
@@ -53,10 +53,15 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
         size = (batch_factors.shape[0], action_size)
         rewards = calc_cum_reward_with_rr(pct, step=10, include_curr_day=False)
         # rewards = calc_cum_reward_with_calmar(pct, win_size=10, threshold=5)
-        y_data = np.zeros(size)
-        y_data[:, 0] = rewards[is_fit]
-        y_data[:, 1] = -rewards[is_fit]
-        _flag = to_categorical(np.zeros((batch_factors.shape[0], 1)), flag_size)
+        y_data = np.zeros(size * 2)
+        y_data[:size, 0] = rewards[is_fit]
+        y_data[:size, 1] = -rewards[is_fit]
+        y_data[size:, :] = - y_data[:size, :]
+        _flag = to_categorical(
+            np.concatenate([
+                np.zeros((batch_factors.shape[0], 1)),
+                np.ones((batch_factors.shape[0], 1)), ]
+            ), flag_size)
         x_data = {'state': batch_factors, 'flag': _flag}
         return x_data, y_data
 
@@ -76,7 +81,6 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
     import math
     from keras.callbacks import Callback
     import pandas as pd
-    import os
 
     class FitLog(Callback):
 
@@ -96,7 +100,7 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
     train_x, train_y, valid_x, valid_y = get_data(train_from, valid_from, valid_to, n_step, action_size, flag_size)
     params = [None, 0.0001, 0.00001, 0.000001, 0.0000001]
     param_iter = itertools.product(params, params, [None, 1e-3, 1e-4])
-    param_iter = [[1e-7, 1e-7, None]]   # layer 5 情况下最有优参数
+    param_iter = [[1e-7, 1e-7, None]]  # layer 5 情况下最有优参数
     tag_loss_dic = {}
     for num, reg_params in enumerate(param_iter, start=1):
         logger.debug("%d) %s train_x.shape=%s", num, reg_params, train_x['state'].shape)
@@ -126,7 +130,14 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
         df = pd.DataFrame(fit_log.epoch_log_dic).T
         tag_loss_dic[tag] = df['loss']
         # df.to_csv(os.path.join(log_dir, f'{tag}.csv'))
-        logger.debug('model.predict_on_batch(valid_x)=\n', model.predict_on_batch(valid_x))
+        result_y = model.predict_on_batch(valid_x)
+        logger.debug('model.predict_on_batch(valid_x)=\n%s', result_y)
+        import matplotlib.pyplot as plt
+        fig = plt.figure(figsize=(10, 6))  #
+        ax = fig.add_subplot(211)
+        ax.hist(valid_y, normed=True)
+        ax = fig.add_subplot(212)
+        ax.hist(result_y, normed=True)
 
     df = pd.DataFrame(tag_loss_dic)
     df.to_csv(f'loss_layer{layer_num}.csv')
