@@ -18,12 +18,13 @@ kernel_regularizer 参数效果从高到低 None > 1e-4 > 1e-3
 import itertools
 import logging
 
-from drl.d3qnr20191127.agent.framework import calc_cum_reward_with_rr, build_model_4_layers
+from drl.d3qnr20191127.agent.framework import calc_cum_reward_with_rr,\
+    build_model_4_layers, build_model_3_layers, build_model_5_layers
 
 logger = logging.getLogger()
 
 
-def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_size=3):
+def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_size=3, is_classification=False):
     import numpy as np
     from drl import DATA_FOLDER_PATH
     from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
@@ -57,11 +58,12 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
         y_data[:, 0] = rewards[is_fit]
         y_data[:, 1] = -rewards[is_fit]
         y_data = np.concatenate([y_data, -y_data])
-        _flag = to_categorical(
-            np.concatenate([
-                np.zeros((size[0], 1)),
-                np.ones((size[0], 1)), ]
-            ), flag_size)
+        if is_classification:
+            y_data = np.argmax(y_data, axis=1)
+        _flag = to_categorical(np.concatenate([
+            np.zeros((size[0], 1)),
+            np.ones((size[0], 1)),
+        ]), flag_size)
         batch_factors = np.concatenate([batch_factors, batch_factors])
         x_data = {'state': batch_factors, 'flag': _flag}
         return x_data, y_data
@@ -98,31 +100,42 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
 
     action_size = 2
     flag_size = 3
-    train_x, train_y, valid_x, valid_y = get_data(train_from, valid_from, valid_to, n_step, action_size, flag_size)
+    is_classification = True
+    train_x, train_y, valid_x, valid_y = get_data(train_from, valid_from, valid_to, n_step, action_size, flag_size,
+                                                  is_classification=is_classification)
     params = [None, 0.0001, 0.00001, 0.000001, 0.0000001]
     param_iter = itertools.product(params, params, [None, 1e-3, 1e-4])
     param_iter = [[1e-7, 1e-7, None]]  # layer 5 情况下最有优参数
     tag_loss_dic = {}
-    for num, reg_params in enumerate(param_iter, start=1):
+    for num, reg_params in enumerate(itertools.chain(*itertools.repeat(param_iter, 3)), start=1):
         logger.debug("%d) %s train_x.shape=%s", num, reg_params, train_x['state'].shape)
         # framework = Framework(
         #     input_shape=train_x['state'].shape, reg_params=reg_params,
         #     action_size=2, batch_size=512)
         # model = framework.model_eval
-        layer_num = 4
-        model = build_model_4_layers(
+        layer_num = 5
+        if layer_num == 3:
+            build_model_func = build_model_3_layers
+        elif layer_num == 4:
+            build_model_func = build_model_4_layers
+        elif layer_num == 5:
+            build_model_func = build_model_5_layers
+        else:
+            raise KeyError(f'layer_num = {layer_num}')
+        model = build_model_func(
             input_shape=[None if num == 0 else _ for num, _ in enumerate(train_x['state'].shape)],
             flag_size=flag_size,
             learning_rate=0.001,
             reg_params=reg_params,
             action_size=action_size,
+            is_classification=is_classification
         )
         # model.summary()
         tag = f'e{"e".join([str(math.floor(math.log(v, 10))) if v is not None else "_" for v in reg_params])}'
         fit_log = FitLog(tag)
-        log_dir = f'./log_layer{layer_num}_{tag}'
+        log_dir = f'./log_layer{layer_num}_{tag}_{num}'
         model.fit(train_x, train_y, validation_data=(valid_x, valid_y),
-                  epochs=10000, batch_size=1024, verbose=0,
+                  epochs=10000, batch_size=1024, verbose=1,
                   callbacks=[
                       TensorBoard(log_dir=log_dir),
                       fit_log
@@ -133,12 +146,20 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
         # df.to_csv(os.path.join(log_dir, f'{tag}.csv'))
         result_y = model.predict_on_batch(valid_x)
         logger.debug('model.predict_on_batch(valid_x)=\n%s', result_y)
+        valid_y_4_show = valid_y if is_classification else valid_y[:, 1]
+        result_y_4_show = result_y if is_classification else result_y[:, 1]
         import matplotlib.pyplot as plt
-        fig = plt.figure(figsize=(10, 6))  #
-        ax = fig.add_subplot(211)
-        ax.hist(valid_y, normed=True)
-        ax = fig.add_subplot(212)
-        ax.hist(result_y, normed=True)
+        fig = plt.figure(figsize=(10, 18))  #
+        ax = fig.add_subplot(311)
+        ax.hist(valid_y_4_show, density=True)
+        ax = fig.add_subplot(312)
+        ax.hist(result_y_4_show, density=True)
+        ax = fig.add_subplot(312)
+        ax.plot(valid_y_4_show)
+        ax.plot(result_y_4_show)
+        ax.plot([(0 if _ else -1) for _ in (result_y_4_show == valid_y_4_show)])
+        plt.legend(['valid_y', 'result_y', 'match'])
+        plt.suptitle(f'layer{layer_num}_{tag}_{num}')
         plt.show()
 
     df = pd.DataFrame(tag_loss_dic)

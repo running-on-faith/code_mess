@@ -65,7 +65,8 @@ class EpsilonMaker:
         return self.epsilon
 
 
-def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001, dueling=True):
+def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
+                         dueling=True):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
     from keras.models import Model
@@ -123,7 +124,8 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     return model
 
 
-def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001, dueling=True):
+def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
+                         dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
     from keras.models import Model
@@ -143,7 +145,9 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     net = LSTM(
         input_size * 2,
         recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer)(input)
+        kernel_regularizer=kernel_regularizer,
+        dropout=0.2
+    )(input)
     net = Dense(int(input_size / 2))(net)
     net = Dropout(0.4)(net)
     input2 = Input(batch_shape=[None, flag_size], name=f'flag')
@@ -168,14 +172,25 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 
         return K.mean(tf.where(cond, squared_loss, quadratic_loss))
 
-    model.compile(Nadam(learning_rate), loss=_huber_loss,
-                  metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
-                  )
+    if is_classification:
+        if action_size == 2:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.binary_accuracy]
+                          )
+        else:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.categorical_accuracy]
+                          )
+    else:
+        model.compile(Nadam(learning_rate), loss=_huber_loss,
+                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      )
     # model.summary()
     return model
 
 
-def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001, dueling=True):
+def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
+                         dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
     from keras.models import Model
@@ -218,9 +233,83 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 
         return K.mean(tf.where(cond, squared_loss, quadratic_loss))
 
-    model.compile(Nadam(learning_rate), loss=_huber_loss,
-                  metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
-                  )
+    if is_classification:
+        if action_size == 2:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.binary_accuracy]
+                          )
+        else:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.categorical_accuracy]
+                          )
+    else:
+        model.compile(Nadam(learning_rate), loss=_huber_loss,
+                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      )
+    # model.summary()
+    return model
+
+
+def build_model_3_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None],
+                         learning_rate=0.001, dueling=True, is_classification=False):
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Input, concatenate, Lambda, Activation
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    from keras.regularizers import l2, l1_l2
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    # 2019-11-27 增加对 LSTM 层的正则化
+    # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
+    # 使用 L1L2 混合正则项（又称：Elastic Net）
+    # TODO: 参数尚未优化
+    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+        if reg_params[0] is not None and reg_params[1] is not None else None
+    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    input_size = input_shape[-1]
+    net = LSTM(
+        input_size * 2,
+        recurrent_regularizer=recurrent_regularizer,
+        kernel_regularizer=kernel_regularizer,
+        dropout=0.3
+    )(input)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    if dueling:
+        net = Dense(action_size + 1, activation='relu')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_size,))(net)
+    else:
+        net = Dense(action_size, activation='linear')(net)
+
+    if is_classification:
+        net = Activation('softmax')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    if is_classification:
+        if action_size == 2:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.binary_accuracy]
+                          )
+        else:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.categorical_accuracy]
+                          )
+    else:
+        model.compile(Nadam(learning_rate), loss=_huber_loss,
+                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      )
     # model.summary()
     return model
 
@@ -308,7 +397,7 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
-        return build_model_5_layers(
+        return build_model_3_layers(
             input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
             reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
 
@@ -568,7 +657,7 @@ def _test_show_model():
     action_size = 2
     agent = Framework(input_shape=[None, 120, 93], action_size=action_size, dueling=True,
                       batch_size=16384)
-    file_path = f'model action_size_{action_size}_layer_5.png'
+    file_path = f'model action_size_{action_size}_layer_3.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
     open_file_with_system_app(file_path)
