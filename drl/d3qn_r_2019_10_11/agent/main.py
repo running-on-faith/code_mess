@@ -241,7 +241,8 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
         # 说明上面“历史训练曲线” 有输出图像， 因此使用 ax = fig.add_subplot(212)
         ax = fig.add_subplot(212)
 
-    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path='images')
+    from drl import MODEL_ANALYSIS_IMAGES_FOLDER
+    plot_twin([value_df, value_fee0_df], md_df['close'], name=title, ax=ax, folder_path=MODEL_ANALYSIS_IMAGES_FOLDER)
 
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     path = f"model/weights_{round_n}_{num_episodes}.h5"
@@ -255,13 +256,13 @@ def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_ste
     """测试模型训练过程"""
     import pandas as pd
     import os
-    from drl import DATA_FOLDER_PATH
-    if not os.path.exists('./model'):
-        os.makedirs('./model')
-    if not os.path.exists('./images'):
-        os.makedirs('./images')
-    if not os.path.exists('./rewards'):
-        os.makedirs('./rewards')
+    from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLDER, MODEL_REWARDS_FOLDER
+    if not os.path.exists(f'./{MODEL_SAVED_FOLDER}'):
+        os.makedirs(f'./{MODEL_SAVED_FOLDER}')
+    if not os.path.exists(f'./{MODEL_ANALYSIS_IMAGES_FOLDER}'):
+        os.makedirs(f'./{MODEL_ANALYSIS_IMAGES_FOLDER}')
+    if not os.path.exists(f'./{MODEL_REWARDS_FOLDER}'):
+        os.makedirs(f'./{MODEL_REWARDS_FOLDER}')
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data

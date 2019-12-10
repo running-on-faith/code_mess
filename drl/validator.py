@@ -21,11 +21,12 @@ from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
 
 from analysis.ana import analysis_in_out_example_valid_env_result
 from analysis.summary import in_out_example_analysis_result_all_round_2_docx
-from drl import DATA_FOLDER_PATH
+from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLDER
 
 
 def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_agent_func,
-                                       tail_n=1, show_plot=True, model_path="model/weights_1.h5", key=None, **_):
+                                       tail_n=1, show_plot=True, model_path=f"{MODEL_SAVED_FOLDER}/weights_1.h5",
+                                       key=None, **_):
     """加载 model_path 模型，对batch_factors计算买卖决策，对 md_df 行情进行模拟，回测检验"""
     logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
@@ -59,7 +60,7 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
         value_df = reward_df[['value', 'value_fee0']] / env.A.init_cash
         title = f'{model_name}_predict_{max_date_str}' if key is None else \
             f'{model_name}_predict_episode_{key}_{max_date_str}'
-        plot_twin(value_df, md_df["close"], name=title, folder_path='images')
+        plot_twin(value_df, md_df["close"], name=title, folder_path=MODEL_ANALYSIS_IMAGES_FOLDER)
 
     action_count = reward_df['action_count'].iloc[-1]
     logger.debug("key=%s 累计操作 %d 次, 平均持仓时间 %.2f 天, 净值：%.4f",

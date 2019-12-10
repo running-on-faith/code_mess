@@ -13,7 +13,9 @@ from logging.config import dictConfig
 from ibats_utils.mess import is_windows_os
 
 DATA_FOLDER_PATH = r'D:\WSPych\IBATSCommon\ibats_common\example\data' if is_windows_os() else r'/home/mg/github/IBATS_Common/ibats_common/example/data'
-
+MODEL_SAVED_FOLDER = 'models'
+MODEL_ANALYSIS_IMAGES_FOLDER = 'images'
+MODEL_REWARDS_FOLDER = 'rewards'
 # evn configuration
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(filename)s.%(funcName)s:%(lineno)d|%(message)s'
 

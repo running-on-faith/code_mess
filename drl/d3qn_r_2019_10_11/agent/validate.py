@@ -46,7 +46,8 @@ def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="mod
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'{MODEL_NAME}_in_sample_{dt_str}' if key is None else f'ddqn_lstm2_in_sample_episode_{key}_{dt_str}'
         from ibats_common.analysis.plot import plot_twin
-        plot_twin(value_df, md_df["close"], name=title, folder_path='images')
+        from drl import MODEL_ANALYSIS_IMAGES_FOLDER
+        plot_twin(value_df, md_df["close"], name=title, folder_path=MODEL_ANALYSIS_IMAGES_FOLDER)
 
     logger.debug("模型：%s，样本内测试完成, 累计操作 %d 次, 净值：%.4f",
                  model_path, reward_df['action_count'].iloc[-1], reward_df['value'].iloc[-1] / env.A.init_cash)
@@ -138,8 +139,9 @@ def _test_load_predict(model_folder='model', target_round_n=1, show_plot_togethe
         predict_result_df = pd.DataFrame(predict_result_dic).T.sort_index()
         dt_str = datetime_2_str(datetime.now(), '%Y-%m-%d %H%M%S')
         title = f'{MODEL_NAME}_summary_r{target_round_n}_{dt_str}_trend'
+        from drl import MODEL_ANALYSIS_IMAGES_FOLDER
         plot_twin(predict_result_df[['value', 'value_fee0']], predict_result_df['action_count'],
-                  ax=ax, name=title, y_scales_log=[False, True], folder_path='images')
+                  ax=ax, name=title, y_scales_log=[False, True], folder_path=MODEL_ANALYSIS_IMAGES_FOLDER)
 
 
 if __name__ == "__main__":

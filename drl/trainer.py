@@ -18,16 +18,32 @@ import pandas as pd
 from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 from ibats_utils.mess import date_2_str
 
-from drl import DATA_FOLDER_PATH
+from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLDER, MODEL_REWARDS_FOLDER
 
 
 def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
           model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={}):
+    """
+    训练DRL
+    保存训练参数到 models_folder_path/f"{max_date_str}_{round_n}_{episode}.h5"
+    :param md_df:
+    :param batch_factors:
+    :param get_agent_func:
+    :param round_n:
+    :param num_episodes:
+    :param n_episode_pre_record:
+    :param model_name:
+    :param root_folder_path:
+    :param output_reward_csv:
+    :param env_kwargs:
+    :param agent_kwargs:
+    :return:
+    """
     logger = logging.getLogger(__name__)
     root_folder_path = os.path.abspath(root_folder_path)
-    models_folder_path = os.path.join(root_folder_path, 'model')
-    images_folder_path = os.path.join(root_folder_path, 'images')
-    rewards_folder_path = os.path.join(root_folder_path, 'rewards')
+    models_folder_path = os.path.join(root_folder_path, MODEL_SAVED_FOLDER)
+    images_folder_path = os.path.join(root_folder_path, MODEL_ANALYSIS_IMAGES_FOLDER)
+    rewards_folder_path = os.path.join(root_folder_path, MODEL_REWARDS_FOLDER)
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors, **env_kwargs)
     agent = get_agent_func(input_shape=batch_factors.shape, **agent_kwargs)
@@ -189,9 +205,9 @@ def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func
 
     range_to_str = date_2_str(range_to)
     root_folder_path = os.path.abspath(os.path.join(os.path.curdir, 'output', range_to_str))
-    os.makedirs(os.path.join(root_folder_path, 'model'), exist_ok=True)
-    os.makedirs(os.path.join(root_folder_path, 'images'), exist_ok=True)
-    os.makedirs(os.path.join(root_folder_path, 'rewards'), exist_ok=True)
+    os.makedirs(os.path.join(root_folder_path, MODEL_SAVED_FOLDER), exist_ok=True)
+    os.makedirs(os.path.join(root_folder_path, MODEL_ANALYSIS_IMAGES_FOLDER), exist_ok=True)
+    os.makedirs(os.path.join(root_folder_path, MODEL_REWARDS_FOLDER), exist_ok=True)
 
     from ibats_common.backend.factor import transfer_2_batch
     factors_df = get_factor_func(md_df)
