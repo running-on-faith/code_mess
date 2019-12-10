@@ -66,9 +66,9 @@ class EpsilonMaker:
 
 
 def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
-                         dueling=True):
+                         dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
     from keras import metrics, backend as K
     from keras.optimizers import Nadam
@@ -84,7 +84,8 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     net = LSTM(
         input_shape[-1] * 2,
         recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer
+        kernel_regularizer=kernel_regularizer,
+        dropout=0.3
     )(input)
     net = Dense(int(input_shape[-1]))(net)
     net = Dropout(0.3)(net)
@@ -106,6 +107,9 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     else:
         net = Dense(action_size, activation='linear')(net)
 
+    if is_classification:
+        net = Activation('softmax')(net)
+
     model = Model(inputs=[input, input2], outputs=net)
 
     def _huber_loss(y_true, y_pred, clip_delta=1.0):
@@ -117,9 +121,19 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 
         return K.mean(tf.where(cond, squared_loss, quadratic_loss))
 
-    model.compile(Nadam(learning_rate), loss=_huber_loss,
-                  metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
-                  )
+    if is_classification:
+        if action_size == 2:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.binary_accuracy]
+                          )
+        else:
+            model.compile(Nadam(learning_rate), loss=_huber_loss,
+                          metrics=[metrics.categorical_accuracy]
+                          )
+    else:
+        model.compile(Nadam(learning_rate), loss=_huber_loss,
+                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      )
     # model.summary()
     return model
 
@@ -127,7 +141,7 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
     from keras import metrics, backend as K
     from keras.optimizers import Nadam
@@ -146,7 +160,7 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
         input_size * 2,
         recurrent_regularizer=recurrent_regularizer,
         kernel_regularizer=kernel_regularizer,
-        dropout=0.2
+        dropout=0.3
     )(input)
     net = Dense(int(input_size / 2))(net)
     net = Dropout(0.4)(net)
@@ -160,6 +174,9 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
                      output_shape=(action_size,))(net)
     else:
         net = Dense(action_size, activation='linear')(net)
+
+    if is_classification:
+        net = Activation('softmax')(net)
 
     model = Model(inputs=[input, input2], outputs=net)
 
@@ -192,7 +209,7 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
     from keras import metrics, backend as K
     from keras.optimizers import Nadam
@@ -210,7 +227,9 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     net = LSTM(
         input_size * 2,
         recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer)(input)
+        kernel_regularizer=kernel_regularizer,
+        dropout=0.3
+    )(input)
     input2 = Input(batch_shape=[None, flag_size], name=f'flag')
     net = concatenate([net, input2])
     net = Dense(int((input_size + flag_size) / 4))(net)
@@ -221,6 +240,9 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
                      output_shape=(action_size,))(net)
     else:
         net = Dense(action_size, activation='linear')(net)
+
+    if is_classification:
+        net = Activation('softmax')(net)
 
     model = Model(inputs=[input, input2], outputs=net)
 
@@ -397,7 +419,7 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
-        return build_model_3_layers(
+        return build_model_4_layers(
             input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
             reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
 
