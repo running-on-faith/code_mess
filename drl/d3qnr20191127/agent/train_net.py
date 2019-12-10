@@ -14,17 +14,21 @@ recurrent_regularizer:
  l1 l2 参数在 1e-2，1e-3 之间的参数表现普遍不如更低的参数
  l1 参数效果从高到低  None =~= 1e-7 > 1e-6 > 1e-5  对于 l1-l2 参数来说 1e-7 与 None（不使用 l1_l2) 效果相当
 kernel_regularizer 参数效果从高到低 None > 1e-4 > 1e-3
+
+随着网络层数的增加，模型可以预测除有效数据的概率越来越小（可能原有是存在过度优化，导致样本外数据无法被预测）
+因此可能3、4层网络更加适合当期复杂度
 """
 import itertools
 import logging
 
-from drl.d3qnr20191127.agent.framework import calc_cum_reward_with_rr,\
-    build_model_4_layers, build_model_3_layers, build_model_5_layers
+from drl.d3qnr20191127.agent.framework import calc_cum_reward_with_rr, \
+    build_model_4_layers, build_model_3_layers, build_model_5_layers, build_model_8_layers
 
 logger = logging.getLogger()
 
 
 def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_size=3, is_classification=False):
+    """获取测试数据"""
     import numpy as np
     from drl import DATA_FOLDER_PATH
     from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
@@ -59,7 +63,7 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
         y_data[:, 1] = -rewards[is_fit]
         y_data = np.concatenate([y_data, -y_data])
         if is_classification:
-            y_data = np.argmax(y_data, axis=1)
+            y_data = to_categorical(np.argmax(y_data, axis=1), action_size)
         _flag = to_categorical(np.concatenate([
             np.zeros((size[0], 1)),
             np.ones((size[0], 1)),
@@ -74,16 +78,22 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
 
 
 def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
-                    valid_to='2019-04-01', n_step=60):
-    train_from = '2017-01-01'
-    valid_from = '2019-01-01'
-    valid_to = '2019-04-01'
-    n_step = 60
+                    valid_to='2019-04-01', n_step=60, enable_load_model=True):
+    """
+    测试不同层数，不同参数的网络，优化效果，以及样本内、样本外测试有效数据比例，准确率分布清空
+    """
+    # train_from = '2017-01-01'
+    # valid_from = '2019-01-01'
+    # valid_to = '2019-04-01'
+    # n_step = 60
+    # enable_load_model = True
 
     from keras.callbacks import TensorBoard
     import math
     from keras.callbacks import Callback
     import pandas as pd
+    import numpy as np
+    from collections import defaultdict
 
     class FitLog(Callback):
 
@@ -103,25 +113,30 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
     is_classification = True
     train_x, train_y, valid_x, valid_y = get_data(train_from, valid_from, valid_to, n_step, action_size, flag_size,
                                                   is_classification=is_classification)
+    layer_count = 5
     params = [None, 0.0001, 0.00001, 0.000001, 0.0000001]
     param_iter = itertools.product(params, params, [None, 1e-3, 1e-4])
-    param_iter = [[1e-7, 1e-7, None]]  # layer 5 情况下最有优参数
-    tag_loss_dic = {}
-    for num, reg_params in enumerate(itertools.chain(*itertools.repeat(param_iter, 3)), start=1):
-        logger.debug("%d) %s train_x.shape=%s", num, reg_params, train_x['state'].shape)
+    param_iter = itertools.product(
+        [3, 4, 5],
+        itertools.chain(*itertools.repeat([[1e-7, 1e-7, None]], 10))  # layer 5 情况下最有优参数
+    )
+    tag_loss_dic, loop_count_dic = defaultdict(dict), {}
+    for num, (layer_count, reg_params) in enumerate(param_iter, start=1):
+        # logger.debug("%d) %d 层网络 %s train_x.shape=%s", num, layer_count, reg_params, train_x['state'].shape)
         # framework = Framework(
         #     input_shape=train_x['state'].shape, reg_params=reg_params,
         #     action_size=2, batch_size=512)
         # model = framework.model_eval
-        layer_num = 5
-        if layer_num == 3:
+        if layer_count == 3:
             build_model_func = build_model_3_layers
-        elif layer_num == 4:
+        elif layer_count == 4:
             build_model_func = build_model_4_layers
-        elif layer_num == 5:
+        elif layer_count == 5:
             build_model_func = build_model_5_layers
+        elif layer_count == 8:
+            build_model_func = build_model_8_layers
         else:
-            raise KeyError(f'layer_num = {layer_num}')
+            raise KeyError(f'layer_count = {layer_count}')
         model = build_model_func(
             input_shape=[None if num == 0 else _ for num, _ in enumerate(train_x['state'].shape)],
             flag_size=flag_size,
@@ -131,42 +146,93 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
             is_classification=is_classification
         )
         # model.summary()
-        tag = f'e{"e".join([str(math.floor(math.log(v, 10))) if v is not None else "_" for v in reg_params])}'
-        fit_log = FitLog(tag)
-        log_dir = f'./log_layer{layer_num}_{tag}_{num}'
-        model.fit(train_x, train_y, validation_data=(valid_x, valid_y),
-                  epochs=10000, batch_size=1024, verbose=1,
-                  callbacks=[
-                      TensorBoard(log_dir=log_dir),
-                      fit_log
-                  ],
-                  use_multiprocessing=True, workers=2)
-        df = pd.DataFrame(fit_log.epoch_log_dic).T
-        tag_loss_dic[tag] = df['loss']
+        loop_count_dic[layer_count] = loop_count = loop_count_dic.setdefault(layer_count, 0) + 1
+        tag = f'layer{layer_count}_' \
+            f'e{"e".join([str(math.floor(math.log(v, 10))) if v is not None else "_" for v in reg_params])}_' \
+            f'{loop_count}'
+        log_dir = f'./log_{tag}'
+        tag_loss_dic[tag]['layer_count'] = layer_count
+        tag_loss_dic[tag]['loop_count'] = loop_count
+        import os
+        model_file_path = os.path.join(log_dir, 'weights.h5')
+        if enable_load_model and os.path.exists(model_file_path):
+            model.load_weights(model_file_path)
+            tag_loss_dic[tag]['loss'] = np.nan
+        else:
+            fit_log = FitLog(tag)
+            model.fit(
+                train_x, train_y, validation_data=(valid_x, valid_y),
+                epochs=5000, batch_size=1024, verbose=0,
+                callbacks=[
+                    TensorBoard(log_dir=log_dir),
+                    fit_log
+                ],
+                use_multiprocessing=True, workers=4)
+            model.save_weights(model_file_path)
+            df = pd.DataFrame(fit_log.epoch_log_dic).T
+            tag_loss_dic[tag]['loss'] = df['loss']
+
+        # 样本内测试模型是否有效
+        predict_result = model.predict(train_x)
+        if np.all(predict_result == (1 / action_size)):
+            logger.warning("2%d) %d 层网络 %s 本轮训练无效，重新开始", num, layer_count, tag)
+            tag_loss_dic[tag]['available_rate_train'] = 0
+            tag_loss_dic[tag]['available_acc_rate_train'] = np.nan
+            tag_loss_dic[tag]['available_rate_valid'] = np.nan
+            tag_loss_dic[tag]['available_acc_rate_valid'] = np.nan
+            continue
+        available_rate, available_acc_rate = calc_acc(predict_result, train_y)
+        tag_loss_dic[tag]['available_rate_train'] = available_rate
+        tag_loss_dic[tag]['available_acc_rate_train'] = available_acc_rate
         # df.to_csv(os.path.join(log_dir, f'{tag}.csv'))
-        result_y = model.predict_on_batch(valid_x)
-        logger.debug('model.predict_on_batch(valid_x)=\n%s', result_y)
-        valid_y_4_show = valid_y if is_classification else valid_y[:, 1]
-        result_y_4_show = result_y if is_classification else result_y[:, 1]
+        # 样本外测试模型是否有效
+        result_y = model.predict(valid_x)
+        available_rate, available_acc_rate = calc_acc(result_y, valid_y)
+        logger.info("%2d) %d 层网络 %s 样本内预测, 有效结果占比%6.2f%%, 有效数据准确率%6.2f%% ; "
+                    "样本外预测, 有效结果占比%6.2f%%, 有效数据准确率%6.2f%%",
+                    num, layer_count, tag, available_rate * 100, available_acc_rate * 100,
+                    available_rate * 100, available_acc_rate * 100)
+        tag_loss_dic[tag]['available_rate_valid'] = available_rate
+        tag_loss_dic[tag]['available_acc_rate_valid'] = available_acc_rate
+        # logger.debug('%d) %d 层网络 %s model.predict_on_batch(valid_x)=\n%s', num, layer_count, tag, result_y)
+        # 获取中间层数据
+        # from keras.models import Model
+        # layer = Model(model.layers[0].input, model.layers[10].output)
+
+        valid_y_4_show = np.argmax(valid_y, axis=1) if is_classification else valid_y[:, 1]
+        result_y_4_show = np.argmax(result_y, axis=1) if is_classification else result_y[:, 1]
         import matplotlib.pyplot as plt
-        fig = plt.figure(figsize=(10, 18))  #
+        fig = plt.figure(figsize=(6, 10))  #
         ax = fig.add_subplot(311)
         ax.hist(valid_y_4_show, density=True)
         ax = fig.add_subplot(312)
         ax.hist(result_y_4_show, density=True)
-        ax = fig.add_subplot(312)
+        ax = fig.add_subplot(313)
         ax.plot(valid_y_4_show)
         ax.plot(result_y_4_show)
         ax.plot([(0 if _ else -1) for _ in (result_y_4_show == valid_y_4_show)])
         plt.legend(['valid_y', 'result_y', 'match'])
-        plt.suptitle(f'layer{layer_num}_{tag}_{num}')
+        plt.suptitle(f'{num}_layer{layer_count}_{tag}')
         plt.show()
 
-    df = pd.DataFrame(tag_loss_dic)
-    df.to_csv(f'loss_layer{layer_num}.csv')
+    df = pd.DataFrame(tag_loss_dic).T
+    df.to_csv(f'loss_layer.csv')
     import matplotlib.pyplot as plt
-    df.plot(grid=True, legend=True)
+    # df['loss'].plot(grid=True, legend=True)
+    plt.scatter(df['layer_count'], df['available_acc_rate_train'], marker='o')
+    plt.scatter(df['layer_count'], df['available_acc_rate_valid'], marker='^')
     plt.show()
+
+
+def calc_acc(predict_y, target_y):
+    import numpy as np
+    action_size = predict_y.shape[1]
+    available = ~np.all(predict_y == (1 / action_size), axis=1)
+    available_rate = np.sum(available) / predict_y.shape[0]
+    matches = (np.argmax(predict_y, axis=1) == np.argmax(target_y, axis=1))
+    available_match = matches[available]
+    available_acc_rate = np.sum(available_match) / available_match.shape[0]
+    return available_rate, available_acc_rate
 
 
 if __name__ == "__main__":
