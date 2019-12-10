@@ -24,9 +24,10 @@ action_size 4 -> 2 多空 only
 # use_curp_only()
 
 import logging
-
+import pandas as pd
+import os
 import numpy as np
-
+from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLDER, MODEL_REWARDS_FOLDER
 from drl.d3qnr20191127.agent.framework import Framework
 
 MODEL_NAME = 'd3qnr20191127'
@@ -60,11 +61,11 @@ class Agent(object):
     def update_eval(self):
         return self.agent.update_value_net()
 
-    def save_model(self, path="model/weights.h5"):
+    def save_model(self, path=f"{MODEL_SAVED_FOLDER}/weights.h5"):
         # return self.saver.save(self.sess, path)
         self.agent.model_eval.save_weights(path)
 
-    def restore_model(self, path="model/weights.h5"):
+    def restore_model(self, path=f"{MODEL_SAVED_FOLDER}/weights.h5"):
         # self.saver.restore(self.sess, path)
         self.agent.model_eval.load_weights(path)
         self.agent.update_target_net()
@@ -253,15 +254,12 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
 
 def _test_agent2(round_from=1, round_max=40, increase=100, batch_size=512, n_step=120):
     """测试模型训练过程"""
-    import pandas as pd
-    import os
-    from drl import DATA_FOLDER_PATH
-    if not os.path.exists('./model'):
-        os.makedirs('./model')
-    if not os.path.exists('./images'):
-        os.makedirs('./images')
-    if not os.path.exists('./rewards'):
-        os.makedirs('./rewards')
+    if not os.path.exists(f'./{MODEL_SAVED_FOLDER}'):
+        os.makedirs(f'./{MODEL_SAVED_FOLDER}')
+    if not os.path.exists(f'./{MODEL_ANALYSIS_IMAGES_FOLDER}'):
+        os.makedirs(f'./{MODEL_ANALYSIS_IMAGES_FOLDER}')
+    if not os.path.exists(f'./{MODEL_REWARDS_FOLDER}'):
+        os.makedirs(f'./{MODEL_REWARDS_FOLDER}')
     # 建立相关数据
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     from ibats_common.example.data import load_data
