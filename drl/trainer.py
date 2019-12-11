@@ -79,15 +79,20 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     # 生成 .h5 模型文件
                     if episode > 0 and episode % 50 == 0:
-                        # 每 50 轮，进行一次样本内测试
-                        model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
-                        agent.save_model(path=model_path)
-                        # 输出 csv文件
-                        if output_reward_csv:
-                            reward_df = env.plot_data()
-                            reward_df.to_csv(
-                                os.path.join(rewards_folder_path, f'{max_date_str}_{round_n}_{episode}.csv'))
-                        log_str2 = f", model save to path: {model_path}"
+                        loss_dic, valid_rate = agent.valid_model()
+                        if valid_rate > 0.6:
+                            # 每 50 轮，进行一次样本内测试
+                            model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
+                            agent.save_model(path=model_path)
+                            # 输出 csv文件
+                            if output_reward_csv:
+                                reward_df = env.plot_data()
+                                reward_df.to_csv(
+                                    os.path.join(rewards_folder_path, f'{max_date_str}_{round_n}_{episode}.csv'))
+                            log_str2 = f", model save to path: {model_path}" \
+                                f", 样本内测试预测有效数据比例 {valid_rate:2f}%, loss_dic={loss_dic}"
+                        else:
+                            log_str2 = f", 样本内测试预测有效数据比例 {valid_rate:2f}% < 60%, loss_dic={loss_dic}"
                     else:
                         log_str2 = ""
 
@@ -318,7 +323,7 @@ def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_ite
 
 
 def _test_train_on_each_period():
-    from drl.drl_off_example.d3qn_replay_2019_08_25.train import train_round_iter_func
+    from drl.d3qnr20191127.train import train_round_iter_func
     from ibats_common.backend.factor import get_factor
     from ibats_common.example import get_trade_date_series, get_delivery_date_series
     instrument_type = 'RB'
@@ -337,7 +342,7 @@ def _test_train_on_each_period():
 
 def _test_train_on_range(use_pool=False):
     """测试 train_on_range """
-    from drl.drl_off_example.d3qn_replay_2019_08_25.train import train_round_iter_func
+    from drl.d3qnr20191127.train import train_round_iter_func
     logger = logging.getLogger(__name__)
     base_data_count, n_step, max_process_count = 1000, 60, multiprocessing.cpu_count() // 2
     date_to = pd.to_datetime('2014-11-04')
