@@ -118,7 +118,7 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
     param_iter = itertools.product(params, params, [None, 1e-3, 1e-4])
     param_iter = itertools.product(
         [3, 4, 5],
-        itertools.chain(*itertools.repeat([[1e-7, 1e-7, None]], 10))  # layer 5 情况下最有优参数
+        itertools.chain(*itertools.repeat([[1e-7, 1e-7, None]], 14))  # layer 5 情况下最有优参数
     )
     tag_loss_dic, loop_count_dic = defaultdict(dict), {}
     for num, (layer_count, reg_params) in enumerate(param_iter, start=1):

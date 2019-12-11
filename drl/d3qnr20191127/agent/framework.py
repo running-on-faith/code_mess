@@ -419,7 +419,7 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
-        return build_model_4_layers(
+        return build_model_3_layers(
             input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
             reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
 
@@ -602,6 +602,25 @@ class Framework(object):
             [], [], [], [], []
 
         return self.acc_loss_lists
+
+    def valid_in_sample(self):
+        """利用样本内数据对模型进行验证，返回 loss_dic, valid_rate（样本内数据预测结果有效率）"""
+        _state = np.concatenate(self.cache_list_state)
+        _flag = np.concatenate(self.cache_list_flag)
+        _q_target = np.concatenate(self.cache_list_q_target)
+        inputs = {'state': _state, 'flag': _flag}
+        losses = self.model_eval.evaluate(inputs, _q_target, verbose=0)
+        loss_dic = {name: losses[_] for _, name in enumerate(self.model_eval.metrics_names)}
+        _q_pred = self.model_eval.predict(inputs)
+        is_valid = None
+        for idx in range(1, self.action_size):
+            if is_valid is None:
+                is_valid = _q_pred[:, idx - 1] != _q_pred[:, idx]
+            else:
+                is_valid |= _q_pred[:, idx - 1] != _q_pred[:, idx]
+
+        valid_rate = np.sum(is_valid) / len(is_valid)
+        return loss_dic, valid_rate
 
 
 def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000):
