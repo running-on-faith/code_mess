@@ -282,12 +282,12 @@ def train_on_fix_interval_periods(md_loader_func, get_factor_func, train_round_k
     # 建立相关数据
     # md_df = load_data('RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date')
     md_df = md_loader_func()
-    logger.info('加载数据，提取日期序列')
     if date_train_from is not None:
         date_min = pd.to_datetime(date_train_from)
         date_max = max(md_df.index)
     else:
         date_min, date_max = min(md_df.index[base_data_count:]), max(md_df.index)
+    logger.info('加载数据，提取日期序列 [%s, %s]', date_2_str(date_min), date_2_str(date_max))
     if use_pool and max_process_count > 1:
         pool = multiprocessing.Pool(max_process_count)
     else:
