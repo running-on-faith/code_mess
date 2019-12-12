@@ -175,22 +175,22 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
         # 样本内测试模型是否有效
         predict_result = model.predict(train_x)
         if np.all(predict_result == (1 / action_size)):
-            logger.warning("2%d) %d 层网络 %s 本轮训练无效，重新开始", num, layer_count, tag)
+            logger.warning("2%d) %d 层网络 %s 本轮训练无效", num, layer_count, tag)
             tag_loss_dic[tag]['available_rate_train'] = 0
             tag_loss_dic[tag]['available_acc_rate_train'] = np.nan
             tag_loss_dic[tag]['available_rate_valid'] = np.nan
             tag_loss_dic[tag]['available_acc_rate_valid'] = np.nan
             continue
-        available_rate, available_acc_rate = calc_acc(predict_result, train_y)
-        tag_loss_dic[tag]['available_rate_train'] = available_rate
-        tag_loss_dic[tag]['available_acc_rate_train'] = available_acc_rate
+        available_rate_train, available_acc_rate_train = calc_acc(predict_result, train_y)
+        tag_loss_dic[tag]['available_rate_train'] = available_rate_train
+        tag_loss_dic[tag]['available_acc_rate_train'] = available_acc_rate_train
         # df.to_csv(os.path.join(log_dir, f'{tag}.csv'))
         # 样本外测试模型是否有效
         result_y = model.predict(valid_x)
         available_rate, available_acc_rate = calc_acc(result_y, valid_y)
         logger.info("%2d) %d 层网络 %s 样本内预测, 有效结果占比%6.2f%%, 有效数据准确率%6.2f%% ; "
                     "样本外预测, 有效结果占比%6.2f%%, 有效数据准确率%6.2f%%",
-                    num, layer_count, tag, available_rate * 100, available_acc_rate * 100,
+                    num, layer_count, tag, available_rate_train * 100, available_acc_rate_train * 100,
                     available_rate * 100, available_acc_rate * 100)
         tag_loss_dic[tag]['available_rate_valid'] = available_rate
         tag_loss_dic[tag]['available_acc_rate_valid'] = available_acc_rate
@@ -198,6 +198,8 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
         # 获取中间层数据
         # from keras.models import Model
         # layer = Model(model.layers[0].input, model.layers[10].output)
+        if np.isnan(available_rate) or available_rate == 0:
+            continue
 
         valid_y_4_show = np.argmax(valid_y, axis=1) if is_classification else valid_y[:, 1]
         result_y_4_show = np.argmax(result_y, axis=1) if is_classification else result_y[:, 1]
