@@ -201,8 +201,8 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     return reward_df
 
 
-def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func, range_to=None, n_step=60,
-                   pool: multiprocessing.Pool = None, max_train_data_len=1000):
+def train_between_dates(md_loader_func, get_factor_func, train_round_kwargs_iter_func, range_to=None, n_step=60,
+                        pool: multiprocessing.Pool = None, max_train_data_len=1000):
     """在日期范围内进行模型训练"""
     logger = logging.getLogger(__name__)
     # 建立相关数据
@@ -300,9 +300,9 @@ def train_on_fix_interval_periods(md_loader_func, get_factor_func, train_round_k
             start=1):
         if data_count <= 0 or (False if date_period_count is None else (date_period_num > date_period_count)):
             continue
-        round_result_dic = train_on_range(md_loader_func, get_factor_func,
-                                          train_round_kwargs_iter_func=train_round_kwargs_iter_func,
-                                          range_to=date_to, n_step=n_step, pool=pool)
+        round_result_dic = train_between_dates(
+            md_loader_func, get_factor_func, train_round_kwargs_iter_func=train_round_kwargs_iter_func,
+            range_to=date_to, n_step=n_step, pool=pool)
         if use_pool:
             date_results_dict[date_to] = round_result_dic
             tot_count += len(round_result_dic)
@@ -357,7 +357,7 @@ def _test_train_on_each_period():
 
 
 def _test_train_on_range(use_pool=False):
-    """测试 train_on_range """
+    """测试 train_between_dates """
     from drl.d3qnr20191127.train_drl import train_round_iter_func
     logger = logging.getLogger(__name__)
     base_data_count, n_step, max_process_count = 1000, 60, multiprocessing.cpu_count() // 2
@@ -378,7 +378,7 @@ def _test_train_on_range(use_pool=False):
     delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
     get_factor_func = functools.partial(get_factor,
                                         trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
-    result_dic = train_on_range(
+    result_dic = train_between_dates(
         md_loader_func=md_loader_func, get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2),
         range_to=date_to, n_step=n_step, pool=pool)

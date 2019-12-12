@@ -16,7 +16,7 @@ import math
 
 from drl import DATA_FOLDER_PATH
 from drl.d3qn_replay_2019_08_25.agent.main import MODEL_NAME, get_agent
-from drl.trainer import train_on_fix_interval_periods
+from drl.drl_trainer import train_on_fix_interval_periods
 
 
 def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 5, 7]):
