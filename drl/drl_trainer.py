@@ -22,9 +22,10 @@ from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLD
     TENSORBOARD_LOG_FOLDER
 
 
-def train_for_n_episodes(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
-                         model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={},
-                         valid_rate_threshold=0.6):
+def train_for_n_episodes(
+        md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
+        model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={},
+        valid_rate_threshold=0.6):
     """
     训练DRL
     保存训练参数到 models_folder_path/f"{max_date_str}_{round_n}_{episode}.h5"
@@ -70,9 +71,8 @@ def train_for_n_episodes(md_df, batch_factors, get_agent_func, round_n=0, num_ep
                 state = next_state
 
                 if done:
-
+                    # 更新 eval 网络，重新计算各个节点权重
                     logs_list = agent.update_eval()
-
                     # 加入 reward_df[['value', 'value_fee0']]
                     if episode > 1 and (episode % n_episode_pre_record == 0 or episode == num_episodes - 1):
                         episodes_nav_df_dic[episode] = env.plot_data()[['nav', 'nav_fee0']]
