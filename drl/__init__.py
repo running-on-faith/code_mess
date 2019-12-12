@@ -16,6 +16,7 @@ DATA_FOLDER_PATH = r'D:\WSPych\IBATSCommon\ibats_common\example\data' if is_wind
 MODEL_SAVED_FOLDER = 'models'
 MODEL_ANALYSIS_IMAGES_FOLDER = 'images'
 MODEL_REWARDS_FOLDER = 'rewards'
+TENSORBOARD_LOG_FOLDER = 'tb_log'
 # evn configuration
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s %(filename)s.%(funcName)s:%(lineno)d|%(message)s'
 

@@ -18,11 +18,13 @@ import pandas as pd
 from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
 from ibats_utils.mess import date_2_str
 
-from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLDER, MODEL_REWARDS_FOLDER
+from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLDER, MODEL_REWARDS_FOLDER, \
+    TENSORBOARD_LOG_FOLDER
 
 
 def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
-          model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={}):
+          model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={},
+          valid_rate_threshold=0.6):
     """
     训练DRL
     保存训练参数到 models_folder_path/f"{max_date_str}_{round_n}_{episode}.h5"
@@ -37,6 +39,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     :param output_reward_csv:
     :param env_kwargs:
     :param agent_kwargs:
+    :param valid_rate_threshold: 样本内预测有效数据比例阈值
     :return:
     """
     logger = logging.getLogger(__name__)
@@ -52,7 +55,7 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
     logger.info('train until %s with env_kwargs=%s, agent_kwargs=%s', max_date_str, env_kwargs, agent_kwargs)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
-    episode, is_broken = 1, False
+    episode, is_model_available = 1, True
     episodes_nav_df_dic, model_path = {}, None
     for episode in range(1, num_episodes + 1):
         state = env.reset()
@@ -78,9 +81,9 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                         log_str1 = ""
 
                     # 生成 .h5 模型文件
-                    if episode > 0 and episode % 50 == 0:
+                    if episode > 200 and episode % 50 == 0:
                         loss_dic, valid_rate = agent.valid_model()
-                        if valid_rate > 0.6:
+                        if valid_rate > valid_rate_threshold:
                             # 每 50 轮，进行一次样本内测试
                             model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
                             agent.save_model(path=model_path)
@@ -90,9 +93,10 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                                 reward_df.to_csv(
                                     os.path.join(rewards_folder_path, f'{max_date_str}_{round_n}_{episode}.csv'))
                             log_str2 = f", model save to path: {model_path}" \
-                                f", 样本内测试预测有效数据比例 {valid_rate:2f}%, loss_dic={loss_dic}"
+                                f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}%, loss_dic={loss_dic}"
                         else:
-                            log_str2 = f", 样本内测试预测有效数据比例 {valid_rate:2f}% < 60%, loss_dic={loss_dic}"
+                            log_str2 = f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}% " \
+                                f"< {valid_rate_threshold * 100:.2f}%, loss_dic={loss_dic}"
                     else:
                         log_str2 = ""
 
@@ -109,11 +113,10 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
 
                     break
         except Exception as exp:
-            logger.exception("train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%9.5f%%, "
-                             "action_count=%4d",
-                             max_date_str, round_n, episode, num_episodes, episode_step, env.A.max_step_count,
-                             env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1]
-                             )
+            logger.exception(
+                "train until %s round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%9.5f%%, action_count=%4d",
+                max_date_str, round_n, episode, num_episodes, episode_step, env.A.max_step_count,
+                env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1])
             raise exp from exp
         avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2  # 一卖一买算换手一次，因此你 "* 2"
         if avg_holding_days > 20:
@@ -126,13 +129,20 @@ def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_e
                 env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
                 avg_holding_days)
+            is_model_available = False
             break
 
     # if reward_df.iloc[-1, 0] > reward_df.iloc[0, 0]:
     model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
-    if not os.path.exists(model_path):
-        agent.save_model(path=model_path)
-        logger.debug('model save to path: %s', model_path)
+    if is_model_available and not os.path.exists(model_path):
+        loss_dic, valid_rate = agent.valid_model()
+        if valid_rate > valid_rate_threshold:
+            agent.save_model(path=model_path)
+            logger.debug('model save to path: %s', model_path)
+        else:
+            logger.exception(
+                "train until %s round=%d, episode=%4d/%4d, 样本内测试预测有效数据比例 %.2f%% < %.2f%%, loss_dic=%s",
+                max_date_str, round_n, episode, num_episodes, valid_rate * 100, valid_rate_threshold * 100, loss_dic)
 
     agent.close()
 
@@ -229,20 +239,21 @@ def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func
     for round_n, env_kwargs, agent_kwargs, train_kwargs in round_list:
         # 执行训练
         try:
-            agent_kwargs['tensorboard_log_dir'] = os.path.join(root_folder_path, 'log')
+            agent_kwargs['tensorboard_log_dir'] = os.path.join(root_folder_path, f"{TENSORBOARD_LOG_FOLDER}_{round_n}")
             logger.debug('range_to=%s, round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s',
                          range_to_str, round_n, round_max, root_folder_path, agent_kwargs)
             if pool is None:
-                df = train(md_df, batch_factors,
-                           root_folder_path=root_folder_path,
-                           env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
+                df = train(
+                    md_df, batch_factors, root_folder_path=root_folder_path,
+                    env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
                 logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
                              round_n, round_max, root_folder_path, agent_kwargs, df.iloc[-1, :])
                 result_dic[round_n] = df
             else:
-                result = pool.apply_async(train, (md_df, batch_factors,),
-                                          kwds=dict(root_folder_path=root_folder_path,
-                                                    env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs))
+                result = pool.apply_async(
+                    train, (md_df, batch_factors,), kwds=dict(
+                        root_folder_path=root_folder_path,
+                        env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs))
                 result_dic[round_n] = result
         except ZeroDivisionError:
             pass
@@ -251,8 +262,8 @@ def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func
 
 
 def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_iter_func, base_data_count=1000,
-                         offset='1M', n_step=60,
-                         date_train_from=None, use_pool=True, max_process_count=multiprocessing.cpu_count()):
+                         offset='1M', n_step=60, date_train_from=None, date_period_count=None,
+                         use_pool=True, max_process_count=multiprocessing.cpu_count()):
     """
     间隔指定周期进行训练
     :param md_loader_func: 数据加载器
@@ -262,6 +273,7 @@ def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_ite
     :param offset: 训练数据步进长度，采样间隔 D日 W周 M月 Y年
     :param n_step: 训练数据 step
     :param date_train_from: 当 date_train_from 不为空时 base_data_count 参数失效，从指定日期开始进行训练
+    :param date_period_count: 以起始日期开始算起，训练几个日期的模型， 默认为 None 全部
     :param use_pool: 是否使用进程池
     :param max_process_count:最大进程数（默认 cup 数量）
     :return:
@@ -283,9 +295,10 @@ def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_ite
 
     date_results_dict, tot_count = {}, 0
     # for date_to in pd.date_range(date_min, date_max, freq=pd.DateOffset(offset)):
-    for date_to, data_count in md_df[(date_min <= md_df.index) & (md_df.index <= date_max)]['close'].resample(
-            offset).count().items():
-        if data_count <= 0:
+    for date_period_num, (date_to, data_count) in enumerate(
+            md_df[(date_min <= md_df.index) & (md_df.index <= date_max)]['close'].resample(offset).count().items(),
+            start=1):
+        if data_count <= 0 or (False if date_period_count is None else (date_period_num > date_period_count)):
             continue
         round_result_dic = train_on_range(md_loader_func, get_factor_func,
                                           train_round_kwargs_iter_func=train_round_kwargs_iter_func,
@@ -323,7 +336,7 @@ def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_ite
 
 
 def _test_train_on_each_period():
-    from drl.d3qnr20191127.train import train_round_iter_func
+    from drl.d3qnr20191127.train_drl import train_round_iter_func
     from ibats_common.backend.factor import get_factor
     from ibats_common.example import get_trade_date_series, get_delivery_date_series
     instrument_type = 'RB'
@@ -337,12 +350,15 @@ def _test_train_on_each_period():
             f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
         )[OHLCAV_COL_NAME_LIST],
         get_factor_func=get_factor_func,
-        train_round_kwargs_iter_func=train_round_iter_func(2), use_pool=True)
+        train_round_kwargs_iter_func=train_round_iter_func(2),
+        use_pool=True,
+        date_period_count=1,  # None 如果需要训练全部日期
+    )
 
 
 def _test_train_on_range(use_pool=False):
     """测试 train_on_range """
-    from drl.d3qnr20191127.train import train_round_iter_func
+    from drl.d3qnr20191127.train_drl import train_round_iter_func
     logger = logging.getLogger(__name__)
     base_data_count, n_step, max_process_count = 1000, 60, multiprocessing.cpu_count() // 2
     date_to = pd.to_datetime('2014-11-04')
