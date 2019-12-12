@@ -338,7 +338,7 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 
 class Framework(object):
     def __init__(self, input_shape=[None, 60, 93], dueling=True, action_size=4, batch_size=512,
-                 learning_rate=0.001, tensorboard_log_dir='./log',
+                 learning_rate=0.001, tensorboard_log_dir='./tensorboard_log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action=0.9057,
                  min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01,
@@ -367,6 +367,9 @@ class Framework(object):
 
         self.input_shape = [None if num == 0 else _ for num, _ in enumerate(input_shape)]
         self.action_size = action_size
+        if action_size <= 1:
+            self.logger.error("action_size=%d, 必须大于1", action_size)
+            raise ValueError(f"action_size={action_size}, 必须大于1")
         if action_size == 2:
             self.actions = [1, 2]
         else:
@@ -586,7 +589,7 @@ class Framework(object):
                                 )
         else:
             self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
-                                verbose=0, callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
+                                verbose=0, callbacks=[TensorBoard(log_dir=self.tensorboard_log_dir), self.fit_callback],
                                 )
             self.has_logged = True
 
@@ -612,14 +615,17 @@ class Framework(object):
         losses = self.model_eval.evaluate(inputs, _q_target, verbose=0)
         loss_dic = {name: losses[_] for _, name in enumerate(self.model_eval.metrics_names)}
         _q_pred = self.model_eval.predict(inputs)
+        if self.action_size <= 1:
+            raise ValueError(f"action_size={self.action_size}, 必须大于1")
         is_valid = None
         for idx in range(1, self.action_size):
             if is_valid is None:
                 is_valid = _q_pred[:, idx - 1] != _q_pred[:, idx]
             else:
                 is_valid |= _q_pred[:, idx - 1] != _q_pred[:, idx]
+        else:
+            valid_rate = np.sum(is_valid) / len(is_valid)
 
-        valid_rate = np.sum(is_valid) / len(is_valid)
         return loss_dic, valid_rate
 
 
