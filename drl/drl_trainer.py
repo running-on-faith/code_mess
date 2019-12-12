@@ -22,9 +22,9 @@ from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLD
     TENSORBOARD_LOG_FOLDER
 
 
-def train(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
-          model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={},
-          valid_rate_threshold=0.6):
+def train_for_n_episodes(md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
+                         model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={},
+                         valid_rate_threshold=0.6):
     """
     训练DRL
     保存训练参数到 models_folder_path/f"{max_date_str}_{round_n}_{episode}.h5"
@@ -243,7 +243,7 @@ def train_between_dates(md_loader_func, get_factor_func, train_round_kwargs_iter
             logger.debug('range_to=%s, round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s',
                          range_to_str, round_n, round_max, root_folder_path, agent_kwargs)
             if pool is None:
-                df = train(
+                df = train_for_n_episodes(
                     md_df, batch_factors, root_folder_path=root_folder_path,
                     env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs)
                 logger.debug('round_n=%d/%d, root_folder_path=%s, agent_kwargs=%s, final status:\n%s',
@@ -251,7 +251,7 @@ def train_between_dates(md_loader_func, get_factor_func, train_round_kwargs_iter
                 result_dic[round_n] = df
             else:
                 result = pool.apply_async(
-                    train, (md_df, batch_factors,), kwds=dict(
+                    train_for_n_episodes, (md_df, batch_factors,), kwds=dict(
                         root_folder_path=root_folder_path,
                         env_kwargs=env_kwargs, agent_kwargs=agent_kwargs, **train_kwargs))
                 result_dic[round_n] = result
