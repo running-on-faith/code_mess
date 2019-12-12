@@ -261,9 +261,9 @@ def train_on_range(md_loader_func, get_factor_func, train_round_kwargs_iter_func
     return result_dic
 
 
-def train_on_each_period(md_loader_func, get_factor_func, train_round_kwargs_iter_func, base_data_count=1000,
-                         offset='1M', n_step=60, date_train_from=None, date_period_count=None,
-                         use_pool=True, max_process_count=multiprocessing.cpu_count()):
+def train_on_fix_interval_periods(md_loader_func, get_factor_func, train_round_kwargs_iter_func, base_data_count=1000,
+                                  offset='1M', n_step=60, date_train_from=None, date_period_count=None,
+                                  use_pool=True, max_process_count=multiprocessing.cpu_count()):
     """
     间隔指定周期进行训练
     :param md_loader_func: 数据加载器
@@ -345,7 +345,7 @@ def _test_train_on_each_period():
     get_factor_func = functools.partial(get_factor,
                                         trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
 
-    train_on_each_period(
+    train_on_fix_interval_periods(
         md_loader_func=lambda range_to=None: load_data(
             f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to
         )[OHLCAV_COL_NAME_LIST],

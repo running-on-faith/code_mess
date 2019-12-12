@@ -16,7 +16,7 @@ import math
 
 from drl import DATA_FOLDER_PATH
 from drl.d3qn_r_2019_10_11.agent.main import MODEL_NAME, get_agent
-from drl.trainer import train_on_each_period
+from drl.trainer import train_on_fix_interval_periods
 
 
 def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 6, 8]):
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     get_factor_func = functools.partial(get_factor,
                                         trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
 
-    train_on_each_period(
+    train_on_fix_interval_periods(
         md_loader_func=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         get_factor_func=get_factor_func,
