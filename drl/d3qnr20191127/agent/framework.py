@@ -30,6 +30,7 @@
 同时对正则化进行了参数化
 """
 import logging
+from typing import List
 
 import ffn
 import numpy as np
@@ -374,8 +375,12 @@ class Framework(object):
             self.actions = [1, 2]
         else:
             self.actions = list(range(action_size))
+        # 计数器，仅用于模型训练是记录使用
         self.last_action = None
         self.last_action_same_count = 0
+        self.action_count = 0
+        self.model_predict_count = 0
+        self.model_predict_unavailable_count = 0
         # 延续上一执行动作的概率
         # keep_last_action=0.84     math.pow(0.5, 0.25) = 0.84089
         # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
@@ -410,11 +415,19 @@ class Framework(object):
         self.reg_params = reg_params
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
-        self.has_logged = False
+        self.has_fitted = False
         self.epochs = epochs
         self.update_target_net_period = update_target_net_period
         self.tot_update_count = 0
         self.min_data_len_4_multiple_date = min_data_len_4_multiple_date
+
+    def reset_counter(self):
+        # 计数器，仅用于模型训练是记录使用
+        self.last_action = None
+        self.last_action_same_count = 0
+        self.action_count = 0
+        self.model_predict_count = 0
+        self.model_predict_unavailable_count = 0
 
     @property
     def acc_loss_lists(self):
@@ -478,6 +491,7 @@ class Framework(object):
         return model
 
     def get_deterministic_policy(self, inputs):
+        """用于是基于模型预测使用"""
         from keras.utils import to_categorical
         action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
@@ -486,14 +500,50 @@ class Framework(object):
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
-        if self.action_size == 2:
-            return np.argmax(act_values[0]) + 1  # returns action
+        is_available = check_available(act_values)
+        if is_available[0]:
+            if self.action_size == 2:
+                return np.argmax(act_values[0]) + 1  # returns action
+            else:
+                return np.argmax(act_values[0])  # returns action
         else:
-            return np.argmax(act_values[0])  # returns action
+            self.logger.warning("当期状态预测结果无效，选择保持持仓状态。")
+            from ibats_common.backend.rl.emulator.market import Action
+            return Action.keep
 
     def get_stochastic_policy(self, inputs):
+        """用于模型训练使用，内涵一定几率随机动作"""
         from keras.utils import to_categorical
-        if np.random.rand() <= self.epsilon:
+        self.action_count += 1
+        if self.has_fitted and np.random.rand() > self.epsilon:
+            self.model_predict_count += 1
+            act_values = self.model_eval.predict(
+                x={'state': np.array(inputs[0]), 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+            if np.any(np.isnan(act_values)):
+                self.model_predict_unavailable_count += 1
+                self.logger.error(
+                    "预测失效=%s。action_count=%4d, model_predict_count=%4d, "
+                    "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
+                    act_values, self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
+                    self.model_predict_unavailable_count / self.model_predict_count * 100
+                )
+                raise ZeroDivisionError("predict error act_values=%s" % act_values)
+            is_available = check_available(act_values)
+            if is_available[0]:
+                action = self.actions[int(np.argmax(act_values[0]))]  # returns action
+            else:
+                self.model_predict_unavailable_count += 1
+                self.logger.warning(
+                    "当期状态预测结果无效，选择随机策略。action_count=%4d, model_predict_count=%4d, "
+                    "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
+                    self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
+                    self.model_predict_unavailable_count / self.model_predict_count * 100
+                )
+                action = None
+        else:
+            action = None
+
+        if action is None:
             if self.last_action is None:
                 action = np.random.choice(self.actions)
             else:
@@ -502,19 +552,13 @@ class Framework(object):
                     action = np.random.choice(self.actions)
                 else:
                     action = self.last_action
-        else:
-            act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                    'flag': to_categorical(inputs[1] + 1, self.flag_size)})
-            if np.any(np.isnan(act_values)):
-                self.logger.error("predict error act_values=%s", act_values)
-                raise ZeroDivisionError("predict error act_values=%s" % act_values)
-            action = self.actions[int(np.argmax(act_values[0]))]  # returns action
 
         if action == self.last_action:
             self.last_action_same_count += 1
         else:
             self.last_action = action
             self.last_action_same_count = 1
+
         return self.last_action
 
     # update target network params
@@ -556,10 +600,17 @@ class Framework(object):
         inputs = {'state': _state,
                   'flag': _flag}
         q_target = self.model_target.predict(x=inputs)
-        index = np.arange(q_target.shape[0])
-        q_target[index, self.cache_action] = reward_tot
-        # 将训练及进行复制叠加
-        # 加入缓存，整理缓存
+        # index = np.arange(q_target.shape[0])
+        q_target[:, self.cache_action] = reward_tot
+        # 对所有无效数据进行惩罚
+        is_unavailable = ~check_available(q_target)
+        if np.any(is_unavailable) > 0:
+            actions = [self.cache_action[_] for _, v in enumerate(is_unavailable) if v]
+            self.logger.warning(
+                "%d unavailable action: %s value: %s",
+                np.sum(is_unavailable), actions, q_target[is_unavailable, actions])
+            q_target[is_unavailable, actions] -= 0.1
+        # 将训练及进行复制叠加，加入缓存，整理缓存
         self.cache_list_state.append(multiple_data(
             _state[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
         self.cache_list_flag.append(multiple_data(
@@ -583,7 +634,7 @@ class Framework(object):
         _flag = np.concatenate(self.cache_list_flag)
         _q_target = np.concatenate(self.cache_list_q_target)
         inputs = {'state': _state, 'flag': _flag}
-        if self.has_logged:
+        if self.has_fitted:
             self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
                                 verbose=0, callbacks=[self.fit_callback],
                                 )
@@ -591,7 +642,7 @@ class Framework(object):
             self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
                                 verbose=0, callbacks=[TensorBoard(log_dir=self.tensorboard_log_dir), self.fit_callback],
                                 )
-            self.has_logged = True
+            self.has_fitted = True
 
         # 计算 epsilon
         # 2019-8-21 用衰减的sin函数作为学习曲线
@@ -617,16 +668,20 @@ class Framework(object):
         _q_pred = self.model_eval.predict(inputs)
         if self.action_size <= 1:
             raise ValueError(f"action_size={self.action_size}, 必须大于1")
-        is_valid = None
-        for idx in range(1, self.action_size):
-            if is_valid is None:
-                is_valid = _q_pred[:, idx - 1] != _q_pred[:, idx]
-            else:
-                is_valid |= _q_pred[:, idx - 1] != _q_pred[:, idx]
-        else:
-            valid_rate = np.sum(is_valid) / len(is_valid)
+        is_available = check_available(_q_pred)
+        valid_rate = np.sum(is_available) / len(is_available)
 
         return loss_dic, valid_rate
+
+
+def check_available(pred: np.ndarray) -> List[bool]:
+    is_available = None
+    for idx in range(1, pred.shape[1]):
+        if is_available is None:
+            is_available = pred[:, idx - 1] != pred[:, idx]
+        else:
+            is_available |= pred[:, idx - 1] != pred[:, idx]
+    return is_available
 
 
 def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000):

@@ -78,6 +78,9 @@ class Agent(object):
         # self.sess.close()
         pass
 
+    def reset_counter(self):
+        self.agent.reset_counter()
+
 
 def _test_agent(n_step=60):
     import pandas as pd
@@ -132,6 +135,7 @@ def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_recor
     episodes_reward_df_dic = {}
     for episode in range(num_episodes):
         state = env.reset()
+        agent.reset_counter()
         episode_step = 0
         try:
             while True:

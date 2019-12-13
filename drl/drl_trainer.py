@@ -60,6 +60,7 @@ def train_for_n_episodes(
     episodes_nav_df_dic, model_path = {}, None
     for episode in range(1, num_episodes + 1):
         state = env.reset()
+        agent.reset_counter()
         episode_step = 0
         try:
             while True:
