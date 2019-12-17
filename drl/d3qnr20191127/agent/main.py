@@ -63,7 +63,7 @@ class Agent(object):
 
     def save_model(self, path=f"{MODEL_SAVED_FOLDER}/weights.h5"):
         # return self.saver.save(self.sess, path)
-        self.agent.model_eval.save_weights(path)
+        self.agent.save_model_weights(path)
 
     def restore_model(self, path=f"{MODEL_SAVED_FOLDER}/weights.h5"):
         # self.saver.restore(self.sess, path)
