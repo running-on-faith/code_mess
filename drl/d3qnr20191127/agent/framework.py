@@ -354,6 +354,7 @@ class Framework(object):
                 super().__init__()
                 self.logs_list = []
                 self.epsilon = 1.
+                self.model_predict_unavailable_rate = 1.
                 self.logger = logging.getLogger(str(self.__class__))
 
             def on_epoch_end(self, epoch, logs=None):
@@ -364,6 +365,7 @@ class Framework(object):
                     # self.acc_list.append(logs['categorical_accuracy'] if 'categorical_accuracy' in logs else np.nan)
                     # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
                     logs['epsilon'] = self.epsilon
+                    logs['model_predict_unavailable_rate'] = self.model_predict_unavailable_rate
                     self.logs_list.append(logs)
 
         self.input_shape = [None if num == 0 else _ for num, _ in enumerate(input_shape)]
@@ -391,7 +393,7 @@ class Framework(object):
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
-        self.cache_list_tot_reward = []
+        self.cache_list_sum_reward_4_pop_queue = []
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.tensorboard_log_dir = tensorboard_log_dir
@@ -525,7 +527,7 @@ class Framework(object):
                     "预测失效=%s。action_count=%4d, model_predict_count=%4d, "
                     "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
                     act_values, self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
-                    self.model_predict_unavailable_count / self.model_predict_count * 100
+                    self.model_predict_unavailable_rate * 100
                 )
                 raise ZeroDivisionError("predict error act_values=%s" % act_values)
             is_available = check_available(act_values)
@@ -533,12 +535,12 @@ class Framework(object):
                 action = self.actions[int(np.argmax(act_values[0]))]  # returns action
             else:
                 self.model_predict_unavailable_count += 1
-                self.logger.warning(
-                    "当期状态预测结果无效，选择随机策略。action_count=%4d, model_predict_count=%4d, "
-                    "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
-                    self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
-                    self.model_predict_unavailable_count / self.model_predict_count * 100
-                )
+                # self.logger.warning(
+                #     "当期状态预测结果无效，选择随机策略。action_count=%4d, model_predict_count=%4d, "
+                #     "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
+                #     self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
+                #     self.model_predict_unavailable_rate * 100
+                # )
                 action = None
         else:
             action = None
@@ -560,6 +562,17 @@ class Framework(object):
             self.last_action_same_count = 1
 
         return self.last_action
+
+    def save_model_weights(self, file_path, ignore_if_unavailable_rate_over=0.4):
+        if ignore_if_unavailable_rate_over is not None and \
+                ignore_if_unavailable_rate_over > self.model_predict_unavailable_rate:
+            return None
+        self.model_eval.save_weights(filepath=file_path)
+        return file_path
+
+    @property
+    def model_predict_unavailable_rate(self):
+        return self.model_predict_unavailable_count / self.model_predict_count
 
     # update target network params
     def update_target_net(self):
@@ -592,8 +605,8 @@ class Framework(object):
         reward_tot = calc_cum_reward_with_rr(self.cache_reward, self.cum_reward_back_step)
         # 以未来N日calmar为奖励函数（目前发现优化有问题，暂时不清楚原有）
         # reward_tot = calc_cum_reward_with_calmar(self.cache_reward, self.cum_reward_back_step)
-        tot_reward = np.sum(self.cache_reward)
-        self.cache_list_tot_reward.append(tot_reward)
+        sum_reward = np.sum(self.cache_reward)
+        self.cache_list_sum_reward_4_pop_queue.append(sum_reward)
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
         _flag = to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)
@@ -609,7 +622,7 @@ class Framework(object):
             self.logger.warning(
                 "%d unavailable action: %s value: %s",
                 np.sum(is_unavailable), actions, q_target[is_unavailable, actions])
-            q_target[is_unavailable, actions] -= 0.1
+            q_target[is_unavailable, actions] -= 1.
         # 将训练及进行复制叠加，加入缓存，整理缓存
         self.cache_list_state.append(multiple_data(
             _state[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
@@ -618,14 +631,14 @@ class Framework(object):
         self.cache_list_q_target.append(multiple_data(
             q_target[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
         # 随机删除一组训练样本
-        if len(self.cache_list_tot_reward) >= self.epsilon_memory_size:
+        if len(self.cache_list_sum_reward_4_pop_queue) >= self.epsilon_memory_size:
             if np.random.random() < self.random_drop_best_cache_rate:
                 # 有一定几率随机drop
                 pop_index = np.random.randint(0, self.epsilon_memory_size - 1)
             else:
-                pop_index = int(np.argmin(self.cache_list_tot_reward))
+                pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue))
 
-            self.cache_list_tot_reward.pop(pop_index)
+            self.cache_list_sum_reward_4_pop_queue.pop(pop_index)
             self.cache_list_state.pop(pop_index)
             self.cache_list_flag.pop(pop_index)
             self.cache_list_q_target.pop(pop_index)
@@ -634,6 +647,8 @@ class Framework(object):
         _flag = np.concatenate(self.cache_list_flag)
         _q_target = np.concatenate(self.cache_list_q_target)
         inputs = {'state': _state, 'flag': _flag}
+        # 训练并记录损失率，无效率等
+        self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
         if self.has_fitted:
             self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
                                 verbose=0, callbacks=[self.fit_callback],
@@ -684,7 +699,7 @@ def check_available(pred: np.ndarray) -> List[bool]:
     return is_available
 
 
-def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000):
+def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000, log_value=True):
     """计算 reward 值，将未来 step 步的 reward 以log递减形式向前传导"""
     reward_tot = np.array(reward, dtype='float32')
     tot_len = len(reward_tot)
@@ -700,13 +715,17 @@ def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000
         else:
             reward_tot[idx - 1] = sum(reward_tot[idx:idx_end] * weights)
 
-    return reward_tot * mulitplier
+    reward_tot = reward_tot * mulitplier
+    if log_value:
+        reward_tot[reward_tot > 0] = np.log2(reward_tot[reward_tot > 0] + 1)
+        reward_tot[reward_tot < 0] = -np.log2(-reward_tot[reward_tot < 0] + 1)
+    return reward_tot
 
 
 def _test_calc_cum_reward_with_rr():
     """验证 calc_tot_reward 函数"""
     rewards = [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
-    reward_tot = calc_cum_reward_with_rr(rewards, 3)
+    reward_tot = calc_cum_reward_with_rr(rewards, 3, log_value=False)
     print(reward_tot)
     target_reward = np.array([1.875, 1.875, 1.875, 1.75, 1.625, 1.375, 0.875, 1.75, 1.5, 1.125, 0.375, 0.875,
                               1.75, 1.5, 1.])
