@@ -341,7 +341,7 @@ class Framework(object):
     def __init__(self, input_shape=[None, 60, 93], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./tensorboard_log',
                  epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
-                 cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action=0.9057,
+                 cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action_rate=0.9057,
                  min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01,
                  reg_params=[1e-7, 1e-7, 1e-3]):
         import tensorflow as tf
@@ -384,12 +384,16 @@ class Framework(object):
         self.model_predict_count = 0
         self.model_predict_unavailable_count = 0
         # 延续上一执行动作的概率
-        # keep_last_action=0.84     math.pow(0.5, 0.25) = 0.84089
-        # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
-        # keep_last_action=0.8816   math.pow(0.5, 0.1818) = 0.8816
-        # keep_last_action=0.9057   math.pow(0.5, 1/7) = 0.9057
-        # keep_last_action=0.9170   math.pow(0.5, 0.125) = 0.9170
-        self.keep_last_action = keep_last_action
+        # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), 当 Sn = 0.5, q= 0.5 时
+        # a = Sn * (1 - q) / (1 - q^n) = 0.25 / (1 - 0.5^n)
+        # n=2, keep_last_action_rate=1/3
+        # n=3, keep_last_action_rate=2/7
+        # n=4, keep_last_action_rate=4/15
+        # n=5, keep_last_action_rate=8/31
+        # n=6, keep_last_action_rate=16/63
+        # n=7, keep_last_action_rate=32/127
+        # n=8, keep_last_action_rate=64/255
+        self.keep_last_action_rate = keep_last_action_rate
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
@@ -550,7 +554,7 @@ class Framework(object):
                 action = np.random.choice(self.actions)
             else:
                 # 随着连续相同动作的数量增加，持续同一动作的概率越来越小
-                if np.random.rand() > self.keep_last_action ** self.last_action_same_count:
+                if np.random.rand() > self.keep_last_action_rate ** self.last_action_same_count:
                     action = np.random.choice(self.actions)
                 else:
                     action = self.last_action
@@ -572,7 +576,8 @@ class Framework(object):
 
     @property
     def model_predict_unavailable_rate(self):
-        return self.model_predict_unavailable_count / self.model_predict_count
+        return self.model_predict_unavailable_count / self.model_predict_count \
+            if self.model_predict_count > 0 else np.nan
 
     # update target network params
     def update_target_net(self):

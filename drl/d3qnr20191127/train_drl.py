@@ -19,7 +19,7 @@ from drl.d3qnr20191127.agent.main import MODEL_NAME, get_agent
 from drl.drl_trainer import train_on_fix_interval_periods
 
 
-def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[5, 7, 9]):
+def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 5, 7]):
     """
     迭代器函数：每轮训练迭代参数 迭代器
     :param round_n_per_target_day:
@@ -30,8 +30,10 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[5, 
     round_n = 1
     for round_n_sub in range(round_n_per_target_day):
         for days in target_avg_holding_days:
+            # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), 当 Sn = 0.5, q= 0.5 时
+            # a = Sn * (1 - q) / (1 - q^n) = 0.25 / (1 - 0.5^n)
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-            agent_kwargs = dict(keep_last_action=math.pow(0.5, 1 / days), batch_size=128,
+            agent_kwargs = dict(keep_last_action_rate=0.25/(1-0.5**days), batch_size=128,
                                 epsilon_memory_size=10, random_drop_best_cache_rate=0.01)
             num_episodes = 3000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
@@ -64,7 +66,7 @@ def _test_train_on_each_period():
         get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=4), n_step=60,
         date_train_from='2017-01-01', offset='3M',
-        use_pool=False, max_process_count=2,
+        use_pool=True, max_process_count=2,
         date_period_count=1,  # None 如果需要训练全部日期
     )
 
