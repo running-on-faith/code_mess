@@ -357,7 +357,7 @@ class Framework(object):
                  epochs=1, keep_epsilon_init_4_first_n=5, epsilon_decay=0.9990, sin_step=0.1,
                  epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action_rate=0.9057,
-                 min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01,
+                 min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01,
                  reg_params=[1e-7, 1e-7, 1e-3]):
         import tensorflow as tf
         from keras import backend as K
@@ -431,7 +431,7 @@ class Framework(object):
         # self.epsilon_decay = epsilon_decay
         self.epsilon_maker = EpsilonMaker(keep_epsilon_init_4_first_n, epsilon_decay, sin_step, epsilon_min,
                                           epsilon_sin_max=epsilon_sin_max)
-        self.random_drop_best_cache_rate = random_drop_best_cache_rate
+        self.random_drop_cache_rate = random_drop_cache_rate
         self.flag_size = 3
         self.reg_params = reg_params
         self.model_eval = self._build_model()
@@ -601,12 +601,12 @@ class Framework(object):
             q_target[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
         # 随机删除一组训练样本
         if len(self.cache_list_sum_reward_4_pop_queue) >= self.epsilon_memory_size:
-            if np.random.random() < self.random_drop_best_cache_rate:
+            if self.random_drop_cache_rate is not None and np.random.random() < self.random_drop_cache_rate:
                 # 随机 drop
                 pop_index = np.random.randint(0, self.epsilon_memory_size - 1)
             else:
                 # drop 最差方案
-                pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue[:self.epsilon_memory_size-1]))
+                pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue[:self.epsilon_memory_size - 1]))
 
             self.cache_list_sum_reward_4_pop_queue.pop(pop_index)
             self.cache_list_state.pop(pop_index)

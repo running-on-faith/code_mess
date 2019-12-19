@@ -30,7 +30,7 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
             agent_kwargs = dict(
                 keep_last_action_rate=0.25 / (1 - 0.5 ** days), batch_size=128,
-                epsilon_memory_size=10, random_drop_best_cache_rate=0.01,
+                epsilon_memory_size=10, random_drop_cache_rate=None,
                 sin_step=0.2, epsilon_decay=0.993, epsilon_min=0.05, epsilon_sin_max=0.1
             )
             num_episodes = 3000 + 200 * round_n_sub
