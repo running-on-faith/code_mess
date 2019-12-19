@@ -40,7 +40,17 @@ DATE_BASELINE = pd.to_datetime('2018-01-01')
 
 
 class EpsilonMaker:
-    def __init__(self, epsilon_decay=0.996, sin_step=0.05, epsilon_min=0.05, epsilon_sin_max=0.2):
+    def __init__(self, keep_init_4_first_n=10, epsilon_decay=0.996, sin_step=0.1, epsilon_min=0.02,
+                 epsilon_sin_max=0.1):
+        """
+        Epsilon 发生器
+        :param keep_init_4_first_n: 前 N 次保持 init 值
+        :param epsilon_decay: 衰减率
+        :param sin_step: sin 曲线步长
+        :param epsilon_min: 最小值
+        :param epsilon_sin_max: sin曲线浮动最大值
+        """
+        self.keep_init_4_first_n = keep_init_4_first_n
         self.sin_step = sin_step
         self.sin_step_tot = 0
         self.epsilon = self.epsilon_init = 1.0  # exploration rate
@@ -48,20 +58,24 @@ class EpsilonMaker:
         self.epsilon_min = epsilon_min
         self.epsilon_down = self.epsilon  # self.epsilon_down *= self.epsilon_decay
         self.epsilon_sin = 0
-        self.sin_height = self.epsilon_sin_max - self.epsilon_min
+        # sin 曲线上下波动高达是 2 (从 -1 到 1) 因此除以 2
+        self.sin_height = (self.epsilon_sin_max - self.epsilon_min) / 2
         self.epsilon_decay = epsilon_decay
+        self._count = 0
 
     @property
     def epsilon_next(self):
-        if self.epsilon_down > self.epsilon_min:
-            self.epsilon_down *= self.epsilon_decay
-        self.epsilon_sin = (np.sin(self.sin_step_tot * self.sin_step) + 1) / 2 * self.sin_height
-        self.sin_step_tot += 1
-        self.epsilon = self.epsilon_down + self.epsilon_sin
-        if self.epsilon > self.epsilon_init:
-            self.epsilon = self.epsilon_init
-        elif self.epsilon < self.epsilon_min:
-            self.epsilon = self.epsilon_min
+        self._count += 1
+        if self._count > self.keep_init_4_first_n:
+            if self.epsilon_down > self.epsilon_min:
+                self.epsilon_down *= self.epsilon_decay
+            self.epsilon_sin = (np.sin(self.sin_step_tot * self.sin_step) + 1) * self.sin_height
+            self.sin_step_tot += 1
+            self.epsilon = self.epsilon_down + self.epsilon_sin
+            if self.epsilon > self.epsilon_init:
+                self.epsilon = self.epsilon_init
+            elif self.epsilon < self.epsilon_min:
+                self.epsilon = self.epsilon_min
 
         return self.epsilon
 
@@ -340,7 +354,8 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
 class Framework(object):
     def __init__(self, input_shape=[None, 60, 93], dueling=True, action_size=4, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./tensorboard_log',
-                 epochs=1, epsilon_decay=0.9990, sin_step=0.1, epsilon_min=0.05, update_target_net_period=20,
+                 epochs=1, keep_epsilon_init_4_first_n=5, epsilon_decay=0.9990, sin_step=0.1,
+                 epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action_rate=0.9057,
                  min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01,
                  reg_params=[1e-7, 1e-7, 1e-3]):
@@ -414,8 +429,8 @@ class Framework(object):
         self.epsilon = 1.0  # exploration rate
         # self.epsilon_min = epsilon_min
         # self.epsilon_decay = epsilon_decay
-        self.epsilon_maker = EpsilonMaker(epsilon_decay, sin_step, epsilon_min,
-                                          epsilon_sin_max=0.05)
+        self.epsilon_maker = EpsilonMaker(keep_epsilon_init_4_first_n, epsilon_decay, sin_step, epsilon_min,
+                                          epsilon_sin_max=epsilon_sin_max)
         self.random_drop_best_cache_rate = random_drop_best_cache_rate
         self.flag_size = 3
         self.reg_params = reg_params
@@ -444,57 +459,6 @@ class Framework(object):
         return build_model_3_layers(
             input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
             reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
-
-    def _build_model_20191127(self):
-        import tensorflow as tf
-        from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-        from keras.models import Model
-        from keras import metrics, backend as K
-        from keras.optimizers import Nadam
-        from keras.regularizers import l2, l1_l2
-        # Neural Net for Deep-Q learning Model
-        input = Input(batch_shape=self.input_shape, name=f'state')
-        # 2019-11-27 增加对 LSTM 层的正则化
-        # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
-        # 使用 L1L2 混合正则项（又称：Elastic Net）
-        # TODO: 参数尚未优化
-        recurrent_regularizer = l1_l2(l1=self.reg_params[0], l2=self.reg_params[1]) \
-            if self.reg_params[0] is not None and self.reg_params[1] is not None else None
-        kernel_regularizer = l2(self.reg_params[2]) if self.reg_params[2] is not None else None
-        net = LSTM(
-            self.input_shape[-1] * 2,
-            recurrent_regularizer=recurrent_regularizer,
-            kernel_regularizer=kernel_regularizer)(input)
-        net = Dense(int(self.input_shape[-1] / 1.5))(net)
-        net = Dropout(0.4)(net)
-        input2 = Input(batch_shape=[None, self.flag_size], name=f'flag')
-        net = concatenate([net, input2])
-        net = Dense((int(self.input_shape[-1] / 1.5) + self.flag_size) // 3, activation='linear')(net)
-        net = Dropout(0.4)(net)
-        # net = Dense(self.action_size * 4, activation='relu')(net)
-        if self.dueling:
-            net = Dense(self.action_size + 2, activation='linear')(net)
-            net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 2:] - K.mean(i[:, 2:], keepdims=True),
-                         output_shape=(self.action_size,))(net)
-        else:
-            net = Dense(self.action_size, activation='linear')(net)
-
-        model = Model(inputs=[input, input2], outputs=net)
-
-        def _huber_loss(y_true, y_pred, clip_delta=1.0):
-            error = y_true - y_pred
-            cond = K.abs(error) <= clip_delta
-
-            squared_loss = 0.5 * K.square(error)
-            quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
-
-            return K.mean(tf.where(cond, squared_loss, quadratic_loss))
-
-        model.compile(Nadam(self.learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.mean_squared_error, metrics.categorical_accuracy]
-                      )
-        # model.summary()
-        return model
 
     def get_deterministic_policy(self, inputs):
         """用于是基于模型预测使用"""
@@ -554,7 +518,9 @@ class Framework(object):
                 action = np.random.choice(self.actions)
             else:
                 # 随着连续相同动作的数量增加，持续同一动作的概率越来越小
-                if np.random.rand() > self.keep_last_action_rate ** self.last_action_same_count:
+                # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), q= 0.5, => Sn = a * (1 - 0.5^n) * 2
+                sum_rate = self.keep_last_action_rate * (1 - 0.5 ** self.last_action_same_count) * 2
+                if np.random.rand() > sum_rate:
                     action = np.random.choice(self.actions)
                 else:
                     action = self.last_action
@@ -610,13 +576,12 @@ class Framework(object):
         reward_tot = calc_cum_reward_with_rr(self.cache_reward, self.cum_reward_back_step)
         # 以未来N日calmar为奖励函数（目前发现优化有问题，暂时不清楚原有）
         # reward_tot = calc_cum_reward_with_calmar(self.cache_reward, self.cum_reward_back_step)
-        sum_reward = np.sum(self.cache_reward)
+        sum_reward = np.sum(reward_tot)
         self.cache_list_sum_reward_4_pop_queue.append(sum_reward)
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
         _flag = to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)
-        inputs = {'state': _state,
-                  'flag': _flag}
+        inputs = {'state': _state, 'flag': _flag}
         q_target = self.model_target.predict(x=inputs)
         # index = np.arange(q_target.shape[0])
         q_target[:, self.cache_action] = reward_tot
@@ -624,9 +589,8 @@ class Framework(object):
         is_unavailable = ~check_available(q_target)
         if np.any(is_unavailable) > 0:
             actions = [self.cache_action[_] for _, v in enumerate(is_unavailable) if v]
-            self.logger.warning(
-                "%d unavailable action: %s value: %s",
-                np.sum(is_unavailable), actions, q_target[is_unavailable, actions])
+            self.logger.warning("%d unavailable action: %s value: %s",
+                                np.sum(is_unavailable), actions, q_target[is_unavailable, actions])
             q_target[is_unavailable, actions] -= 1.
         # 将训练及进行复制叠加，加入缓存，整理缓存
         self.cache_list_state.append(multiple_data(
@@ -638,10 +602,11 @@ class Framework(object):
         # 随机删除一组训练样本
         if len(self.cache_list_sum_reward_4_pop_queue) >= self.epsilon_memory_size:
             if np.random.random() < self.random_drop_best_cache_rate:
-                # 有一定几率随机drop
+                # 随机 drop
                 pop_index = np.random.randint(0, self.epsilon_memory_size - 1)
             else:
-                pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue))
+                # drop 最差方案
+                pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue[:self.epsilon_memory_size-1]))
 
             self.cache_list_sum_reward_4_pop_queue.pop(pop_index)
             self.cache_list_state.pop(pop_index)
@@ -791,7 +756,7 @@ def _test_show_model():
 
 def _test_epsilon_maker():
     import matplotlib.pyplot as plt
-    epsilon_maker = EpsilonMaker(sin_step=0.05, epsilon_decay=0.996, epsilon_min=0.05)
+    epsilon_maker = EpsilonMaker(sin_step=0.2, epsilon_decay=0.993, epsilon_min=0.05, epsilon_sin_max=0.1)
     epsilon_list = [epsilon_maker.epsilon_next for _ in range(2000)]
     plt.plot(epsilon_list)
     plt.suptitle(
@@ -843,8 +808,8 @@ def _test_multiple_data():
 if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
-    _test_show_model()
+    # _test_show_model()
     # _test_calc_cum_reward_with_rr()
     # _test_calc_cum_reward_with_calmar()
-    # _test_epsilon_maker()
+    _test_epsilon_maker()
     # _test_multiple_data()
