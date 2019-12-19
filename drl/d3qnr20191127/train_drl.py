@@ -8,11 +8,6 @@
 @desc    : 用于进行指定日期范围数据训练，以及样本外测试
 """
 import logging
-# if True:
-#     from ibats_common.backend.rl.utils import use_cup_only
-#
-#     use_cup_only()
-import math
 
 from drl import DATA_FOLDER_PATH
 from drl.d3qnr20191127.agent.main import MODEL_NAME, get_agent
@@ -33,8 +28,11 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
             # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), 当 Sn = 0.5, q= 0.5 时
             # a = Sn * (1 - q) / (1 - q^n) = 0.25 / (1 - 0.5^n)
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
-            agent_kwargs = dict(keep_last_action_rate=0.25/(1-0.5**days), batch_size=128,
-                                epsilon_memory_size=10, random_drop_best_cache_rate=0.01)
+            agent_kwargs = dict(
+                keep_last_action_rate=0.25 / (1 - 0.5 ** days), batch_size=128,
+                epsilon_memory_size=10, random_drop_best_cache_rate=0.01,
+                sin_step=0.2, epsilon_decay=0.993, epsilon_min=0.05, epsilon_sin_max=0.1
+            )
             num_episodes = 3000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
                                 model_name=MODEL_NAME, get_agent_func=get_agent, output_reward_csv=True)
