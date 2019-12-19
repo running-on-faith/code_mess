@@ -120,7 +120,7 @@ def train_for_n_episodes(
                 env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1])
             raise exp from exp
         avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2  # 一卖一买算换手一次，因此你 "* 2"
-        if avg_holding_days > 20:
+        if avg_holding_days > 20 and episode >= 800:
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
                 "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
