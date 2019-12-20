@@ -25,11 +25,9 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
     round_n = 1
     for round_n_sub in range(round_n_per_target_day):
         for days in target_avg_holding_days:
-            # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), 当 Sn = 0.5, q= 0.5 时
-            # a = Sn * (1 - q) / (1 - q^n) = 0.25 / (1 - 0.5^n)
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
             agent_kwargs = dict(
-                keep_last_action_rate=0.25 / (1 - 0.5 ** days), batch_size=128,
+                target_avg_holding_days=days, batch_size=128,
                 epsilon_memory_size=10, random_drop_cache_rate=None,
                 sin_step=0.2, epsilon_decay=0.993, epsilon_min=0.05, epsilon_sin_max=0.1
             )

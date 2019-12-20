@@ -356,7 +356,7 @@ class Framework(object):
                  learning_rate=0.001, tensorboard_log_dir='./tensorboard_log',
                  epochs=1, keep_epsilon_init_4_first_n=5, epsilon_decay=0.9990, sin_step=0.1,
                  epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
-                 cum_reward_back_step=10, epsilon_memory_size=20, keep_last_action_rate=0.9057,
+                 cum_reward_back_step=10, epsilon_memory_size=20, target_avg_holding_days=5,
                  min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01,
                  reg_params=[1e-7, 1e-7, 1e-3]):
         import tensorflow as tf
@@ -392,6 +392,10 @@ class Framework(object):
             self.actions = [1, 2]
         else:
             self.actions = list(range(action_size))
+        # actions_change_set 为action集合，形成的数组。
+        # 对应每一个动作需要改变时，可以选择的动作集合。
+        # 数组脚标为当前动作，对应的集合为可以选择的动作
+        self.actions_change_list = [[_ for _ in self.actions if _ != action] for action in range(max(self.actions) + 1)]
         # 计数器，仅用于模型训练是记录使用
         self.last_action = None
         self.last_action_same_count = 0
@@ -399,16 +403,13 @@ class Framework(object):
         self.model_predict_count = 0
         self.model_predict_unavailable_count = 0
         # 延续上一执行动作的概率
-        # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), 当 Sn = 0.5, q= 0.5 时
-        # a = Sn * (1 - q) / (1 - q^n) = 0.25 / (1 - 0.5^n)
-        # n=2, keep_last_action_rate=1/3
-        # n=3, keep_last_action_rate=2/7
-        # n=4, keep_last_action_rate=4/15
-        # n=5, keep_last_action_rate=8/31
-        # n=6, keep_last_action_rate=16/63
-        # n=7, keep_last_action_rate=32/127
-        # n=8, keep_last_action_rate=64/255
-        self.keep_last_action_rate = keep_last_action_rate
+        # 根据等比数列求和公式 Sn = a * (1 - q^n) / (1 - q)
+        # 当 q = 1 - a 时，Sn = 1 - q^n
+        # 目标平均持仓天数 N 日时 50% 概率切换动作。因此 Sn = 0.5
+        # 因此 q = 0.5 ^ (1/n)
+        # a = 1-0.5^(1/n)
+        self.target_avg_holding_days = target_avg_holding_days
+        self.target_avg_holding_rate = 1 - 0.5 ** (1/target_avg_holding_days)
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
@@ -518,10 +519,8 @@ class Framework(object):
                 action = np.random.choice(self.actions)
             else:
                 # 随着连续相同动作的数量增加，持续同一动作的概率越来越小
-                # 根据等比数列求和公式 Sn = a*(1-q^n)/(1-q), q= 0.5, => Sn = a * (1 - 0.5^n) * 2
-                sum_rate = self.keep_last_action_rate * (1 - 0.5 ** self.last_action_same_count) * 2
-                if np.random.rand() > sum_rate:
-                    action = np.random.choice(self.actions)
+                if np.random.rand() < self.target_avg_holding_rate:
+                    action = np.random.choice(self.actions_change_list[self.last_action])
                 else:
                     action = self.last_action
 
