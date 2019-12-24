@@ -61,7 +61,7 @@ def train_for_n_episodes(
     for episode in range(1, num_episodes + 1):
         state = env.reset()
         agent.reset_counter()
-        episode_step = 0
+        episode_step, avg_holding_days = 0, 0
         try:
             while True:
                 episode_step += 1
@@ -82,22 +82,38 @@ def train_for_n_episodes(
                         log_str1 = ""
 
                     # 生成 .h5 模型文件
-                    if episode > 200 and episode % 50 == 0:
+                    if episode % 50 == 0:
+                        # 一卖一买算换手一次，因此你 "* 2"
+                        avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2
+                        is_available = True
+                        if avg_holding_days < 2:
+                            is_available = False
+                            log_str2 = f"，平均持仓{avg_holding_days:5.2f} < 2"
+                        elif avg_holding_days > 20:
+                            is_available = False
+                            log_str2 = f"，平均持仓{avg_holding_days:5.2f} > 20"
+                        else:
+                            log_str2 = ""
+
                         loss_dic, valid_rate = agent.valid_model()
                         if valid_rate > valid_rate_threshold:
+                            log_str2 += f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}%, loss_dic={loss_dic}"
+                        else:
+                            is_available = False
+                            log_str2 += f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}% " \
+                                f"<= {valid_rate_threshold * 100:.2f}%, loss_dic={loss_dic}"
+
+                        if is_available:
                             # 每 50 轮，进行一次样本内测试
                             model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
+                            log_str2 = f", model save to path: {model_path}" + log_str2
                             agent.save_model(path=model_path)
                             # 输出 csv文件
                             if output_reward_csv:
                                 reward_df = env.plot_data()
                                 reward_df.to_csv(
                                     os.path.join(rewards_folder_path, f'{max_date_str}_{round_n}_{episode}.csv'))
-                            log_str2 = f", model save to path: {model_path}" \
-                                f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}%, loss_dic={loss_dic}"
-                        else:
-                            log_str2 = f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}% " \
-                                f"< {valid_rate_threshold * 100:.2f}%, loss_dic={loss_dic}"
+
                     else:
                         log_str2 = ""
 
@@ -119,7 +135,8 @@ def train_for_n_episodes(
                 max_date_str, round_n, episode, num_episodes, episode_step, env.A.max_step_count,
                 env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1])
             raise exp from exp
-        avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2  # 一卖一买算换手一次，因此你 "* 2"
+        # 一卖一买算换手一次，因此你 "* 2"
+        avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2
         if avg_holding_days > 20 and episode >= 800:
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
