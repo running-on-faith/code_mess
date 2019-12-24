@@ -56,7 +56,7 @@ def train_for_n_episodes(
     logger.info('train until %s with env_kwargs=%s, agent_kwargs=%s', max_date_str, env_kwargs, agent_kwargs)
     # num_episodes, n_episode_pre_record = 200, 20
     logs_list = []
-    episode, is_model_available = 1, True
+    episode, is_model_available, is_valid_rate_oks = 1, True, []
     episodes_nav_df_dic, model_path = {}, None
     for episode in range(1, num_episodes + 1):
         state = env.reset()
@@ -96,7 +96,9 @@ def train_for_n_episodes(
                             log_str2 = ""
 
                         loss_dic, valid_rate = agent.valid_model()
-                        if valid_rate > valid_rate_threshold:
+                        is_valid_rate_ok = valid_rate > valid_rate_threshold
+                        is_valid_rate_oks.append(is_valid_rate_ok)
+                        if is_valid_rate_ok:
                             log_str2 += f", 样本内测试预测有效数据比例 {valid_rate * 100:.2f}%, loss_dic={loss_dic}"
                         else:
                             is_available = False
@@ -137,16 +139,17 @@ def train_for_n_episodes(
             raise exp from exp
         # 一卖一买算换手一次，因此你 "* 2"
         avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2
-        if avg_holding_days > 20 and episode >= 800:
+        ok_rate = np.sum(is_valid_rate_oks)/len(is_valid_rate_oks)
+        if episode >= 1000 and (avg_holding_days > 20 or ok_rate < 0.5):
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
                 "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
-                "action_count=%4d, 平均持仓%5.2f > 20天，退出本次训练",
+                "action_count=%4d, （平均持仓%5.2f > 20天 或 平均有效预测比率 %5.2f%% < 50%%），退出本次训练",
                 max_date_str, round_n, episode, num_episodes,
                 episode_step, env.A.max_step_count,
                 env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
-                avg_holding_days)
+                avg_holding_days, ok_rate * 100)
             is_model_available = False
             break
 
