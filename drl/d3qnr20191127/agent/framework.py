@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 DATE_BASELINE = pd.to_datetime('2018-01-01')
+DEFAULT_REG_PARAMS = [1e-7, 1e-7, None]
 
 
 class EpsilonMaker:
@@ -80,28 +81,28 @@ class EpsilonMaker:
         return self.epsilon
 
 
-def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
+def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
-    from keras import metrics, backend as K
+    from keras import metrics, backend
     from keras.optimizers import Nadam
     from keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
-    input = Input(batch_shape=input_shape, name=f'state')
+    input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
     # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
     # 使用 L1L2 混合正则项（又称：Elastic Net）
-    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+    recurrent_reg = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
         if reg_params[0] is not None and reg_params[1] is not None else None
-    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    kernel_reg = l2(reg_params[2]) if reg_params[2] is not None else None
     net = LSTM(
         input_shape[-1] * 2,
-        recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer,
+        recurrent_regularizer=recurrent_reg,
+        kernel_regularizer=kernel_reg,
         dropout=0.3
-    )(input)
+    )(input_net)
     net = Dense(int(input_shape[-1]))(net)
     net = Dropout(0.3)(net)
     net = Dense(int(input_shape[-1] / 2))(net)
@@ -117,7 +118,7 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     # net = Dense(self.action_size * 4, activation='relu')(net)
     if dueling:
         net = Dense(action_size + 1, activation='relu')(net)
-        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+        net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
                      output_shape=(action_size,))(net)
     else:
         net = Dense(action_size, activation='linear')(net)
@@ -125,16 +126,16 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     if is_classification:
         net = Activation('softmax')(net)
 
-    model = Model(inputs=[input, input2], outputs=net)
+    model = Model(inputs=[input_net, input2], outputs=net)
 
     def _huber_loss(y_true, y_pred, clip_delta=1.0):
         error = y_true - y_pred
-        cond = K.abs(error) <= clip_delta
+        cond = backend.abs(error) <= clip_delta
 
-        squared_loss = 0.5 * K.square(error)
-        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+        squared_loss = 0.5 * backend.square(error)
+        quadratic_loss = 0.5 * backend.square(clip_delta) + clip_delta * (backend.abs(error) - clip_delta)
 
-        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+        return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
         if action_size == 2:
@@ -147,36 +148,36 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
                           )
     else:
         model.compile(Nadam(learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      # metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
                       )
     # model.summary()
     return model
 
 
-def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
+def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
-    from keras import metrics, backend as K
+    from keras import metrics, backend
     from keras.optimizers import Nadam
     from keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
-    input = Input(batch_shape=input_shape, name=f'state')
+    input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
     # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
     # 使用 L1L2 混合正则项（又称：Elastic Net）
-    # TODO: 参数尚未优化
-    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+
+    recurrent_reg = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
         if reg_params[0] is not None and reg_params[1] is not None else None
-    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    kernel_reg = l2(reg_params[2]) if reg_params[2] is not None else None
     input_size = input_shape[-1]
     net = LSTM(
         input_size * 2,
-        recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer,
+        recurrent_regularizer=recurrent_reg,
+        kernel_regularizer=kernel_reg,
         dropout=0.3
-    )(input)
+    )(input_net)
     net = Dense(int(input_size / 2))(net)
     net = Dropout(0.4)(net)
     input2 = Input(batch_shape=[None, flag_size], name=f'flag')
@@ -185,7 +186,7 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     net = Dropout(0.4)(net)
     if dueling:
         net = Dense(action_size + 1, activation='relu')(net)
-        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+        net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
                      output_shape=(action_size,))(net)
     else:
         net = Dense(action_size, activation='linear')(net)
@@ -193,16 +194,16 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     if is_classification:
         net = Activation('softmax')(net)
 
-    model = Model(inputs=[input, input2], outputs=net)
+    model = Model(inputs=[input_net, input2], outputs=net)
 
     def _huber_loss(y_true, y_pred, clip_delta=1.0):
         error = y_true - y_pred
-        cond = K.abs(error) <= clip_delta
+        cond = backend.abs(error) <= clip_delta
 
-        squared_loss = 0.5 * K.square(error)
-        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+        squared_loss = 0.5 * backend.square(error)
+        quadratic_loss = 0.5 * backend.square(clip_delta) + clip_delta * (backend.abs(error) - clip_delta)
 
-        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+        return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
         if action_size == 2:
@@ -215,43 +216,42 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
                           )
     else:
         model.compile(Nadam(learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      # metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
                       )
     # model.summary()
     return model
 
 
-def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None], learning_rate=0.001,
+def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
-    from keras import metrics, backend as K
+    from keras import metrics, backend
     from keras.optimizers import Nadam
     from keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
-    input = Input(batch_shape=input_shape, name=f'state')
+    input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
     # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
     # 使用 L1L2 混合正则项（又称：Elastic Net）
-    # TODO: 参数尚未优化
-    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+    recurrent_reg = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
         if reg_params[0] is not None and reg_params[1] is not None else None
-    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    kernel_reg = l2(reg_params[2]) if reg_params[2] is not None else None
     input_size = input_shape[-1]
     net = LSTM(
         input_size * 2,
-        recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer,
-        dropout=0.3
-    )(input)
+        recurrent_regularizer=recurrent_reg,
+        kernel_regularizer=kernel_reg,
+        dropout=0.25
+    )(input_net)
     input2 = Input(batch_shape=[None, flag_size], name=f'flag')
     net = concatenate([net, input2])
     net = Dense(int((input_size + flag_size) / 4))(net)
-    net = Dropout(0.4)(net)
+    net = Dropout(0.25)(net)
     if dueling:
         net = Dense(action_size + 1, activation='relu')(net)
-        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+        net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
                      output_shape=(action_size,))(net)
     else:
         net = Dense(action_size, activation='linear')(net)
@@ -259,16 +259,14 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     if is_classification:
         net = Activation('softmax')(net)
 
-    model = Model(inputs=[input, input2], outputs=net)
+    model = Model(inputs=[input_net, input2], outputs=net)
 
     def _huber_loss(y_true, y_pred, clip_delta=1.0):
         error = y_true - y_pred
-        cond = K.abs(error) <= clip_delta
-
-        squared_loss = 0.5 * K.square(error)
-        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
-
-        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+        cond = backend.abs(error) <= clip_delta
+        squared_loss = 0.5 * backend.square(error)
+        quadratic_loss = 0.5 * backend.square(clip_delta) + clip_delta * (backend.abs(error) - clip_delta)
+        return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
         if action_size == 2:
@@ -281,41 +279,40 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
                           )
     else:
         model.compile(Nadam(learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      # metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
                       )
     # model.summary()
     return model
 
 
-def build_model_3_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 1e-7, None],
+def build_model_3_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS,
                          learning_rate=0.001, dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Input, concatenate, Lambda, Activation
     from keras.models import Model
-    from keras import metrics, backend as K
+    from keras import metrics, backend
     from keras.optimizers import Nadam
     from keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
-    input = Input(batch_shape=input_shape, name=f'state')
+    input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
     # 根据 《使用权重症则化较少模型过拟合》，经验上，LSTM 正则化 10^-6
     # 使用 L1L2 混合正则项（又称：Elastic Net）
-    # TODO: 参数尚未优化
-    recurrent_regularizer = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
+    recurrent_reg = l1_l2(l1=reg_params[0], l2=reg_params[1]) \
         if reg_params[0] is not None and reg_params[1] is not None else None
-    kernel_regularizer = l2(reg_params[2]) if reg_params[2] is not None else None
+    kernel_reg = l2(reg_params[2]) if reg_params[2] is not None else None
     input_size = input_shape[-1]
     net = LSTM(
         input_size * 2,
-        recurrent_regularizer=recurrent_regularizer,
-        kernel_regularizer=kernel_regularizer,
+        recurrent_regularizer=recurrent_reg,
+        kernel_regularizer=kernel_reg,
         dropout=0.3
-    )(input)
+    )(input_net)
     input2 = Input(batch_shape=[None, flag_size], name=f'flag')
     net = concatenate([net, input2])
     if dueling:
         net = Dense(action_size + 1, activation='relu')(net)
-        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+        net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
                      output_shape=(action_size,))(net)
     else:
         net = Dense(action_size, activation='linear')(net)
@@ -323,16 +320,16 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
     if is_classification:
         net = Activation('softmax')(net)
 
-    model = Model(inputs=[input, input2], outputs=net)
+    model = Model(inputs=[input_net, input2], outputs=net)
 
     def _huber_loss(y_true, y_pred, clip_delta=1.0):
         error = y_true - y_pred
-        cond = K.abs(error) <= clip_delta
+        cond = backend.abs(error) <= clip_delta
 
-        squared_loss = 0.5 * K.square(error)
-        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+        squared_loss = 0.5 * backend.square(error)
+        quadratic_loss = 0.5 * backend.square(clip_delta) + clip_delta * (backend.abs(error) - clip_delta)
 
-        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+        return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
         if action_size == 2:
@@ -345,7 +342,7 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=[1e-7, 
                           )
     else:
         model.compile(Nadam(learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
+                      # metrics=[metrics.mae, metrics.mean_squared_logarithmic_error]
                       )
     # model.summary()
     return model
@@ -357,10 +354,10 @@ class Framework(object):
                  epochs=1, keep_epsilon_init_4_first_n=5, epsilon_decay=0.9990, sin_step=0.1,
                  epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, target_avg_holding_days=5,
-                 min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01,
+                 min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01, build_model_layer_count=4,
                  reg_params=[1e-7, 1e-7, 1e-3]):
         import tensorflow as tf
-        from keras import backend as K
+        from keras import backend
         from keras.callbacks import Callback
 
         class LogFit(Callback):
@@ -409,7 +406,7 @@ class Framework(object):
         # 因此 q = 0.5 ^ (1/n)
         # a = 1-0.5^(1/n)
         self.target_avg_holding_days = target_avg_holding_days
-        self.target_avg_holding_rate = 1 - 0.5 ** (1/target_avg_holding_days)
+        self.target_avg_holding_rate = 1 - 0.5 ** (1 / target_avg_holding_days)
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
@@ -424,7 +421,7 @@ class Framework(object):
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
         self.logger = logging.getLogger(str(self.__class__))
-        K.clear_session()
+        backend.clear_session()
         tf.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
@@ -435,6 +432,7 @@ class Framework(object):
         self.random_drop_cache_rate = random_drop_cache_rate
         self.flag_size = 3
         self.reg_params = reg_params
+        self.build_model_layer_count = build_model_layer_count
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
         self.has_fitted = False
@@ -457,14 +455,32 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
-        return build_model_3_layers(
-            input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
-            reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+        if self.build_model_layer_count == 3:
+            net = build_model_3_layers(
+                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+        elif self.build_model_layer_count == 4:
+            net = build_model_4_layers(
+                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+        elif self.build_model_layer_count == 5:
+            net = build_model_5_layers(
+                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+        elif self.build_model_layer_count == 8:
+            net = build_model_8_layers(
+                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+        else:
+            raise ValueError(f"build_model_layer_count={self.build_model_layer_count}")
+        return net
 
     def get_deterministic_policy(self, inputs):
         """用于是基于模型预测使用"""
         from keras.utils import to_categorical
-        action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
+        # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
+        # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
+        action = inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(action, self.flag_size)})
@@ -473,10 +489,11 @@ class Framework(object):
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
         is_available = check_available(act_values)
         if is_available[0]:
-            if self.action_size == 2:
-                return np.argmax(act_values[0]) + 1  # returns action
-            else:
-                return np.argmax(act_values[0])  # returns action
+            # if self.action_size == 2:
+            #     return np.argmax(act_values[0]) + 1  # returns action
+            # else:
+            #     return np.argmax(act_values[0])  # returns action
+            return self.actions[int(np.argmax(act_values[0]))]
         else:
             self.logger.warning("当期状态预测结果无效，选择保持持仓状态。")
             from ibats_common.backend.rl.emulator.market import Action
@@ -488,8 +505,11 @@ class Framework(object):
         self.action_count += 1
         if self.has_fitted and np.random.rand() > self.epsilon:
             self.model_predict_count += 1
+            # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
+            # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
+            action = inputs[1]
             act_values = self.model_eval.predict(
-                x={'state': np.array(inputs[0]), 'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+                x={'state': np.array(inputs[0]), 'flag': to_categorical(action, self.flag_size)})
             if np.any(np.isnan(act_values)):
                 self.model_predict_unavailable_count += 1
                 self.logger.error(
@@ -575,15 +595,21 @@ class Framework(object):
         reward_tot = calc_cum_reward_with_rr(self.cache_reward, self.cum_reward_back_step)
         # 以未来N日calmar为奖励函数（目前发现优化有问题，暂时不清楚原有）
         # reward_tot = calc_cum_reward_with_calmar(self.cache_reward, self.cum_reward_back_step)
-        sum_reward = np.sum(reward_tot)
+        # sum_reward = np.sum(reward_tot)  # 以后可以尝试用此方式优化
+        sum_reward = np.sum(self.cache_reward)
         self.cache_list_sum_reward_4_pop_queue.append(sum_reward)
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
-        _flag = to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)
+        _flag = to_categorical(np.array([_[1] for _ in self.cache_state]), self.flag_size)
         inputs = {'state': _state, 'flag': _flag}
         q_target = self.model_target.predict(x=inputs)
-        # index = np.arange(q_target.shape[0])
-        q_target[:, self.cache_action] = reward_tot
+        # 2019-12-24 修复bug “q_target[index, self.cache_action] = reward_tot” 计算结果错误
+        # 导致权重数值有误因此无法优化
+        # 现改为循环单列赋值方式
+        actions = np.array(self.cache_action)
+        for action in range(q_target.shape[1]):
+            matches = actions == action
+            q_target[matches, action] = reward_tot[matches]
         # 对所有无效数据进行惩罚
         is_unavailable = ~check_available(q_target)
         if np.any(is_unavailable) > 0:
@@ -618,6 +644,7 @@ class Framework(object):
         inputs = {'state': _state, 'flag': _flag}
         # 训练并记录损失率，无效率等
         self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
+        # 训练模型
         if self.has_fitted:
             self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
                                 verbose=0, callbacks=[self.fit_callback],
@@ -648,7 +675,10 @@ class Framework(object):
         _q_target = np.concatenate(self.cache_list_q_target)
         inputs = {'state': _state, 'flag': _flag}
         losses = self.model_eval.evaluate(inputs, _q_target, verbose=0)
-        loss_dic = {name: losses[_] for _, name in enumerate(self.model_eval.metrics_names)}
+        if len(self.model_eval.metrics_names) == 1:
+            loss_dic = {self.model_eval.metrics_names[0]: losses}
+        else:
+            loss_dic = {name: losses[_] for _, name in enumerate(self.model_eval.metrics_names)}
         _q_pred = self.model_eval.predict(inputs)
         if self.action_size <= 1:
             raise ValueError(f"action_size={self.action_size}, 必须大于1")
@@ -694,7 +724,7 @@ def calc_cum_reward_with_rr(reward, step, include_curr_day=True, mulitplier=1000
 def _test_calc_cum_reward_with_rr():
     """验证 calc_tot_reward 函数"""
     rewards = [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
-    reward_tot = calc_cum_reward_with_rr(rewards, 3, log_value=False)
+    reward_tot = calc_cum_reward_with_rr(rewards, 3, mulitplier=1, log_value=False)
     print(reward_tot)
     target_reward = np.array([1.875, 1.875, 1.875, 1.75, 1.625, 1.375, 0.875, 1.75, 1.5, 1.125, 0.375, 0.875,
                               1.75, 1.5, 1.])
@@ -808,7 +838,7 @@ if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
     # _test_show_model()
-    # _test_calc_cum_reward_with_rr()
+    _test_calc_cum_reward_with_rr()
     # _test_calc_cum_reward_with_calmar()
-    _test_epsilon_maker()
+    # _test_epsilon_maker()
     # _test_multiple_data()
