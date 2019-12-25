@@ -30,6 +30,7 @@
 同时对正则化进行了参数化
 """
 import logging
+import os
 from typing import List
 
 import ffn
@@ -645,15 +646,18 @@ class Framework(object):
         # 训练并记录损失率，无效率等
         self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
         # 训练模型
-        if self.has_fitted:
-            self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
-                                verbose=0, callbacks=[self.fit_callback],
-                                )
-        else:
-            self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
-                                verbose=0, callbacks=[TensorBoard(log_dir=self.tensorboard_log_dir), self.fit_callback],
-                                )
-            self.has_fitted = True
+        # if self.has_fitted:
+        #     self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
+        #                         verbose=0, callbacks=[self.fit_callback],
+        #                         )
+        # else:
+        self.model_eval.fit(
+            inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
+            verbose=0, callbacks=[
+                TensorBoard(log_dir=os.path.join(self.tensorboard_log_dir, str(self.tot_update_count))),
+                self.fit_callback],
+        )
+        self.has_fitted = True
 
         # 计算 epsilon
         # 2019-8-21 用衰减的sin函数作为学习曲线
