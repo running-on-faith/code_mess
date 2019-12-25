@@ -110,11 +110,12 @@ def train_for_n_episodes(
                             model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
                             log_str2 = f", model save to path: {model_path}" + log_str2
                             agent.save_model(path=model_path)
-                            # 输出 csv文件
-                            if output_reward_csv:
-                                reward_df = env.plot_data()
-                                reward_df.to_csv(
-                                    os.path.join(rewards_folder_path, f'{max_date_str}_{round_n}_{episode}.csv'))
+
+                        # 输出 csv文件
+                        if output_reward_csv:
+                            reward_df = env.plot_data()
+                            reward_df.to_csv(
+                                os.path.join(rewards_folder_path, f'{max_date_str}_{round_n}_{episode}.csv'))
 
                     else:
                         log_str2 = ""
