@@ -27,12 +27,12 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
         for days in target_avg_holding_days:
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
             agent_kwargs = dict(
-                target_avg_holding_days=days, batch_size=128,
+                target_avg_holding_days=days, batch_size=32, epochs=5, learning_rate=0.0001,
                 epsilon_memory_size=10, random_drop_cache_rate=None,
                 sin_step=0.2, epsilon_decay=0.993, epsilon_min=0.05, epsilon_sin_max=0.1,
                 build_model_layer_count=3,
             )
-            num_episodes = 3000 + 200 * round_n_sub
+            num_episodes = 2000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
                                 model_name=MODEL_NAME, get_agent_func=get_agent, output_reward_csv=True)
             yield round_n, env_kwargs, agent_kwargs, train_kwargs
