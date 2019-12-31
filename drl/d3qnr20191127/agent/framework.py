@@ -368,6 +368,7 @@ class Framework(object):
                 self.logs_list = []
                 self.epsilon = 1.
                 self.model_predict_unavailable_rate = 1.
+                self.predict_direction_match_rate = 0.
                 self.logger = logging.getLogger(str(self.__class__))
 
             def on_epoch_end(self, epoch, logs=None):
@@ -379,6 +380,7 @@ class Framework(object):
                     # self.acc_list.append(logs['mean_absolute_error'] if 'mean_absolute_error' in logs else np.nan)
                     logs['epsilon'] = self.epsilon
                     logs['model_predict_unavailable_rate'] = self.model_predict_unavailable_rate
+                    logs['predict_direction_match_rate'] = self.predict_direction_match_rate
                     self.logs_list.append(logs)
 
         self.input_shape = [None if num == 0 else _ for num, _ in enumerate(input_shape)]
@@ -610,10 +612,16 @@ class Framework(object):
         # 2019-12-24 修复bug “q_target[index, self.cache_action] = reward_tot” 计算结果错误
         # 导致权重数值有误因此无法优化
         # 现改为循环单列赋值方式
+        data_len = q_target.shape[1]
+        action_before = np.argmax(q_target, 1)
         actions = np.array(self.cache_action)
-        for action in range(q_target.shape[1]):
+        for action in range(data_len):
             matches = actions == action
             q_target[matches, action] = reward_tot[matches]
+        action_after = np.argmax(q_target, 1)
+        direction_match_rate = (action_before == action_after) / data_len
+        # direction_match_rate 用来标识，初始预测值与在数值修正后的值对比，action 方向性变化率
+        self.fit_callback.predict_direction_match_rate = direction_match_rate
         # 对所有无效数据进行惩罚
         is_unavailable = ~check_available(q_target)
         if np.any(is_unavailable) > 0:
