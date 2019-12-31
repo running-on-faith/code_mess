@@ -483,8 +483,8 @@ class Framework(object):
         # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
         action = inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
-        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                'flag': to_categorical(action, self.flag_size)})
+        act_values = self.model_target.predict(x={'state': np.array(inputs[0]),
+                                                  'flag': to_categorical(action, self.flag_size)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
@@ -509,7 +509,7 @@ class Framework(object):
             # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
             # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
             action = inputs[1]
-            act_values = self.model_eval.predict(
+            act_values = self.model_target.predict(
                 x={'state': np.array(inputs[0]), 'flag': to_categorical(action, self.flag_size)})
             if np.any(np.isnan(act_values)):
                 self.model_predict_unavailable_count += 1
@@ -589,6 +589,9 @@ class Framework(object):
         self.tot_update_count += 1
         if self.tot_update_count % self.update_target_net_period == 0:
             self.update_target_net()
+            self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
+            self.cache_list_sum_reward_4_pop_queue = []
+            self.has_fitted = True
 
         # 以平仓动作为标识，将持仓期间的收益进行反向传递
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
@@ -626,7 +629,7 @@ class Framework(object):
         self.cache_list_q_target.append(multiple_data(
             q_target[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
         # 随机删除一组训练样本
-        if len(self.cache_list_sum_reward_4_pop_queue) >= self.epsilon_memory_size:
+        if len(self.cache_list_sum_reward_4_pop_queue) > self.epsilon_memory_size:
             if self.random_drop_cache_rate is not None and np.random.random() < self.random_drop_cache_rate:
                 # 随机 drop
                 pop_index = np.random.randint(0, self.epsilon_memory_size - 1)
@@ -646,18 +649,18 @@ class Framework(object):
         # 训练并记录损失率，无效率等
         self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
         # 训练模型
-        # if self.has_fitted:
-        #     self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
-        #                         verbose=0, callbacks=[self.fit_callback],
-        #                         )
-        # else:
-        self.model_eval.fit(
-            inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
-            verbose=0, callbacks=[
-                TensorBoard(log_dir=os.path.join(self.tensorboard_log_dir, str(self.tot_update_count))),
-                self.fit_callback],
-        )
-        self.has_fitted = True
+        if self.has_fitted:
+            self.model_eval.fit(
+                inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
+                callbacks=[self.fit_callback],
+            )
+        else:
+            self.model_eval.fit(
+                inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
+                callbacks=[
+                    TensorBoard(log_dir=os.path.join(self.tensorboard_log_dir, str(self.tot_update_count))),
+                    self.fit_callback],
+            )
 
         # 计算 epsilon
         # 2019-8-21 用衰减的sin函数作为学习曲线
