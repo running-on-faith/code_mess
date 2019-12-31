@@ -22,6 +22,8 @@
 2019-10-11
 为了提高历史数据（近期数据权重）（降低远期数据权重），将历史数据进行重复叠加训练
 方法：input output 安装 0.5**N 指数方式split，然后叠加，进行统一训练
+2019-12-31
+在 d3qn_r_2019_10_11 基础上进行了部分bug修复，没有做逻辑改进（此前的模型可以实现优化，因此只在此基础上做bug修复）
 """
 import logging
 
@@ -254,7 +256,13 @@ class Framework(object):
                   'flag': _flag}
         q_target = self.model_target.predict(x=inputs)
         index = np.arange(q_target.shape[0])
-        q_target[index, self.cache_action] = reward_tot
+        # 2019-12-24 修复bug “q_target[index, self.cache_action] = reward_tot” 计算结果错误
+        # 导致权重数值有误因此无法优化
+        # 现改为循环单列赋值方式
+        actions = np.array(self.cache_action)
+        for action in range(q_target.shape[1]):
+            matches = actions == action
+            q_target[matches, action] = reward_tot[matches]
         # 将训练及进行复制叠加
         # 加入缓存，整理缓存
         self.cache_list_state.append(multiple_data(_state, self.min_data_len_4_multiple_date))
