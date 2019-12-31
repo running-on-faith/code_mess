@@ -24,7 +24,7 @@ from ibats_local_trader.agent.td_agent import *
 from ibats_utils.mess import date_2_str, get_last
 
 from drl import DATA_FOLDER_PATH
-from drl.d3qn_r_2019_10_11.agent.main import get_agent
+from drl.d3qn_r_2019_10_11_2.agent.main import get_agent
 
 logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)

@@ -27,9 +27,9 @@ import logging
 
 import numpy as np
 
-from drl.d3qn_r_2019_10_11.agent.framework import Framework
+from drl.d3qn_r_2019_10_11_2.agent.framework import Framework
 
-MODEL_NAME = 'd3qn_r_2019_10_11'
+MODEL_NAME = 'd3qn_r_2019_10_11_2'
 logger = logging.getLogger(__name__)
 
 

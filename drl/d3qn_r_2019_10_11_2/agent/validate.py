@@ -9,7 +9,7 @@
 """
 import logging
 
-from drl.d3qn_r_2019_10_11.agent.main import get_agent, MODEL_NAME
+from drl.d3qn_r_2019_10_11_2.agent.main import get_agent, MODEL_NAME
 
 
 def load_predict(md_df, batch_factors, tail_n=1, show_plot=True, model_path="model/weights_1.h5",

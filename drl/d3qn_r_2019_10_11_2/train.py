@@ -15,7 +15,7 @@ import logging
 import math
 
 from drl import DATA_FOLDER_PATH
-from drl.d3qn_r_2019_10_11.agent.main import MODEL_NAME, get_agent
+from drl.d3qn_r_2019_10_11_2.agent.main import MODEL_NAME, get_agent
 from drl.drl_trainer import train_on_fix_interval_periods
 
 

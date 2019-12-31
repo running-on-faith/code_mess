@@ -20,7 +20,7 @@ from ibats_common.example.data import OHLCAV_COL_NAME_LIST, load_data
 from ibats_utils.mess import open_file_with_system_app
 
 from drl import DATA_FOLDER_PATH
-from drl.d3qn_r_2019_10_11.agent.main import MODEL_NAME, get_agent
+from drl.d3qn_r_2019_10_11_2.agent.main import MODEL_NAME, get_agent
 from drl.validator import validate_bunch, auto_valid_and_report, get_available_episode_model_path_dic
 
 logger = logging.getLogger(__name__)
