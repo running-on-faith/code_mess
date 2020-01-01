@@ -362,7 +362,7 @@ class Framework(object):
                  epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, target_avg_holding_days=5,
                  min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01, build_model_layer_count=4,
-                 reg_params=[1e-7, 1e-7, 1e-3]):
+                 reg_params=[1e-7, 1e-7, 1e-3], train_net_period=10):
         import tensorflow as tf
         from keras import backend
         from keras.callbacks import Callback
@@ -398,7 +398,7 @@ class Framework(object):
             self.actions = [1, 2]
         else:
             self.actions = list(range(action_size))
-        # actions_change_set 为action集合，形成的数组。
+        # actions_change_list 为action集合，形成的数组。
         # 对应每一个动作需要改变时，可以选择的动作集合。
         # 数组脚标为当前动作，对应的集合为可以选择的动作
         self.actions_change_list = [[_ for _ in self.actions if _ != action] for action in range(max(self.actions) + 1)]
@@ -418,8 +418,6 @@ class Framework(object):
         self.target_avg_holding_rate = 1 - 0.5 ** (1 / target_avg_holding_days)
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
-        self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
-        self.cache_list_sum_reward_4_pop_queue = []
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.tensorboard_log_dir = tensorboard_log_dir
@@ -429,6 +427,8 @@ class Framework(object):
         # cache for state, action, reward, next_state, done
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
+        self.cache_state_list, self.cache_action_list, self.cache_reward_list, self.cache_next_state_list, \
+            self.cache_done_list = [], [], [], [], []
         self.logger = logging.getLogger(str(self.__class__))
         backend.clear_session()
         tf.reset_default_graph()
@@ -444,10 +444,14 @@ class Framework(object):
         self.build_model_layer_count = build_model_layer_count
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
-        self.has_fitted = False
+        # 标示网络是否已经被更新
+        self.has_update_target_net = False
         self.epochs = epochs
-        self.update_target_net_period = update_target_net_period
         self.tot_update_count = 0
+        # 每间隔多少 episode 执行一次 model.fit（训练网络）
+        self.train_net_period = train_net_period
+        # 每间隔多少 episode 执行一次 update_target_net （同步网络）
+        self.update_target_net_period = update_target_net_period
         self.min_data_len_4_multiple_date = min_data_len_4_multiple_date
 
     def reset_counter(self):
@@ -512,7 +516,7 @@ class Framework(object):
         """用于模型训练使用，内涵一定几率随机动作"""
         from keras.utils import to_categorical
         self.action_count += 1
-        if self.has_fitted and np.random.rand() > self.epsilon:
+        if self.has_update_target_net and np.random.rand() > self.epsilon:
             self.model_predict_count += 1
             # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
             # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
@@ -594,12 +598,42 @@ class Framework(object):
         from keras.utils import to_categorical
         from keras.callbacks import TensorBoard
 
+        # 如果episode数量不到更新所需长度，则讲 state、action、rewards全部保存
         self.tot_update_count += 1
+        if self.tot_update_count % self.train_net_period == 0 and len(self.cache_reward_list) > 0:
+            # 开始训练网络
+            # 找出 cache_*_list 中最长的数据长度
+            data_len = np.max([len(_) for _ in self.cache_reward_list])
+            rewards_arr = np.full((data_len * self.flag_size, self.action_size), np.nan)
+
+
+            # 清空 cache_*_list
+            self.cache_state_list, self.cache_action_list, self.cache_reward_list, self.cache_next_state_list, \
+                self.cache_done_list = [], [], [], [], []
+        else:
+            # 将数据保存到 cache_*_list
+            self.cache_state_list.append(self.cache_state)
+            self.cache_action_list.append(self.cache_action)
+            self.cache_reward_list.append(self.cache_reward)
+            self.cache_next_state_list.append(self.cache_next_state)
+            self.cache_done_list.append(self.cache_done)
+
         if self.tot_update_count % self.update_target_net_period == 0:
             self.update_target_net()
-            self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
-            self.cache_list_sum_reward_4_pop_queue = []
-            self.has_fitted = True
+            # 标示网络是否已经被更新
+            self.has_update_target_net = True
+
+        # 清空 cache_*
+        self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
+            [], [], [], [], []
+        # 计算 epsilon
+        # 2019-8-21 用衰减的sin函数作为学习曲线
+        self.fit_callback.epsilon = self.epsilon = self.epsilon_maker.epsilon_next
+
+
+
+
+
 
         # 以平仓动作为标识，将持仓期间的收益进行反向传递
         # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
@@ -636,7 +670,7 @@ class Framework(object):
                                 np.sum(is_unavailable), actions, q_target[is_unavailable, actions])
             q_target[is_unavailable, actions] -= 1.
         # 将训练及进行复制叠加，加入缓存，整理缓存
-        self.cache_list_state.append(multiple_data(
+        self.cache_state_list.append(multiple_data(
             _state[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
         self.cache_list_flag.append(multiple_data(
             _flag[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
@@ -652,18 +686,18 @@ class Framework(object):
                 pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue[:self.epsilon_memory_size - 1]))
 
             self.cache_list_sum_reward_4_pop_queue.pop(pop_index)
-            self.cache_list_state.pop(pop_index)
+            self.cache_state_list.pop(pop_index)
             self.cache_list_flag.pop(pop_index)
             self.cache_list_q_target.pop(pop_index)
 
-        _state = np.concatenate(self.cache_list_state)
+        _state = np.concatenate(self.cache_state_list)
         _flag = np.concatenate(self.cache_list_flag)
         _q_target = np.concatenate(self.cache_list_q_target)
         inputs = {'state': _state, 'flag': _flag}
         # 训练并记录损失率，无效率等
         self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
         # 训练模型
-        if self.has_fitted:
+        if self.has_update_target_net:
             self.model_eval.fit(
                 inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
                 callbacks=[self.fit_callback],
@@ -676,22 +710,11 @@ class Framework(object):
                     self.fit_callback],
             )
 
-        # 计算 epsilon
-        # 2019-8-21 用衰减的sin函数作为学习曲线
-        self.fit_callback.epsilon = self.epsilon = self.epsilon_maker.epsilon_next
-        # 原来的 epsilon 计算函数
-        # if self.epsilon > self.epsilon_min:
-        #     self.epsilon *= self.epsilon_decay
-        #     self.fit_callback.epsilon = self.epsilon
-
-        self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
-            [], [], [], [], []
-
         return self.acc_loss_lists
 
     def valid_in_sample(self):
         """利用样本内数据对模型进行验证，返回 loss_dic, valid_rate（样本内数据预测结果有效率）"""
-        _state = np.concatenate(self.cache_list_state)
+        _state = np.concatenate(self.cache_state_list)
         _flag = np.concatenate(self.cache_list_flag)
         _q_target = np.concatenate(self.cache_list_q_target)
         inputs = {'state': _state, 'flag': _flag}
