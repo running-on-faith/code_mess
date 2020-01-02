@@ -88,7 +88,7 @@ class EpsilonMaker:
         return self.epsilon
 
 
-def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
+def build_model_8_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
@@ -122,13 +122,13 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     net = Dropout(0.3)(net)
     net = Dense((int(input_shape[-1] / 4) + flag_size) // 4)(net)
     net = Dropout(0.3)(net)
-    # net = Dense(self.action_size * 4, activation='relu')(net)
+    # net = Dense(self.action_count * 4, activation='relu')(net)
     if dueling:
-        net = Dense(action_size + 1, activation='relu')(net)
+        net = Dense(action_count + 1, activation='relu')(net)
         net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
-                     output_shape=(action_size,))(net)
+                     output_shape=(action_count,))(net)
     else:
-        net = Dense(action_size, activation='linear')(net)
+        net = Dense(action_count, activation='linear')(net)
 
     if is_classification:
         net = Activation('softmax')(net)
@@ -145,7 +145,7 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
         return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
-        if action_size == 2:
+        if action_count == 2:
             model.compile(Nadam(learning_rate), loss=_huber_loss,
                           metrics=[metrics.binary_accuracy]
                           )
@@ -161,7 +161,7 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     return model
 
 
-def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
+def build_model_5_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
@@ -192,11 +192,11 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     net = Dense(int((input_size / 2 + flag_size) / 4))(net)
     net = Dropout(0.4)(net)
     if dueling:
-        net = Dense(action_size + 1, activation='relu')(net)
+        net = Dense(action_count + 1, activation='relu')(net)
         net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
-                     output_shape=(action_size,))(net)
+                     output_shape=(action_count,))(net)
     else:
-        net = Dense(action_size, activation='linear')(net)
+        net = Dense(action_count, activation='linear')(net)
 
     if is_classification:
         net = Activation('softmax')(net)
@@ -213,7 +213,7 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
         return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
-        if action_size == 2:
+        if action_count == 2:
             model.compile(Nadam(learning_rate), loss=_huber_loss,
                           metrics=[metrics.binary_accuracy]
                           )
@@ -229,7 +229,7 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     return model
 
 
-def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
+def build_model_4_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
@@ -257,11 +257,11 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     net = Dense(int((input_size + flag_size) / 4))(net)
     net = Dropout(0.25)(net)
     if dueling:
-        net = Dense(action_size + 1, activation='relu')(net)
+        net = Dense(action_count + 1, activation='relu')(net)
         net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
-                     output_shape=(action_size,))(net)
+                     output_shape=(action_count,))(net)
     else:
-        net = Dense(action_size, activation='linear')(net)
+        net = Dense(action_count, activation='linear')(net)
 
     if is_classification:
         net = Activation('softmax')(net)
@@ -276,7 +276,7 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
         return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
-        if action_size == 2:
+        if action_count == 2:
             model.compile(Nadam(learning_rate), loss=_huber_loss,
                           metrics=[metrics.binary_accuracy]
                           )
@@ -292,7 +292,7 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     return model
 
 
-def build_model_3_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS,
+def build_model_3_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS,
                          learning_rate=0.001, dueling=True, is_classification=False):
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Input, concatenate, Lambda, Activation
@@ -318,11 +318,11 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
     input2 = Input(batch_shape=[None, flag_size], name=f'flag')
     net = concatenate([net, input2])
     if dueling:
-        net = Dense(action_size + 1, activation='relu')(net)
+        net = Dense(action_count + 1, activation='relu')(net)
         net = Lambda(lambda i: backend.expand_dims(i[:, 0], -1) + i[:, 1:] - backend.mean(i[:, 1:], keepdims=True),
-                     output_shape=(action_size,))(net)
+                     output_shape=(action_count,))(net)
     else:
-        net = Dense(action_size, activation='linear')(net)
+        net = Dense(action_count, activation='linear')(net)
 
     if is_classification:
         net = Activation('softmax')(net)
@@ -339,7 +339,7 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
         return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
     if is_classification:
-        if action_size == 2:
+        if action_count == 2:
             model.compile(Nadam(learning_rate), loss=_huber_loss,
                           metrics=[metrics.binary_accuracy]
                           )
@@ -356,7 +356,7 @@ def build_model_3_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
 
 
 class Framework(object):
-    def __init__(self, input_shape=[None, 60, 93], dueling=True, action_size=4, batch_size=512,
+    def __init__(self, input_shape=[None, 60, 93], dueling=True, action_count=2, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./tensorboard_log',
                  epochs=1, keep_epsilon_init_4_first_n=5, epsilon_decay=0.9990, sin_step=0.1,
                  epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
@@ -390,14 +390,14 @@ class Framework(object):
                     self.logs_list.append(logs)
 
         self.input_shape = [None if num == 0 else _ for num, _ in enumerate(input_shape)]
-        self.action_size = action_size
-        if action_size <= 1:
-            self.logger.error("action_size=%d, 必须大于1", action_size)
-            raise ValueError(f"action_size={action_size}, 必须大于1")
-        if action_size == 2:
+        self.action_count = action_count
+        if action_count <= 1:
+            self.logger.error("action_count=%d, 必须大于1", action_count)
+            raise ValueError(f"action_count={action_count}, 必须大于1")
+        if action_count == 2:
             self.actions = [1, 2]
         else:
-            self.actions = list(range(action_size))
+            self.actions = list(range(action_count))
         # actions_change_list 为action集合，形成的数组。
         # 对应每一个动作需要改变时，可以选择的动作集合。
         # 数组脚标为当前动作，对应的集合为可以选择的动作
@@ -405,7 +405,7 @@ class Framework(object):
         # 计数器，仅用于模型训练是记录使用
         self.last_action = None
         self.last_action_same_count = 0
-        self.action_count = 0
+        self.stochastic_count = 0
         self.model_predict_count = 0
         self.model_predict_unavailable_count = 0
         # 延续上一执行动作的概率
@@ -425,10 +425,14 @@ class Framework(object):
         self.fit_callback = LogFit()
         # cache for experience replay
         # cache for state, action, reward, next_state, done
+        # 清空 cache_*
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
-        self.cache_state_list, self.cache_action_list, self.cache_reward_list, self.cache_next_state_list, \
-            self.cache_done_list = [], [], [], [], []
+        # 清空 cache_*_list
+        self.cache_state_list, self.cache_action_list, self.cache_reward_list = [], [], []
+        self.cache_next_state_list, self.cache_done_list = [], []
+        # 供验证使用数据集
+        self.inputs_2_valid, self.rewards_target_4_valid = None, None
         self.logger = logging.getLogger(str(self.__class__))
         backend.clear_session()
         tf.reset_default_graph()
@@ -439,13 +443,15 @@ class Framework(object):
         self.epsilon_maker = EpsilonMaker(keep_epsilon_init_4_first_n, epsilon_decay, sin_step, epsilon_min,
                                           epsilon_sin_max=epsilon_sin_max)
         self.random_drop_cache_rate = random_drop_cache_rate
-        self.flag_size = 3
+        self.flag_count = 3
         self.reg_params = reg_params
         self.build_model_layer_count = build_model_layer_count
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
         # 标示网络是否已经被更新
         self.has_update_target_net = False
+        # 标示网络是否已经被训练
+        self.has_train_eval_net = False
         self.epochs = epochs
         self.tot_update_count = 0
         # 每间隔多少 episode 执行一次 model.fit（训练网络）
@@ -458,7 +464,7 @@ class Framework(object):
         # 计数器，仅用于模型训练是记录使用
         self.last_action = None
         self.last_action_same_count = 0
-        self.action_count = 0
+        self.stochastic_count = 0
         self.model_predict_count = 0
         self.model_predict_unavailable_count = 0
 
@@ -470,19 +476,19 @@ class Framework(object):
     def _build_model(self):
         if self.build_model_layer_count == 3:
             net = build_model_3_layers(
-                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
                 reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
         elif self.build_model_layer_count == 4:
             net = build_model_4_layers(
-                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
                 reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
         elif self.build_model_layer_count == 5:
             net = build_model_5_layers(
-                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
                 reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
         elif self.build_model_layer_count == 8:
             net = build_model_8_layers(
-                input_shape=self.input_shape, flag_size=self.flag_size, action_size=self.action_size,
+                input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
                 reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
         else:
             raise ValueError(f"build_model_layer_count={self.build_model_layer_count}")
@@ -492,17 +498,17 @@ class Framework(object):
         """用于是基于模型预测使用"""
         from keras.utils import to_categorical
         # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
-        # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
+        # action = inputs[1] + 1 if self.action_count == 2 else inputs[1]
         action = inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_target.predict(x={'state': np.array(inputs[0]),
-                                                  'flag': to_categorical(action, self.flag_size)})
+                                                  'flag': to_categorical(action, self.flag_count)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
         is_available = check_available(act_values)
         if is_available[0]:
-            # if self.action_size == 2:
+            # if self.action_count == 2:
             #     return np.argmax(act_values[0]) + 1  # returns action
             # else:
             #     return np.argmax(act_values[0])  # returns action
@@ -515,20 +521,20 @@ class Framework(object):
     def get_stochastic_policy(self, inputs):
         """用于模型训练使用，内涵一定几率随机动作"""
         from keras.utils import to_categorical
-        self.action_count += 1
+        self.stochastic_count += 1
         if self.has_update_target_net and np.random.rand() > self.epsilon:
             self.model_predict_count += 1
             # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
-            # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
+            # action = inputs[1] + 1 if self.action_count == 2 else inputs[1]
             action = inputs[1]
             act_values = self.model_target.predict(
-                x={'state': np.array(inputs[0]), 'flag': to_categorical(action, self.flag_size)})
+                x={'state': np.array(inputs[0]), 'flag': to_categorical(action, self.flag_count)})
             if np.any(np.isnan(act_values)):
                 self.model_predict_unavailable_count += 1
                 self.logger.error(
-                    "预测失效=%s。action_count=%4d, model_predict_count=%4d, "
+                    "预测失效=%s。stochastic_count=%4d, model_predict_count=%4d, "
                     "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
-                    act_values, self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
+                    act_values, self.stochastic_count, self.model_predict_count, self.model_predict_unavailable_count,
                     self.model_predict_unavailable_rate * 100
                 )
                 raise ZeroDivisionError("predict error act_values=%s" % act_values)
@@ -540,7 +546,7 @@ class Framework(object):
                 # self.logger.warning(
                 #     "当期状态预测结果无效，选择随机策略。action_count=%4d, model_predict_count=%4d, "
                 #     "model_predict_unavailable_count=%4d, 当期动作预测失败率=%6.2f%%",
-                #     self.action_count, self.model_predict_count, self.model_predict_unavailable_count,
+                #     self.get_action_count, self.model_predict_count, self.model_predict_unavailable_count,
                 #     self.model_predict_unavailable_rate * 100
                 # )
                 action = None
@@ -584,8 +590,8 @@ class Framework(object):
     # update experience replay pool
     def update_cache(self, state, action, reward, next_state, done):
         self.cache_state.append(state)
-        # 由于 self.action_size == 2 的情况下 action 只有 0,1 两种状态，而参数action 是 1,2 因此需要 - 1 操作
-        if self.action_size == 2:
+        # 由于 self.action_count == 2 的情况下 action 只有 0,1 两种状态，而参数action 是 1,2 因此需要 - 1 操作
+        if self.action_count == 2:
             self.cache_action.append(action - 1)
         else:
             self.cache_action.append(action)
@@ -602,14 +608,97 @@ class Framework(object):
         self.tot_update_count += 1
         if self.tot_update_count % self.train_net_period == 0 and len(self.cache_reward_list) > 0:
             # 开始训练网络
+            # 数据整理
             # 找出 cache_*_list 中最长的数据长度
+            # 计算 rewards 通过 calc_rewards_arr(...)
             data_len = np.max([len(_) for _ in self.cache_reward_list])
-            rewards_arr = np.full((data_len * self.flag_size, self.action_size), np.nan)
+            rewards_arr_list = []
+            states_selected = None
+            for states, actions, rewards, next_states, dones in zip(
+                    self.cache_state_list, self.cache_action_list, self.cache_reward_list,
+                    self.cache_next_state_list, self.cache_done_list):
+                # reward 矩阵，size=(data_len * self.flag_size, self.action_count)
+                # flag==0 时 rewards [0, data_len-1]， flag==1 时 rewards [data_len, data_len * 2 - 1], ...
+                flags = np.array([_[1] for num, _ in enumerate(states)])
+                # 将持仓期间的收益前向递减汇总
+                # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
+                # 以收益率向前叠加的奖励函数
+                rewards_arr = calc_rewards_arr(
+                    rewards, flags, actions, data_len,
+                    self.action_count, self.flag_count, self.cum_reward_back_step)
+                rewards_arr_list.append(rewards_arr)
+                # 选定一个 states， 要求长度等于 data_len
+                # 每一组模拟的 states 全部相同，但由于有些 episode 会提前结束
+                # 因此，这里之选则最大长度的 states
+                if states_selected is None and flags.shape[0] == data_len:
+                    states_selected = states
 
+            rewards_tot = np.nanmax(rewards_arr_list, 0)
+            is_rewards_mean_available = ~np.isnan(rewards_tot)
+            _state = np.concatenate([_[0] for _ in states_selected])
+            # model_target 进行 rewards 预测
+            # 对每一个 flag 分别进行预测
+            inputs_rewards_list = []
+            match_count, predict_count = 0, 0
+            for flag in range(self.flag_count):
+                # 判断行有效性，当前行只要有一个数据不是 nan，就是有效行
+                is_available = is_rewards_mean_available[(data_len * flag):(data_len * (flag + 1)), :]
+                is_available_row = np.any(is_available, 1)
+                if np.any(is_available_row):
+                    inputs = {
+                        'state': _state[is_available_row],
+                        'flag': to_categorical(np.full(data_len, flag), self.flag_count)[is_available_row]}
+                    rewards_target = self.model_target.predict(x=inputs)
+                    # 计算修正 rewards 前后 action 的变化程度，记录 model_target 预测准确率变化
+                    action_before = np.argmax(rewards_target, 1)
+                    # 以 rewards_target 为奖励进行训练
+                    rewards_target[is_available[is_available_row]] = \
+                        rewards_tot[(data_len * flag):(data_len * (flag + 1)), :][is_available]
+                    inputs_rewards_list.append((inputs, rewards_target))
+                    # 计算修正 rewards 前后 action 的变化程度，记录 model_target 预测准确率变化
+                    action_after = np.argmax(rewards_target, 1)
+                    match_count += np.sum(action_before == action_after)
+                    predict_count += rewards_target.shape[0]
 
+            # direction_match_rate 用来标识，初始预测值与在数值修正后的值对比，action 方向性变化率
+            direction_match_rate = match_count / predict_count
+            self.fit_callback.predict_direction_match_rate = direction_match_rate
+            # 训练并记录损失率，无效率等
+            self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
+            # 整理模型训练数据以及目标数据
+            min_data_len = self.min_data_len_4_multiple_date
+            _state = np.concatenate(
+                [inputs['state'][:-self.cum_reward_back_step]
+                 if min_data_len is not None and min_data_len > 0 else inputs['state'][:-self.cum_reward_back_step]
+                 for inputs, rewards_target in inputs_rewards_list])
+            _flag = np.concatenate(
+                [inputs['flag'][:-self.cum_reward_back_step]
+                 if min_data_len is not None and min_data_len > 0 else inputs['state'][:-self.cum_reward_back_step]
+                 for inputs, rewards_target in inputs_rewards_list])
+            _q_target = np.concatenate(
+                [rewards_target[:-self.cum_reward_back_step]
+                 if min_data_len is not None and min_data_len > 0 else rewards_target[:-self.cum_reward_back_step]
+                 for inputs, rewards_target in inputs_rewards_list])
+            inputs = {'state': _state, 'flag': _flag}
+            # 训练模型
+            if self.has_train_eval_net:
+                self.model_eval.fit(
+                    inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
+                    callbacks=[self.fit_callback]
+                )
+            else:
+                self.model_eval.fit(
+                    inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
+                    callbacks=[
+                        TensorBoard(log_dir=os.path.join(self.tensorboard_log_dir, str(self.tot_update_count))),
+                        self.fit_callback],
+                )
+            self.has_train_eval_net = True
+            # 预留一些供验证的数据
+            self.inputs_2_valid, self.rewards_target_4_valid = inputs_rewards_list[-1]
             # 清空 cache_*_list
-            self.cache_state_list, self.cache_action_list, self.cache_reward_list, self.cache_next_state_list, \
-                self.cache_done_list = [], [], [], [], []
+            self.cache_state_list, self.cache_action_list, self.cache_reward_list = [], [], []
+            self.cache_next_state_list, self.cache_done_list = [], []
         else:
             # 将数据保存到 cache_*_list
             self.cache_state_list.append(self.cache_state)
@@ -618,7 +707,7 @@ class Framework(object):
             self.cache_next_state_list.append(self.cache_next_state)
             self.cache_done_list.append(self.cache_done)
 
-        if self.tot_update_count % self.update_target_net_period == 0:
+        if self.tot_update_count % self.update_target_net_period == 0 and self.has_train_eval_net:
             self.update_target_net()
             # 标示网络是否已经被更新
             self.has_update_target_net = True
@@ -630,102 +719,22 @@ class Framework(object):
         # 2019-8-21 用衰减的sin函数作为学习曲线
         self.fit_callback.epsilon = self.epsilon = self.epsilon_maker.epsilon_next
 
-
-
-
-
-
-        # 以平仓动作为标识，将持仓期间的收益进行反向传递
-        # 目的是：每一个动作引发的后续reward也将影响当期记录的最终 reward_tot
-        # 以收益率向前叠加的奖励函数
-        reward_tot = calc_cum_reward_with_rr(self.cache_reward, self.cum_reward_back_step)
-        # 以未来N日calmar为奖励函数（目前发现优化有问题，暂时不清楚原有）
-        # reward_tot = calc_cum_reward_with_calmar(self.cache_reward, self.cum_reward_back_step)
-        # sum_reward = np.sum(reward_tot)  # 以后可以尝试用此方式优化
-        sum_reward = np.sum(self.cache_reward)
-        self.cache_list_sum_reward_4_pop_queue.append(sum_reward)
-        # 以 reward_tot 为奖励进行训练
-        _state = np.concatenate([_[0] for _ in self.cache_state])
-        _flag = to_categorical(np.array([_[1] for _ in self.cache_state]), self.flag_size)
-        inputs = {'state': _state, 'flag': _flag}
-        q_target = self.model_target.predict(x=inputs)
-        # 2019-12-24 修复bug “q_target[index, self.cache_action] = reward_tot” 计算结果错误
-        # 导致权重数值有误因此无法优化
-        # 现改为循环单列赋值方式
-        data_len, action_count = q_target.shape
-        action_before = np.argmax(q_target, 1)
-        actions = np.array(self.cache_action)
-        for action in range(action_count):
-            matches = actions == action
-            q_target[matches, action] = reward_tot[matches]
-        action_after = np.argmax(q_target, 1)
-        direction_match_rate = np.sum(action_before == action_after) / data_len
-        # direction_match_rate 用来标识，初始预测值与在数值修正后的值对比，action 方向性变化率
-        self.fit_callback.predict_direction_match_rate = direction_match_rate
-        # 对所有无效数据进行惩罚
-        is_unavailable = ~check_available(q_target)
-        if np.any(is_unavailable) > 0:
-            actions = [self.cache_action[_] for _, v in enumerate(is_unavailable) if v]
-            self.logger.warning("%d unavailable action: %s value: %s",
-                                np.sum(is_unavailable), actions, q_target[is_unavailable, actions])
-            q_target[is_unavailable, actions] -= 1.
-        # 将训练及进行复制叠加，加入缓存，整理缓存
-        self.cache_state_list.append(multiple_data(
-            _state[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
-        self.cache_list_flag.append(multiple_data(
-            _flag[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
-        self.cache_list_q_target.append(multiple_data(
-            q_target[:-self.cum_reward_back_step], self.min_data_len_4_multiple_date))
-        # 随机删除一组训练样本
-        if len(self.cache_list_sum_reward_4_pop_queue) > self.epsilon_memory_size:
-            if self.random_drop_cache_rate is not None and np.random.random() < self.random_drop_cache_rate:
-                # 随机 drop
-                pop_index = np.random.randint(0, self.epsilon_memory_size - 1)
-            else:
-                # drop 最差方案
-                pop_index = int(np.argmin(self.cache_list_sum_reward_4_pop_queue[:self.epsilon_memory_size - 1]))
-
-            self.cache_list_sum_reward_4_pop_queue.pop(pop_index)
-            self.cache_state_list.pop(pop_index)
-            self.cache_list_flag.pop(pop_index)
-            self.cache_list_q_target.pop(pop_index)
-
-        _state = np.concatenate(self.cache_state_list)
-        _flag = np.concatenate(self.cache_list_flag)
-        _q_target = np.concatenate(self.cache_list_q_target)
-        inputs = {'state': _state, 'flag': _flag}
-        # 训练并记录损失率，无效率等
-        self.fit_callback.model_predict_unavailable_rate = self.model_predict_unavailable_rate
-        # 训练模型
-        if self.has_update_target_net:
-            self.model_eval.fit(
-                inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
-                callbacks=[self.fit_callback],
-            )
-        else:
-            self.model_eval.fit(
-                inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs, verbose=0,
-                callbacks=[
-                    TensorBoard(log_dir=os.path.join(self.tensorboard_log_dir, str(self.tot_update_count))),
-                    self.fit_callback],
-            )
-
         return self.acc_loss_lists
 
     def valid_in_sample(self):
         """利用样本内数据对模型进行验证，返回 loss_dic, valid_rate（样本内数据预测结果有效率）"""
-        _state = np.concatenate(self.cache_state_list)
-        _flag = np.concatenate(self.cache_list_flag)
-        _q_target = np.concatenate(self.cache_list_q_target)
-        inputs = {'state': _state, 'flag': _flag}
-        losses = self.model_eval.evaluate(inputs, _q_target, verbose=0)
+        if self.inputs_2_valid is None:
+            self.logger.warning("没有可验证数据")
+            return {}, np.nan
+        losses = self.model_eval.evaluate(self.inputs_2_valid, self.rewards_target_4_valid, verbose=0)
         if len(self.model_eval.metrics_names) == 1:
             loss_dic = {self.model_eval.metrics_names[0]: losses}
         else:
             loss_dic = {name: losses[_] for _, name in enumerate(self.model_eval.metrics_names)}
-        _q_pred = self.model_eval.predict(inputs)
-        if self.action_size <= 1:
-            raise ValueError(f"action_size={self.action_size}, 必须大于1")
+        _q_pred = self.model_eval.predict(self.inputs_2_valid)
+        if self.action_count <= 1:
+            # 这个地发不太可能抛出这个错误
+            raise ValueError(f"参数设置错误 action_count={self.action_count}, 必须大于1")
         is_available = check_available(_q_pred)
         valid_rate = np.sum(is_available) / len(is_available)
 
@@ -769,6 +778,7 @@ def _test_calc_cum_reward_with_rr():
     """验证 calc_tot_reward 函数"""
     rewards = [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
     reward_tot = calc_cum_reward_with_rr(rewards, 3, mulitplier=1, log_value=False)
+    print(reward_tot.shape)
     print(reward_tot)
     target_reward = np.array([1.875, 1.875, 1.875, 1.75, 1.625, 1.375, 0.875, 1.75, 1.5, 1.125, 0.375, 0.875,
                               1.75, 1.5, 1.])
@@ -807,6 +817,7 @@ def _test_calc_cum_reward_with_calmar():
     """验证 calc_tot_reward 函数"""
     rewards = np.sin(np.linspace(1.5, 2 * np.pi, 30)) / 20 + 0.005
     reward_tot = calc_cum_reward_with_calmar(rewards, 20)
+    print(reward_tot.shape)
     print(reward_tot)
     target_reward = np.array([15.158013, -1.242776, -3.0063176, -3.0086293, -2.8377662, -2.6881402,
                               -2.5780575, -2.5043845, -2.4630232, -2.451551, -2.4515502, -2.4644947,
@@ -818,10 +829,10 @@ def _test_calc_cum_reward_with_calmar():
 
 def _test_show_model():
     from keras.utils import plot_model
-    action_size = 2
-    agent = Framework(input_shape=[None, 120, 93], action_size=action_size, dueling=True,
+    action_count = 2
+    agent = Framework(input_shape=[None, 120, 93], action_count=action_count, dueling=True,
                       batch_size=16384)
-    file_path = f'model action_size_{action_size}_layer_3.png'
+    file_path = f'model action_count_{action_count}_layer_3.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
     open_file_with_system_app(file_path)
@@ -878,11 +889,81 @@ def _test_multiple_data():
     assert np.all(new_data_list == new_data_list_target)
 
 
+def calc_rewards_arr(rewards, flags, actions, data_len, action_count, flag_count, cum_reward_back_step):
+    """
+    根据 rewards，flags, actions 计算 rewards_arr 各个位置的实际 reward 值.
+    reward 矩阵，size=(data_len * self.flag_size, self.action_count)
+    flag==0 时 rewards [0, data_len-1]， flag==1 时 rewards [data_len, data_len * 2 - 1], ...
+    """
+    rewards_arr = np.full((data_len * flag_count, action_count), np.nan)
+    reward_tot = calc_cum_reward_with_rr(rewards, cum_reward_back_step).reshape((len(rewards), 1))
+    index = np.array([data_len * _ + num for num, _ in enumerate(flags)])
+    actions = np.array(actions)
+    for action in range(action_count):
+        matches = actions == action
+        rewards_arr[index[matches], action] = reward_tot[matches]
+
+    # 长度补齐
+    if rewards_arr.shape[0] < data_len:
+        rewards_arr = np.concatenate(
+            [rewards_arr,
+             np.full((data_len - rewards_arr.shape[0], rewards_arr.shape[1]), np.nan)]
+        )
+
+    return rewards_arr
+
+
+def _test_calc_rewards_arr():
+    data_len, action_count, flag_count, cum_reward_back_step = 10, 2, 3, 5
+    rewards = np.linspace(1, 4, data_len)
+    np.random.seed(2)
+    flags = np.random.randint(flag_count, size=(data_len, 1))
+    actions = np.random.randint(action_count, size=(data_len, 1))
+    rewards_arr = calc_rewards_arr(rewards, flags, actions, data_len, action_count, flag_count, cum_reward_back_step)
+    assert rewards_arr.shape == (data_len * flag_count, action_count)
+    print(rewards_arr)
+    # [[11.32389927         nan]
+    #  [        nan         nan]
+    #  [11.92035294         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan 12.4791069 ]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [11.65273285         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [12.59050941         nan]
+    #  [12.46853924         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan 12.14601135]
+    #  [        nan 12.34110165]
+    #  [        nan         nan]
+    #  [12.57088375         nan]
+    #  [        nan         nan]
+    #  [        nan         nan]
+    #  [        nan 11.96614456]]
+    matches = np.full(rewards_arr.shape, True)
+    for num, flag in enumerate(flags):
+        matches[data_len * flag + num, actions[num]] = False
+    assert np.array_equal(np.isnan(rewards_arr), matches)
+
+
 if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
     # _test_show_model()
-    _test_calc_cum_reward_with_rr()
+    # _test_calc_cum_reward_with_rr()
     # _test_calc_cum_reward_with_calmar()
     # _test_epsilon_maker()
     # _test_multiple_data()
+    _test_calc_rewards_arr()

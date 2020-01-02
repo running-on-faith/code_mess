@@ -27,7 +27,7 @@ from drl.d3qnr20200101.agent.framework import calc_cum_reward_with_rr, \
 logger = logging.getLogger()
 
 
-def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_size=3, is_classification=False):
+def get_data(train_from, valid_from, valid_to, n_step=60, action_count=2, flag_size=3, is_classification=False):
     """获取测试数据"""
     import numpy as np
     from drl import DATA_FOLDER_PATH
@@ -55,7 +55,7 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
         # 是因为在模拟环境下，当天的reward实际上是以及发生了的 pct值，因此不能被记录为未来的 reward
         # drl训练情况下，需要使用默认值 include_curr_day=True 是因为训练是的 reward是真实的 reward
         is_fit = [_ in set(df_index) for _ in md_df.index]
-        size = (batch_factors.shape[0], action_size)
+        size = (batch_factors.shape[0], action_count)
         rewards = calc_cum_reward_with_rr(pct, step=10, include_curr_day=False)
         # rewards = calc_cum_reward_with_calmar(pct, win_size=10, threshold=5)
         y_data = np.zeros(size)
@@ -63,7 +63,7 @@ def get_data(train_from, valid_from, valid_to, n_step=60, action_size=2, flag_si
         y_data[:, 1] = -rewards[is_fit]
         y_data = np.concatenate([y_data, -y_data])
         if is_classification:
-            y_data = to_categorical(np.argmax(y_data, axis=1), action_size)
+            y_data = to_categorical(np.argmax(y_data, axis=1), action_count)
         _flag = to_categorical(np.concatenate([
             np.zeros((size[0], 1)),
             np.ones((size[0], 1)),
@@ -108,10 +108,10 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
                 # self.logger.debug('%s', logs)
                 self.epoch_log_dic[epoch] = logs
 
-    action_size = 2
+    action_count = 2
     flag_size = 3
     is_classification = True
-    train_x, train_y, valid_x, valid_y = get_data(train_from, valid_from, valid_to, n_step, action_size, flag_size,
+    train_x, train_y, valid_x, valid_y = get_data(train_from, valid_from, valid_to, n_step, action_count, flag_size,
                                                   is_classification=is_classification)
     layer_count = 5
     params = [None, 0.0001, 0.00001, 0.000001, 0.0000001]
@@ -125,7 +125,7 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
         # logger.debug("%d) %d 层网络 %s train_x.shape=%s", num, layer_count, reg_params, train_x['state'].shape)
         # framework = Framework(
         #     input_shape=train_x['state'].shape, reg_params=reg_params,
-        #     action_size=2, batch_size=512)
+        #     action_count=2, batch_size=512)
         # model = framework.model_eval
         if layer_count == 3:
             build_model_func = build_model_3_layers
@@ -142,7 +142,7 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
             flag_size=flag_size,
             learning_rate=0.001,
             reg_params=reg_params,
-            action_size=action_size,
+            action_count=action_count,
             is_classification=is_classification
         )
         # model.summary()
@@ -174,7 +174,7 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
 
         # 样本内测试模型是否有效
         predict_result = model.predict(train_x)
-        if np.all(predict_result == (1 / action_size)):
+        if np.all(predict_result == (1 / action_count)):
             logger.warning("2%d) %d 层网络 %s 本轮训练无效", num, layer_count, tag)
             tag_loss_dic[tag]['available_rate_train'] = 0
             tag_loss_dic[tag]['available_acc_rate_train'] = np.nan
@@ -228,8 +228,8 @@ def try_best_params(train_from='2017-01-01', valid_from='2019-01-01',
 
 def calc_acc(predict_y, target_y):
     import numpy as np
-    action_size = predict_y.shape[1]
-    available = ~np.all(predict_y == (1 / action_size), axis=1)
+    action_count = predict_y.shape[1]
+    available = ~np.all(predict_y == (1 / action_count), axis=1)
     available_rate = np.sum(available) / predict_y.shape[0]
     matches = (np.argmax(predict_y, axis=1) == np.argmax(target_y, axis=1))
     available_match = matches[available]

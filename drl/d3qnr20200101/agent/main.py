@@ -12,7 +12,7 @@ https://github.com/deepmind/sonnet
 dm-sonnet==1.19 对应 tensorflow==1.5.1
 
 2019-08-08
-action_size 4 -> 2 多空 only
+action_count 4 -> 2 多空 only
 2019-09-23
 文件开头使用 use_curp_only() 将回导致无法使用 多进程执行训练，建议将 use_curp_only() 移入训练类内部
 
@@ -96,7 +96,7 @@ def _test_agent(n_step=60):
 
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, batch_factors, fee_rate=0.001)
-    agent = Agent(input_shape=batch_factors.shape, action_size=3, dueling=True,
+    agent = Agent(input_shape=batch_factors.shape, action_count=3, dueling=True,
                   gamma=0.3, batch_size=256)
     # fill cache
     for episode in range(2):
@@ -113,18 +113,19 @@ def _test_agent(n_step=60):
     reward_df.to_csv('reward_df.csv')
 
 
-def get_agent(action_size=2, dueling=True, batch_size=256, epochs=1, epsilon_decay=0.995, epsilon_min=0.03,
+def get_agent(action_count=2, dueling=True, batch_size=256, epochs=1, epsilon_decay=0.995, epsilon_min=0.03,
               **kwargs):
     # np.log(0.03)/np.log(0.995) = 699.
     # np.log(0.05)/np.log(0.998) = 1496.
-    agent = Agent(action_size=action_size, dueling=dueling, batch_size=batch_size,
+    agent = Agent(action_count=action_count, dueling=dueling, batch_size=batch_size,
                   epsilon_min=epsilon_min, epochs=epochs, epsilon_decay=epsilon_decay, **kwargs)
     return agent
 
 
 def train(md_df, batch_factors, round_n=0, num_episodes=400, n_episode_pre_record=40,
-          env_kwargs={}, agent_kwargs={}):
-    import pandas as pd
+          env_kwargs=None, agent_kwargs=None):
+    env_kwargs = {} if env_kwargs is None else env_kwargs
+    agent_kwargs = {} if agent_kwargs is None else agent_kwargs
     from ibats_common.backend.rl.emulator.account import Account
     env = Account(md_df, data_factors=batch_factors, **env_kwargs)
     agent = get_agent(input_shape=batch_factors.shape, **agent_kwargs)
