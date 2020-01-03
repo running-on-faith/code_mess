@@ -358,7 +358,7 @@ def build_model_3_layers(input_shape, flag_size, action_count, reg_params=DEFAUL
 class Framework(object):
     def __init__(self, input_shape=[None, 60, 93], dueling=True, action_count=2, batch_size=512,
                  learning_rate=0.001, tensorboard_log_dir='./tensorboard_log',
-                 epochs=1, keep_epsilon_init_4_first_n=5, epsilon_decay=0.9990, sin_step=0.1,
+                 epochs=1, keep_epsilon_init_4_first_n=50, epsilon_decay=0.9990, sin_step=0.1,
                  epsilon_min=0.05, epsilon_sin_max=0.1, update_target_net_period=20,
                  cum_reward_back_step=10, epsilon_memory_size=20, target_avg_holding_days=5,
                  min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01, build_model_layer_count=4,
