@@ -25,7 +25,7 @@ from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLD
 def train_for_n_episodes(
         md_df, batch_factors, get_agent_func, round_n=0, num_episodes=400, n_episode_pre_record=40,
         model_name=None, root_folder_path=os.path.curdir, output_reward_csv=False, env_kwargs={}, agent_kwargs={},
-        valid_rate_threshold=0.6):
+        valid_rate_threshold=0.6, available_check_after_n_episode=1000):
     """
     训练DRL
     保存训练参数到 models_folder_path/f"{max_date_str}_{round_n}_{episode}.h5"
@@ -41,6 +41,7 @@ def train_for_n_episodes(
     :param env_kwargs:
     :param agent_kwargs:
     :param valid_rate_threshold: 样本内预测有效数据比例阈值
+    :param available_check_after_n_episode: N Episode 以后再开始进行模型有效性检查
     :return:
     """
     logger = logging.getLogger(__name__)
@@ -139,18 +140,19 @@ def train_for_n_episodes(
                 env.A.total_value / env.A.init_cash, agent.agent.epsilon * 100, env.buffer_action_count[-1])
             raise exp from exp
         # 一卖一买算换手一次，因此你 "* 2"
+        recent_n_days = 500
         avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2
-        ok_rate = np.sum(is_valid_rate_oks)/len(is_valid_rate_oks)
-        if episode >= 1000 and (avg_holding_days > 20 or ok_rate < 0.5):
+        ok_rate = np.sum(is_valid_rate_oks[-recent_n_days:])/len(is_valid_rate_oks[-recent_n_days:])
+        if episode >= available_check_after_n_episode and (avg_holding_days > 20 or ok_rate < 0.5):
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
                 "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
-                "action_count=%4d, （平均持仓%5.2f > 20天 或 平均有效预测比率 %5.2f%% < 50%%），退出本次训练",
+                "action_count=%4d, （平均持仓%5.2f > 20天 或 近%d个 episode 平均有效预测比率 %5.2f%% < 50%%），退出本次训练",
                 max_date_str, round_n, episode, num_episodes,
                 episode_step, env.A.max_step_count,
                 env.A.total_value / env.A.init_cash,
                 agent.agent.epsilon * 100, env.buffer_action_count[-1],
-                avg_holding_days, ok_rate * 100)
+                avg_holding_days, recent_n_days, ok_rate * 100)
             is_model_available = False
             break
 

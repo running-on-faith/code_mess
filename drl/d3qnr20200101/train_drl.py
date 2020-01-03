@@ -34,7 +34,8 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
             )
             num_episodes = 2000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
-                                model_name=MODEL_NAME, get_agent_func=get_agent, output_reward_csv=True)
+                                model_name=MODEL_NAME, get_agent_func=get_agent, output_reward_csv=True,
+                                available_check_after_n_episode=2000)
             yield round_n, env_kwargs, agent_kwargs, train_kwargs
             round_n += 1
 
