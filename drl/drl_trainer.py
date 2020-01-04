@@ -174,6 +174,8 @@ def train_for_n_episodes(
     reward_df = env.plot_data()
 
     # 输出图表
+    import matplotlib
+    matplotlib.use('Qt5Agg')
     import matplotlib.pyplot as plt
     from ibats_common.analysis.plot import plot_twin
     # 输出历史训练曲线
