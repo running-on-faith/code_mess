@@ -26,7 +26,7 @@
 在 d3qn_r_2019_10_11 基础上进行了部分bug修复，没有做逻辑改进（此前的模型可以实现优化，因此只在此基础上做bug修复）
 """
 import logging
-
+from typing import List
 import numpy as np
 
 
@@ -113,6 +113,8 @@ class Framework(object):
         # cache for state, action, reward, next_state, done
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
+        # 供验证使用数据集
+        self.inputs_2_valid, self.rewards_target_4_valid = None, None
         self.logger = logging.getLogger(str(self.__class__))
         K.clear_session()
         tf.reset_default_graph()
@@ -263,6 +265,8 @@ class Framework(object):
         for action in range(q_target.shape[1]):
             matches = actions == action
             q_target[matches, action] = reward_tot[matches]
+        # 预留一些供验证的数据
+        self.inputs_2_valid, self.rewards_target_4_valid = inputs, q_target
         # 将训练及进行复制叠加
         # 加入缓存，整理缓存
         self.cache_list_state.append(multiple_data(_state, self.min_data_len_4_multiple_date))
@@ -307,6 +311,35 @@ class Framework(object):
             [], [], [], [], []
 
         return self.acc_loss_lists
+
+    def valid_in_sample(self):
+        """利用样本内数据对模型进行验证，返回 loss_dic, valid_rate（样本内数据预测结果有效率）"""
+        if self.inputs_2_valid is None:
+            self.logger.warning("没有可验证数据")
+            return {}, np.nan
+        losses = self.model_eval.evaluate(self.inputs_2_valid, self.rewards_target_4_valid, verbose=0)
+        if len(self.model_eval.metrics_names) == 1:
+            loss_dic = {self.model_eval.metrics_names[0]: losses}
+        else:
+            loss_dic = {name: losses[_] for _, name in enumerate(self.model_eval.metrics_names)}
+        _q_pred = self.model_eval.predict(self.inputs_2_valid)
+        if self.action_size <= 1:
+            # 这个地发不太可能抛出这个错误
+            raise ValueError(f"参数设置错误 action_count={self.action_size}, 必须大于1")
+        is_available = check_available(_q_pred)
+        valid_rate = np.sum(is_available) / len(is_available)
+
+        return loss_dic, valid_rate
+
+
+def check_available(pred: np.ndarray) -> List[bool]:
+    is_available = None
+    for idx in range(1, pred.shape[1]):
+        if is_available is None:
+            is_available = pred[:, idx - 1] != pred[:, idx]
+        else:
+            is_available |= pred[:, idx - 1] != pred[:, idx]
+    return is_available
 
 
 def calc_cum_reward(reward, step):

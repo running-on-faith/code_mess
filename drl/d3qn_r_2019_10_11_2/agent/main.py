@@ -73,6 +73,13 @@ class Agent(object):
         # self.sess.close()
         pass
 
+    def reset_counter(self):
+        pass
+
+    def valid_model(self):
+        """利用样本内数据对模型进行验证，返回 loss_dic, valid_rate（样本内数据预测结果有效率）"""
+        return self.agent.valid_in_sample()
+
 
 def _test_agent(n_step=60):
     import pandas as pd
