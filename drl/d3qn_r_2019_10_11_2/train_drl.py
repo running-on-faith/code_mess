@@ -27,9 +27,10 @@ def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 6,
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
             agent_kwargs = dict(keep_last_action=math.pow(0.5, 1 / days), batch_size=512,
                                 epsilon_memory_size=10, random_drop_best_cache_rate=0.1)
-            num_episodes = 1000 + 200 * round_n_sub
+            num_episodes = 3000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=int(num_episodes / 6),
-                                model_name=MODEL_NAME, get_agent_func=get_agent)
+                                model_name=MODEL_NAME, get_agent_func=get_agent, output_reward_csv=False,
+                                available_check_after_n_episode=4000)
             yield round_n, env_kwargs, agent_kwargs, train_kwargs
             round_n += 1
 
@@ -58,7 +59,7 @@ if __name__ == '__main__':
         get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2), n_step=60,
         date_train_from='2015-09-30', offset='4M',
-        use_pool=False, max_process_count=12,
+        use_pool=True, max_process_count=4,
         date_period_count=1,  # None 如果需要训练全部日期
     )
     # _test_train_round_iter_func(round_n_per_target_day=2)
