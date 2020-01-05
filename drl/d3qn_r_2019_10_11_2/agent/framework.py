@@ -295,7 +295,7 @@ class Framework(object):
                                 )
         else:
             self.model_eval.fit(inputs, _q_target, batch_size=self.batch_size, epochs=self.epochs,
-                                verbose=0, callbacks=[TensorBoard(log_dir='./tensorboard_log'), self.fit_callback],
+                                verbose=0, callbacks=[TensorBoard(log_dir=self.tensorboard_log_dir), self.fit_callback],
                                 )
             self.has_logged = True
 
