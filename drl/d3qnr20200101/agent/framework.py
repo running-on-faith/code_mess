@@ -501,7 +501,7 @@ class Framework(object):
         # action = inputs[1] + 1 if self.action_count == 2 else inputs[1]
         action = inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
-        act_values = self.model_target.predict(x={'state': np.array(inputs[0]),
+        act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                   'flag': to_categorical(action, self.flag_count)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
@@ -527,7 +527,7 @@ class Framework(object):
             # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
             # action = inputs[1] + 1 if self.action_count == 2 else inputs[1]
             action = inputs[1]
-            act_values = self.model_target.predict(
+            act_values = self.model_eval.predict(
                 x={'state': np.array(inputs[0]), 'flag': to_categorical(action, self.flag_count)})
             if np.any(np.isnan(act_values)):
                 self.model_predict_unavailable_count += 1
