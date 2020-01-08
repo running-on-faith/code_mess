@@ -176,7 +176,7 @@ class Framework(object):
             return K.mean(tf.where(cond, squared_loss, quadratic_loss))
 
         model.compile(Nadam(self.learning_rate), loss=_huber_loss,
-                      metrics=[metrics.mae, metrics.mean_squared_error, metrics.categorical_accuracy]
+                      metrics=[metrics.mean_squared_error, metrics.categorical_accuracy]
                       )
         # model.summary()
         return model
@@ -429,7 +429,7 @@ def _test_multiple_data():
 
 if __name__ == '__main__':
     # _test_calc_tot_reward()
-    # _test_show_model()
+    _test_show_model()
     # _test_calc_cum_reward()
     # _test_epsilon_maker()
     _test_multiple_data()
