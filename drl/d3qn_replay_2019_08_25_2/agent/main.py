@@ -29,7 +29,7 @@ import numpy as np
 
 from .framework import Framework
 
-MODEL_NAME = 'd3qn_reply4_actoin2'
+MODEL_NAME = 'd3qn_reply4_actoin2_2'
 logger = logging.getLogger(__name__)
 
 

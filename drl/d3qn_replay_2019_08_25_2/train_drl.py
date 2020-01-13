@@ -12,6 +12,7 @@ import numpy as np
 from drl import DATA_FOLDER_PATH
 from drl.d3qn_replay_2019_08_25_2.agent.main import MODEL_NAME, get_agent
 from drl.drl_trainer import train_on_fix_interval_periods
+import math
 
 
 def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 5, 7]):
@@ -29,11 +30,12 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
             agent_kwargs = dict(
                 # target_avg_holding_days=days, random_drop_cache_rate=None, build_model_layer_count=4,
                 # , keep_epsilon_init_4_first_n = 50, epsilon_sin_max=0.1, train_net_period=10,
-                batch_size=128, epochs=5, learning_rate=0.0001,
+                batch_size=128, epochs=5, learning_rate=0.001,
                 epsilon_memory_size=10,
                 sin_step=np.pi/50, epsilon_decay=0.993, epsilon_min=0.01,
+                keep_last_action=math.pow(0.5, 1/days)
             )
-            num_episodes = 6000 + 200 * round_n_sub
+            num_episodes = 3000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
                                 model_name=MODEL_NAME, get_agent_func=get_agent, output_reward_csv=False,
                                 available_check_after_n_episode=5000)
@@ -63,9 +65,10 @@ def _test_train_on_each_period():
         md_loader_func=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         get_factor_func=get_factor_func,
-        train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=4), n_step=60,
+        train_round_kwargs_iter_func=functools.partial(
+            train_round_iter_func, round_n_per_target_day=4, target_avg_holding_days=[4, 6, 7, 8]), n_step=60,
         date_train_from='2017-01-01', offset='3M',
-        use_pool=False, max_process_count=4,
+        use_pool=True, max_process_count=4,
         date_period_count=1,  # None 如果需要训练全部日期
     )
 
