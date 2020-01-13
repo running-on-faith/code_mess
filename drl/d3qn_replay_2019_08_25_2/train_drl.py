@@ -10,7 +10,7 @@
 import logging
 import numpy as np
 from drl import DATA_FOLDER_PATH
-from .agent.main import MODEL_NAME, get_agent
+from drl.d3qn_replay_2019_08_25_2.agent.main import MODEL_NAME, get_agent
 from drl.drl_trainer import train_on_fix_interval_periods
 
 
@@ -27,10 +27,11 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
         for days in target_avg_holding_days:
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
             agent_kwargs = dict(
-                target_avg_holding_days=days, batch_size=128, epochs=5, learning_rate=0.0001,
-                epsilon_memory_size=10, random_drop_cache_rate=None,
-                sin_step=np.pi/50, epsilon_decay=0.993, epsilon_min=0.01, epsilon_sin_max=0.1,
-                build_model_layer_count=4, train_net_period=10, keep_epsilon_init_4_first_n=50,
+                # target_avg_holding_days=days, random_drop_cache_rate=None, build_model_layer_count=4,
+                # , keep_epsilon_init_4_first_n = 50, epsilon_sin_max=0.1, train_net_period=10,
+                batch_size=128, epochs=5, learning_rate=0.0001,
+                epsilon_memory_size=10,
+                sin_step=np.pi/50, epsilon_decay=0.993, epsilon_min=0.01,
             )
             num_episodes = 6000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
