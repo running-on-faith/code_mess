@@ -12,7 +12,7 @@ import functools
 import logging
 import multiprocessing
 import os
-
+from datetime import date
 import numpy as np
 import pandas as pd
 from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST
@@ -244,8 +244,9 @@ def train_between_dates(md_loader_func, get_factor_func, train_round_kwargs_iter
     else:
         range_from = None
 
+    today_str = date_2_str(date.today())
     range_to_str = date_2_str(range_to)
-    root_folder_path = os.path.abspath(os.path.join(os.path.curdir, 'output', range_to_str))
+    root_folder_path = os.path.abspath(os.path.join(os.path.curdir, f'output{today_str}', range_to_str))
     os.makedirs(os.path.join(root_folder_path, MODEL_SAVED_FOLDER), exist_ok=True)
     os.makedirs(os.path.join(root_folder_path, MODEL_ANALYSIS_IMAGES_FOLDER), exist_ok=True)
     os.makedirs(os.path.join(root_folder_path, MODEL_REWARDS_FOLDER), exist_ok=True)
