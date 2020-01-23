@@ -57,8 +57,8 @@ if __name__ == '__main__':
         md_loader_func=lambda range_to=None: load_data(
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         get_factor_func=get_factor_func,
-        train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2), n_step=60,
-        date_train_from='2015-09-30', offset='4M',
+        train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=4), n_step=60,
+        date_train_from='2017-01-01', offset='4M',
         use_pool=True, max_process_count=4,
         date_period_count=1,  # None 如果需要训练全部日期
     )
