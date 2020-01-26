@@ -88,8 +88,59 @@ class EpsilonMaker:
         return self.epsilon
 
 
+def build_model(input_shape, flag_size, action_count, learning_rate=0.001, dueling=True):
+    """
+    原有 drl/d3qnr20191127 模型中8层网络，提取出来成为单独函数
+    """
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    net = LSTM(input_shape[-1] * 2)(input)
+    net = Dense(input_shape[-1] // 2)(net)
+    net = Dropout(0.2)(net)
+    net = Dense(input_shape[-1] // 4)(net)  # 减少一层，降低网络复杂度
+    net = Dropout(0.2)(net)
+    # net = Dense(self.action_size * 4, activation='relu')(net)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    net = Dense((input_shape[-1] // 4 + flag_size) // 2, activation='linear')(net)
+    net = Dropout(0.4)(net)
+    if dueling:
+        net = Dense(action_count + 1, activation='linear')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_count,))(net)
+    else:
+        net = Dense(action_count, activation='linear')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    model.compile(Nadam(learning_rate), loss=_huber_loss,
+                  metrics=[metrics.mean_squared_error, metrics.categorical_accuracy]
+                  )
+    # model.summary()
+    return model
+
+
 def build_model_8_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
+    """
+    参见2020-01-26 星期日 研究记录
+    http://note.youdao.com/noteshare?id=76470cac8264de00d97c18066d3e0053
+    结果表面此网络无法实现有效的优化，放弃
+    """
     import tensorflow as tf
     from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
     from keras.models import Model
@@ -474,7 +525,11 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
-        if self.build_model_layer_count == 3:
+        if self.build_model_layer_count is None:
+            net = build_model(
+                input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
+                learning_rate=self.learning_rate, dueling=self.dueling)
+        elif self.build_model_layer_count == 3:
             net = build_model_3_layers(
                 input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
                 reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
@@ -958,6 +1013,40 @@ def _test_calc_rewards_arr():
     assert np.array_equal(np.isnan(rewards_arr), matches)
 
 
+def random_binary_generator(avg_times=5):
+    """
+
+    norm.ppf(0.6179)                                         # 知道q时求x, q=a
+    norm.cdf(0.3)                                            # 知道x时求q
+    """
+    from scipy.stats import norm
+    # 等比数列
+    # rate = 1 - 0.5 ** (1 / avg_times)
+    # while rate < np.random.rand():
+    #     yield False
+    # yield True
+
+    # 正态分布累计分布概率 cdf
+    cdf_range = (0.5 - 1 / avg_times, 0.5 + 1 / avg_times)
+    norm_probability_low, norm_probability_high = norm.ppf(cdf_range[0]), norm.ppf(cdf_range[1])
+    while not norm_probability_low < np.random.normal() < norm_probability_high:
+        yield False
+    yield True
+
+
+def _test_random_binary_generator(num=1000):
+    hit_list = np.zeros(num)
+    for _ in range(1000):
+        data = [_ for _ in random_binary_generator(5)]
+        hit_list[_] = len(data)
+    import collections
+    import matplotlib.pyplot as plt
+    dist = collections.Counter(hit_list)
+    print(dist)
+    plt.hist(hit_list, bins=len(hit_list), density=True)
+    plt.show()
+
+
 if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
@@ -966,4 +1055,5 @@ if __name__ == '__main__':
     # _test_calc_cum_reward_with_calmar()
     # _test_epsilon_maker()
     # _test_multiple_data()
-    _test_calc_rewards_arr()
+    # _test_calc_rewards_arr()
+    _test_random_binary_generator()
