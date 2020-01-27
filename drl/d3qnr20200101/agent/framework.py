@@ -557,7 +557,7 @@ class Framework(object):
         action = inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                  'flag': to_categorical(action, self.flag_count)})
+                                                'flag': to_categorical(action, self.flag_count)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
@@ -627,8 +627,12 @@ class Framework(object):
         return self.last_action
 
     def save_model_weights(self, file_path, ignore_if_unavailable_rate_over=0.4):
+        model_predict_unavailable_rate = self.model_predict_unavailable_rate
         if ignore_if_unavailable_rate_over is not None and \
-                ignore_if_unavailable_rate_over > self.model_predict_unavailable_rate:
+                model_predict_unavailable_rate > ignore_if_unavailable_rate_over:
+            self.logger.warning(
+                "当前模型参数不被保存，因为样本内测试预测有效数据比例 %.2f > %.2f",
+                model_predict_unavailable_rate, ignore_if_unavailable_rate_over)
             return None
         self.model_eval.save_weights(filepath=file_path)
         return file_path
