@@ -58,6 +58,7 @@ if __name__ == '__main__':
         get_factor_func=get_factor_func,
         train_round_kwargs_iter_func=functools.partial(train_round_iter_func, round_n_per_target_day=2), n_step=60,
         date_train_from='2015-09-30', offset='4M',
-        max_process_count=2
+        max_process_count=2,
+        date_period_count=1,  # None 如果需要训练全部日期
     )
     # _test_train_round_iter_func(round_n_per_target_day=2)
