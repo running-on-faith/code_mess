@@ -89,12 +89,12 @@ def train_for_n_episodes(
                         is_available = True
                         if avg_holding_days < 2:
                             is_available = False
-                            log_str2 = f"，平均持仓{avg_holding_days:5.2f} < 2"
+                            log_str2 = f" < 2天"
                         elif avg_holding_days > 20:
                             is_available = False
-                            log_str2 = f"，平均持仓{avg_holding_days:5.2f} > 20"
+                            log_str2 = f" > 20天"
                         else:
-                            log_str2 = ""
+                            log_str2 = f""
 
                         loss_dic, valid_rate = agent.valid_model()
                         is_valid_rate_ok = valid_rate > valid_rate_threshold
@@ -109,8 +109,9 @@ def train_for_n_episodes(
                         if is_available:
                             # 每 50 轮，进行一次样本内测试
                             model_path = os.path.join(models_folder_path, f"{max_date_str}_{round_n}_{episode}.h5")
-                            log_str2 = f", model save to path: {model_path}" + log_str2
-                            agent.save_model(path=model_path)
+                            model_path = agent.save_model(path=model_path)
+                            if model_path is not None:
+                                log_str2 = f", model save to path: {model_path}" + log_str2
 
                         # 输出 csv文件
                         if output_reward_csv:
@@ -124,7 +125,7 @@ def train_for_n_episodes(
                     if log_str1 != "" or log_str2 != "":
                         logger.debug(
                             "train until %s, round=%d, episode=%4d/%4d, %4d/%4d, 净值=%.4f, epsilon=%7.4f%%, "
-                            "action_count=%4d, 平均持仓%5.2f天%s%s",
+                            "action_count=%4d, 平均持仓%.2f天%s%s",
                             max_date_str, round_n, episode, num_episodes,
                             episode_step, env.A.max_step_count,
                             env.A.total_value / env.A.init_cash,
