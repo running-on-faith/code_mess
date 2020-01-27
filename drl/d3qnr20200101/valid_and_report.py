@@ -13,6 +13,7 @@
 #     use_cup_only()
 import functools
 import logging
+import os
 
 from ibats_common.backend.factor import get_factor
 from ibats_common.example import get_trade_date_series, get_delivery_date_series
@@ -40,7 +41,7 @@ get_factor_func = functools.partial(get_factor,
 
 def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=None, auto_open_file=True,
                                     auto_open_summary_file=True, enable_summary_rewards_2_docx=True,
-                                    max_valid_data_len=1000, read_csv=True):
+                                    max_valid_data_len=1000, read_csv=True, output_folder=None):
     """
     针对model目录进行验证，
     仅样本内验证
@@ -50,8 +51,8 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         md_loader_func=md_loader_func,
         get_factor_func=get_factor_func,
         model_name=MODEL_NAME,
-        get_agent_func=get_agent,
-        model_folder=f'/home/mg/github/code_mess/drl/d3qnr20200101/output/{in_sample_date_line}/model',
+        get_agent_func=functools.partial(get_agent, build_model_layer_count=None),
+        model_folder=os.path.join(output_folder, in_sample_date_line, 'models'),
         in_sample_date_line=in_sample_date_line,
         reward_2_csv=True,
         target_round_n_list=target_round_n_list,
@@ -78,13 +79,14 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
 
 def valid_whole_episodes_and_summary_report(read_csv=True, auto_open_file=False, auto_open_summary_file=False,
                                             in_sample_only=True, max_valid_data_len=1000,
-                                            enable_summary_rewards_2_docx=False):
+                                            enable_summary_rewards_2_docx=False, output_folder=None):
     """针对 output 目录，进行全面验证"""
-    from ibats_utils.mess import is_windows_os
-    if is_windows_os():
-        output_folder = r'D:\WSPych\code_mess\drl\drl_off_example\d3qnr20200101\output'
-    else:
-        output_folder = r'/home/mg/github/code_mess/drl/d3qnr20200101/output'
+    if output_folder is None:
+        from ibats_utils.mess import is_windows_os
+        if is_windows_os():
+            output_folder = r'D:\WSPych\code_mess\drl\drl_off_example\d3qnr20200101\output'
+        else:
+            output_folder = r'/home/mg/github/code_mess/drl/d3qnr20200101/output'
 
     validate_bunch_kwargs = dict(
         md_loader_func=md_loader_func,
@@ -115,7 +117,8 @@ if __name__ == "__main__":
     #     auto_open_summary_file=False,
     # )
     valid_models_and_summary_report(
-        in_sample_date_line='2018-09-28',
+        in_sample_date_line='2017-01-26',
         target_round_n_list=None,  # target_round_n_list=[1] None
         read_csv=True,
+        output_folder='/home/mg/github/code_mess/drl/d3qnr20200101/output2020-01-26'
     )
