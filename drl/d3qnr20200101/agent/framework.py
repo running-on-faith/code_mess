@@ -34,6 +34,8 @@ d3qnr20191127 方法中关于 rewards 永远存在某一列是predict预测值�
 改进方法：
 每一次完成 episode，将会保持对应的所有 action对应的rewards，N次episode 执行完毕后，将所有状态的各个action进行分别叠加
 同状态，同action的rewards取平均值，同一状态的不同action讲有可能均有实际值，因此更能够反应真是的rewards情况
+2019-01-27
+LSTM正则化导致优化事败，取消正则化，build_model_20200128，代替原有模型，降低网络层数
 """
 import logging
 import os

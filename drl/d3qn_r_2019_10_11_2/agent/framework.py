@@ -24,6 +24,8 @@
 方法：input output 安装 0.5**N 指数方式split，然后叠加，进行统一训练
 2019-12-31
 在 d3qn_r_2019_10_11 基础上进行了部分bug修复，没有做逻辑改进（此前的模型可以实现优化，因此只在此基础上做bug修复）
+2019-01-27
+build_model_20200128，代替原有模型，增加LSTM dropout
 """
 import logging
 from typing import List
