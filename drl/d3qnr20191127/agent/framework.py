@@ -980,15 +980,31 @@ def get_rv(avg_times=5, scale=None):
 
     # 展示 正态分布在每个点上的累计分布概率
     # avg_times, scale = 6, 2.5
-    # rand = norm(loc=avg_times - 1, scale=scale)
-    # range_cdf = [rand.cdf(_) if _ == 1 else rand.cdf(_) - rand.cdf(_ - 1) for _ in range(1, avg_times * 2)]
-    # range_cdf_dic = {num: f"{_ * 100:.2f}%" for num, _ in enumerate(range_cdf, start=1)}
-    # print(range_cdf_dic)
-    # 比较可知，avg_times<=6 时 scale = 2 比较合适，>6以后，scale=2.5比较合适
+    # def func(avg_times, scale):
+    #     from scipy.stats import norm
+    #     rand = norm(loc=avg_times - 1, scale=scale)
+    #     range_cdf = [rand.cdf(_) if _ == 1 else rand.cdf(_) - rand.cdf(_ - 1) for _ in range(1, avg_times * 2)]
+    #     range_cdf_dic = {num: f"{_ * 100:.2f}%" for num, _ in enumerate(range_cdf, start=1)}
+    #     print(range_cdf_dic)
+    # 比较可知:
+    # avg_times<=3 时 scale = 0.8 比较合适
+    # avg_times==4 时 scale = 1 比较合适
+    # avg_times==5 时 scale = 1.5 比较合适
+    # avg_times==6 时 scale = 2 比较合适
+    # avg_times>6以后，scale=2.5比较合适
 
     import numpy as np
     if scale is None:
-        scale = 2 if avg_times <= 6 else 2.5
+        if avg_times <= 3:
+            scale = 0.8
+        elif avg_times == 4:
+            scale = 1
+        elif avg_times == 5:
+            scale = 1.5
+        elif avg_times == 6:
+            scale = 2
+        else:  # avg_times > 6
+            scale = 2.5
     return np.random.normal(loc=avg_times, scale=scale)
 
 
