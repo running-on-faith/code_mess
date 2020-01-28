@@ -105,6 +105,50 @@ def build_model(input_shape, flag_size, action_count, learning_rate=0.001, dueli
     return model
 
 
+def build_model_20200128(input_shape, flag_size, action_count, learning_rate=0.001, dueling=True):
+    """
+    原有 drl/d3qnr20191127 模型中8层网络，提取出来成为单独函数
+    """
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    net = LSTM(input_shape[-1] * 2, dropout=0.3)(input)
+    net = Dense(input_shape[-1] // 3)(net)
+    net = Dropout(0.2)(net)
+    # net = Dense(self.action_size * 4, activation='relu')(net)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    net = Dense((input_shape[-1] // 4 + flag_size) // 2, activation='linear')(net)
+    net = Dropout(0.4)(net)
+    if dueling:
+        net = Dense(action_count + 1, activation='linear')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_count,))(net)
+    else:
+        net = Dense(action_count, activation='linear')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    model.compile(Nadam(learning_rate), loss=_huber_loss,
+                  metrics=[metrics.mean_squared_error, metrics.categorical_accuracy]
+                  )
+    # model.summary()
+    return model
+
+
 def build_model_8_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     """
@@ -266,7 +310,7 @@ class Framework(object):
         return self.fit_callback.logs_list
 
     def _build_model(self):
-        model = build_model(
+        model = build_model_20200128(
             input_shape=self.input_shape, flag_size=self.flag_size, action_count=self.action_size,
             learning_rate=self.learning_rate, dueling=self.dueling)
         # 2020-01-26 将model提取处单独函数
@@ -559,7 +603,7 @@ def _test_multiple_data():
 
 if __name__ == '__main__':
     # _test_calc_tot_reward()
-    # _test_show_model()
+    _test_show_model()
     # _test_calc_cum_reward()
-    _test_epsilon_maker()
+    # _test_epsilon_maker()
     # _test_multiple_data()
