@@ -134,6 +134,52 @@ def build_model(input_shape, flag_size, action_count, learning_rate=0.001, dueli
     return model
 
 
+def build_model_20200128(input_shape, flag_size, action_count, learning_rate=0.001, dueling=True):
+    """
+    原有 drl/d3qnr20191127 模型中8层网络，提取出来成为单独函数
+    """
+    import tensorflow as tf
+    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from keras.models import Model
+    from keras import metrics, backend as K
+    from keras.optimizers import Nadam
+    # Neural Net for Deep-Q learning Model
+    input = Input(batch_shape=input_shape, name=f'state')
+    net = LSTM(input_shape[-1] * 2, dropout=0.3)(input)
+    net = Dense(input_shape[-1] // 2)(net)
+    net = Dropout(0.2)(net)
+    net = Dense(input_shape[-1] // 4)(net)  # 减少一层，降低网络复杂度
+    net = Dropout(0.2)(net)
+    # net = Dense(self.action_size * 4, activation='relu')(net)
+    input2 = Input(batch_shape=[None, flag_size], name=f'flag')
+    net = concatenate([net, input2])
+    net = Dense((input_shape[-1] // 4 + flag_size) // 2, activation='linear')(net)
+    net = Dropout(0.4)(net)
+    if dueling:
+        net = Dense(action_count + 1, activation='linear')(net)
+        net = Lambda(lambda i: K.expand_dims(i[:, 0], -1) + i[:, 1:] - K.mean(i[:, 1:], keepdims=True),
+                     output_shape=(action_count,))(net)
+    else:
+        net = Dense(action_count, activation='linear')(net)
+
+    model = Model(inputs=[input, input2], outputs=net)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = K.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * K.square(error)
+        quadratic_loss = 0.5 * K.square(clip_delta) + clip_delta * (K.abs(error) - clip_delta)
+
+        return K.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    model.compile(Nadam(learning_rate), loss=_huber_loss,
+                  metrics=[metrics.mean_squared_error, metrics.categorical_accuracy]
+                  )
+    # model.summary()
+    return model
+
+
 def build_model_8_layers(input_shape, flag_size, action_count, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     """
@@ -542,9 +588,9 @@ class Framework(object):
                 input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
                 reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
         elif self.build_model_layer_count == 8:
-            net = build_model_8_layers(
+            net = build_model_20200128(
                 input_shape=self.input_shape, flag_size=self.flag_count, action_count=self.action_count,
-                reg_params=self.reg_params, learning_rate=self.learning_rate, dueling=self.dueling)
+                learning_rate=self.learning_rate, dueling=self.dueling)
         else:
             raise ValueError(f"build_model_layer_count={self.build_model_layer_count}")
         return net
@@ -889,9 +935,10 @@ def _test_calc_cum_reward_with_calmar():
 def _test_show_model():
     from keras.utils import plot_model
     action_count = 2
+    build_model_layer_count = 8
     agent = Framework(input_shape=[None, 120, 93], action_count=action_count, dueling=True,
-                      batch_size=16384)
-    file_path = f'model action_count_{action_count}_layer_3.png'
+                      batch_size=16384, build_model_layer_count=build_model_layer_count)
+    file_path = f'model action_count_{action_count}_layer_{build_model_layer_count}.png'
     plot_model(agent.model_eval, to_file=file_path, show_shapes=True)
     from ibats_utils.mess import open_file_with_system_app
     open_file_with_system_app(file_path)
@@ -1054,10 +1101,10 @@ def _test_random_binary_generator(num=1000):
 if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
-    # _test_show_model()
+    _test_show_model()
     # _test_calc_cum_reward_with_rr()
     # _test_calc_cum_reward_with_calmar()
     # _test_epsilon_maker()
     # _test_multiple_data()
     # _test_calc_rewards_arr()
-    _test_random_binary_generator()
+    # _test_random_binary_generator()
