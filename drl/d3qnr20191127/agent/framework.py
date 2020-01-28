@@ -30,10 +30,13 @@
 同时对正则化进行了参数化
 2019-01-27
 LSTM正则化导致优化事败，取消正则化，build_model_20200128，代替原有模型，降低网络层数
+2020-01-28
+产生平均持仓周期 == target_avg_holding_days 的随机动作，通过调用 get_rv 函数生成正太分布随机数
 """
 import logging
 import os
 from typing import List
+import functools
 
 import ffn
 import numpy as np
@@ -501,7 +504,8 @@ class Framework(object):
         # 因此 q = 0.5 ^ (1/n)
         # a = 1-0.5^(1/n)
         self.target_avg_holding_days = target_avg_holding_days
-        self.target_avg_holding_rate = 1 - 0.5 ** (1 / target_avg_holding_days)
+        self._get_rv = functools.partial(get_rv, target_avg_holding_days)
+        self.target_avg_holding_rate = self._get_rv()
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
         self.cache_list_state, self.cache_list_flag, self.cache_list_q_target = [], [], []
@@ -607,6 +611,7 @@ class Framework(object):
         from keras.utils import to_categorical
         self.action_count += 1
         if self.has_fitted and np.random.rand() > self.epsilon:
+            # 计算预测动作
             self.model_predict_count += 1
             # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
             # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
@@ -638,11 +643,12 @@ class Framework(object):
             action = None
 
         if action is None:
+            # 计算随机动作
             if self.last_action is None:
                 action = np.random.choice(self.actions)
             else:
                 # 随着连续相同动作的数量增加，持续同一动作的概率越来越小
-                if np.random.rand() < self.target_avg_holding_rate:
+                if self.target_avg_holding_rate < self.last_action_same_count:
                     action = np.random.choice(self.actions_change_list[self.last_action])
                 else:
                     action = self.last_action
@@ -652,6 +658,7 @@ class Framework(object):
         else:
             self.last_action = action
             self.last_action_same_count = 1
+            self.target_avg_holding_rate = self._get_rv()
 
         return self.last_action
 
@@ -950,6 +957,53 @@ def _test_multiple_data():
     assert np.all(new_data_list == new_data_list_target)
 
 
+def get_rv(avg_times=5, scale=None):
+    """
+    获取随机数
+    norm.cdf(x, mu, sigma)               # 返回N(mu,sigma^2)的概率密度函数在 负无穷 到 x 上的积分，也就是概率分布函数的值
+    norm.pdf(x, mu, sigma)               # 返回N(mu,sigma^2)的概率密度函数在 x 处的值
+    norm.ppf(alpha, mu, sigma)           # 返回值s满足：norm.cdf(s, mu, sigma^2) = alpha，s就是alpha分位数
+    """
+    # from scipy.stats import norm
+    # 等比数列
+    # rate = 1 - 0.5 ** (1 / avg_times)
+    # while rate < np.random.rand():
+    #     yield False
+    # yield True
+
+    # 正态分布累计分布概率 cdf
+    # cdf_range = (0.5 - 1 / avg_times, 0.5 + 1 / avg_times)
+    # norm_probability_low, norm_probability_high = norm.ppf(cdf_range[0]), norm.ppf(cdf_range[1])
+    # while not norm_probability_low < np.random.normal() < norm_probability_high:
+    #     yield False
+    # yield True
+
+    # 展示 正态分布在每个点上的累计分布概率
+    # avg_times, scale = 6, 2.5
+    # rand = norm(loc=avg_times - 1, scale=scale)
+    # range_cdf = [rand.cdf(_) if _ == 1 else rand.cdf(_) - rand.cdf(_ - 1) for _ in range(1, avg_times * 2)]
+    # range_cdf_dic = {num: f"{_ * 100:.2f}%" for num, _ in enumerate(range_cdf, start=1)}
+    # print(range_cdf_dic)
+    # 比较可知，avg_times<=6 时 scale = 2 比较合适，>6以后，scale=2.5比较合适
+
+    import numpy as np
+    if scale is None:
+        scale = 2 if avg_times <= 6 else 2.5
+    return np.random.normal(loc=avg_times, scale=scale)
+
+
+def _test_random_generator(num=1000, avg_times=5):
+    hit_list = np.zeros(num)
+    for _ in range(1000):
+        hit_list[_] = np.ceil(get_rv(avg_times))
+    import collections
+    import matplotlib.pyplot as plt
+    dist = collections.Counter(hit_list)
+    print(dist)
+    plt.hist(hit_list, bins=len(hit_list), density=True)
+    plt.show()
+
+
 if __name__ == '__main__':
     print('import', ffn)
     # _test_calc_tot_reward()
@@ -958,3 +1012,4 @@ if __name__ == '__main__':
     # _test_calc_cum_reward_with_calmar()
     # _test_epsilon_maker()
     # _test_multiple_data()
+    # _test_random_generator()

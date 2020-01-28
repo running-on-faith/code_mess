@@ -669,7 +669,6 @@ class Framework(object):
                 # 随着连续相同动作的数量增加，持续同一动作的概率越来越小
                 if self.target_avg_holding_rate < self.last_action_same_count:
                     action = np.random.choice(self.actions_change_list[self.last_action])
-                    self.target_avg_holding_rate = self._get_rv()
                 else:
                     action = self.last_action
 
@@ -678,6 +677,7 @@ class Framework(object):
         else:
             self.last_action = action
             self.last_action_same_count = 1
+            self.target_avg_holding_rate = self._get_rv()
 
         return self.last_action
 
