@@ -30,7 +30,7 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
                 target_avg_holding_days=days, batch_size=128, epochs=5, learning_rate=0.0001,
                 epsilon_memory_size=10, random_drop_cache_rate=None,
                 sin_step=np.pi/50, epsilon_decay=0.993, epsilon_min=0.01, epsilon_sin_max=0.1,
-                build_model_layer_count=None,
+                build_model_layer_count=7,
             )
             num_episodes = 2000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=num_episodes // 8,
