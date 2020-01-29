@@ -206,7 +206,7 @@ def valid_episode_list(episode_model_path_dic, read_csv=True, reward_2_csv=True,
 
 
 def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, in_sample_date_line,
-                   model_folder='model', read_csv=False,
+                   model_folder='models', read_csv=False,
                    reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60,
                    in_sample_valid=True, off_sample_valid=True,
                    ignore_if_exist=False, pool_worker_num=multiprocessing.cpu_count(),
@@ -233,6 +233,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     :return:
     """
     logger = logging.getLogger(__name__)
+    analysis_kwargs.setdefault('doc_file_path',
+                               os.path.abspath(os.path.join(model_folder, os.pardir, os.pardir, 'reports')))
     in_sample_date_line = pd.to_datetime(in_sample_date_line)
     in_sample_date_line_str = date_2_str(in_sample_date_line)
     # 加载模型列表[round_n][episode] = model_file_path
@@ -442,6 +444,7 @@ def auto_valid_and_report(output_folder, auto_open_file=False, auto_open_summary
     """
     logger = logging.getLogger(__name__)
     logger.debug("validate_bunch_kwargs keys: %s", validate_bunch_kwargs.keys())
+    validate_bunch_kwargs.setdefault('doc_file_path', os.path.join(output_folder, 'reports'))
     date_model_folder_dic = {}
     for file_name in os.listdir(output_folder):
         folder_path = os.path.join(output_folder, file_name)

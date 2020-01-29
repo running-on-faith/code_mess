@@ -549,7 +549,9 @@ def analysis_in_out_example_valid_env_result(
         model_param_dic['round_n'] = round_n
         model_param_dic['in_sample_date_line'] = in_sample_date_line
         summary_file_path = in_out_example_analysis_result_2_docx(
-            model_param_dic, analysis_result_dic, title_header, in_sample_date_line=in_sample_date_line)
+            model_param_dic, analysis_result_dic, title_header, in_sample_date_line=in_sample_date_line,
+            doc_file_path=kwargs.setdefault('doc_file_path', None)
+        )
         logger.debug('summary to docx [%d] %s', round_n, summary_file_path)
     else:
         summary_file_path = None
