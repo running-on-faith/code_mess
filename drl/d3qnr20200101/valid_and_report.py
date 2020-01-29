@@ -23,6 +23,7 @@ from ibats_utils.mess import open_file_with_system_app
 from drl import DATA_FOLDER_PATH
 from drl.d3qnr20200101.agent.main import MODEL_NAME, get_agent
 from drl.validator import validate_bunch, auto_valid_and_report, get_available_episode_model_path_dic
+from ibats_common.backend.rl.emulator.account import VERSION_V2
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         read_csv=read_csv,
         in_sample_valid=True,
         off_example_available_days=20,
+        account_version=VERSION_V2,
     )
     # 输出有效的模型
     df_dic_list = get_available_episode_model_path_dic(round_results_dic, in_sample_date_line)
@@ -98,7 +100,8 @@ def valid_whole_episodes_and_summary_report(read_csv=True, auto_open_file=False,
         read_csv=read_csv,
         max_valid_data_len=max_valid_data_len,
         enable_summary_rewards_2_docx=enable_summary_rewards_2_docx,
-        pool_worker_num=0
+        pool_worker_num=0,
+        account_version=VERSION_V2,
     )
     # valid_models_and_summary_report()
     auto_valid_and_report(
@@ -120,5 +123,5 @@ if __name__ == "__main__":
         in_sample_date_line='2017-01-26',
         target_round_n_list=None,  # target_round_n_list=[1] None
         read_csv=True,
-        output_folder='/home/mg/github/code_mess/drl/d3qnr20200101/output2020-01-26'
+        output_folder='/home/mg/github/code_mess/drl/d3qnr20200101/output2020-01-28'
     )
