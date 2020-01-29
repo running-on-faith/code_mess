@@ -26,10 +26,13 @@
 在 d3qn_r_2019_10_11 基础上进行了部分bug修复，没有做逻辑改进（此前的模型可以实现优化，因此只在此基础上做bug修复）
 2019-01-27
 build_model_20200128，代替原有模型，增加LSTM dropout
+2020-01-29
+升级 ibats_common==0.17.1，使用时需要在 env_kwargs 中声明 version=VERSION_V2
 """
 import logging
 from typing import List
 import numpy as np
+from ibats_common.backend.rl.emulator.market2 import ACTIONS, FLAGS
 
 DEFAULT_REG_PARAMS = [1e-7, 1e-7, None]
 
@@ -259,18 +262,10 @@ class Framework(object):
 
         self.input_shape = input_shape
         self.action_size = action_size
-        if action_size == 2:
-            self.actions = [1, 2]
-        else:
-            self.actions = list(range(action_size))
+        self.actions = ACTIONS[:action_size]
         self.last_action = None
         self.last_action_same_count = 0
         # 延续上一执行动作的概率
-        # keep_last_action=0.84     math.pow(0.5, 0.25) = 0.84089
-        # keep_last_action=0.87     math.pow(0.5, 0.20) = 0.87055
-        # keep_last_action=0.8816   math.pow(0.5, 0.1818) = 0.8816
-        # keep_last_action=0.9057   math.pow(0.5, 1/7) = 0.9057
-        # keep_last_action=0.9170   math.pow(0.5, 0.125) = 0.9170
         self.keep_last_action = keep_last_action
         self.cum_reward_back_step = cum_reward_back_step
         self.epsilon_memory_size = epsilon_memory_size
@@ -297,7 +292,7 @@ class Framework(object):
         self.epsilon_maker = EpsilonMaker(epsilon_decay, sin_step, epsilon_min,
                                           epsilon_sin_max=1 / (cum_reward_back_step * 2))
         self.random_drop_best_cache_rate = random_drop_best_cache_rate
-        self.flag_size = 3
+        self.flag_size = len(FLAGS)
         self.model_eval = self._build_model()
         self.model_target = self._build_model()
         self.has_logged = False
@@ -359,17 +354,13 @@ class Framework(object):
 
     def get_deterministic_policy(self, inputs):
         from keras.utils import to_categorical
-        action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                'flag': to_categorical(action, self.flag_size)})
+                                                'flag': to_categorical(inputs[1], self.flag_size)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
-        if self.action_size == 2:
-            return np.argmax(act_values[0]) + 1  # returns action
-        else:
-            return np.argmax(act_values[0])  # returns action
+        return self.actions[int(np.argmax(act_values[0]))]
 
     def get_stochastic_policy(self, inputs):
         from keras.utils import to_categorical
@@ -384,7 +375,7 @@ class Framework(object):
                     action = self.last_action
         else:
             act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
-                                                    'flag': to_categorical(inputs[1] + 1, self.flag_size)})
+                                                    'flag': to_categorical(inputs[1], self.flag_size)})
             if np.any(np.isnan(act_values)):
                 self.logger.error("predict error act_values=%s", act_values)
                 raise ZeroDivisionError("predict error act_values=%s" % act_values)
@@ -404,11 +395,7 @@ class Framework(object):
     # update experience replay pool
     def update_cache(self, state, action, reward, next_state, done):
         self.cache_state.append(state)
-        # 由于 self.action_size == 2 的情况下 action 只有 0,1 两种状态，而参数action 是 1,2 因此需要 - 1 操作
-        if self.action_size == 2:
-            self.cache_action.append(action - 1)
-        else:
-            self.cache_action.append(action)
+        self.cache_action.append(action)
         self.cache_reward.append(reward)
         self.cache_next_state.append(next_state)
         self.cache_done.append(done)
@@ -429,11 +416,10 @@ class Framework(object):
         self.cache_list_tot_reward.append(tot_reward)
         # 以 reward_tot 为奖励进行训练
         _state = np.concatenate([_[0] for _ in self.cache_state])
-        _flag = to_categorical(np.array([_[1] for _ in self.cache_state]) + 1, self.flag_size)
+        _flag = to_categorical(np.array([_[1] for _ in self.cache_state]), self.flag_size)
         inputs = {'state': _state,
                   'flag': _flag}
         q_target = self.model_target.predict(x=inputs)
-        index = np.arange(q_target.shape[0])
         # 2019-12-24 修复bug “q_target[index, self.cache_action] = reward_tot” 计算结果错误
         # 导致权重数值有误因此无法优化
         # 现改为循环单列赋值方式
@@ -478,11 +464,7 @@ class Framework(object):
         # 计算 epsilon
         # 2019-8-21 用衰减的sin函数作为学习曲线
         self.fit_callback.epsilon = self.epsilon = self.epsilon_maker.epsilon_next
-        # 原来的 epsilon 计算函数
-        # if self.epsilon > self.epsilon_min:
-        #     self.epsilon *= self.epsilon_decay
-        #     self.fit_callback.epsilon = self.epsilon
-
+        # 清空 cache_*
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
 

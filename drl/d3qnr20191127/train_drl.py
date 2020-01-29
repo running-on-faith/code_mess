@@ -12,6 +12,7 @@ import numpy as np
 from drl import DATA_FOLDER_PATH
 from drl.d3qnr20191127.agent.main import MODEL_NAME, get_agent
 from drl.drl_trainer import train_on_fix_interval_periods
+from ibats_common.backend.rl.emulator.account import VERSION_V2
 
 
 def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 5, 7]):
@@ -25,7 +26,7 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
     round_n = 1
     for round_n_sub in range(round_n_per_target_day):
         for days in target_avg_holding_days:
-            env_kwargs = dict(state_with_flag=True, fee_rate=0.001)
+            env_kwargs = dict(state_with_flag=True, fee_rate=0.001, version=VERSION_V2)
             agent_kwargs = dict(
                 target_avg_holding_days=days, batch_size=128, epochs=5, learning_rate=0.0001,
                 epsilon_memory_size=10, random_drop_cache_rate=None,

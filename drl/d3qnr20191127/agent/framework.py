@@ -32,6 +32,8 @@
 LSTM正则化导致优化事败，取消正则化，build_model_20200128，代替原有模型，降低网络层数
 2020-01-28
 产生平均持仓周期 == target_avg_holding_days 的随机动作，通过调用 get_rv 函数生成正太分布随机数
+2020-01-29
+升级 ibats_common==0.17.1，使用时需要在 env_kwargs 中声明 version=VERSION_V2
 """
 import logging
 import os
@@ -41,6 +43,7 @@ import functools
 import ffn
 import numpy as np
 import pandas as pd
+from ibats_common.backend.rl.emulator.market2 import ACTION_KEEP, ACTIONS, FLAGS
 
 DATE_BASELINE = pd.to_datetime('2018-01-01')
 DEFAULT_REG_PARAMS = [1e-7, 1e-7, None]
@@ -483,10 +486,7 @@ class Framework(object):
         if action_size <= 1:
             self.logger.error("action_size=%d, 必须大于1", action_size)
             raise ValueError(f"action_size={action_size}, 必须大于1")
-        if action_size == 2:
-            self.actions = [1, 2]
-        else:
-            self.actions = list(range(action_size))
+        self.actions = ACTIONS[:action_size]
         # actions_change_set 为action集合，形成的数组。
         # 对应每一个动作需要改变时，可以选择的动作集合。
         # 数组脚标为当前动作，对应的集合为可以选择的动作
@@ -498,11 +498,6 @@ class Framework(object):
         self.model_predict_count = 0
         self.model_predict_unavailable_count = 0
         # 延续上一执行动作的概率
-        # 根据等比数列求和公式 Sn = a * (1 - q^n) / (1 - q)
-        # 当 q = 1 - a 时，Sn = 1 - q^n
-        # 目标平均持仓天数 N 日时 50% 概率切换动作。因此 Sn = 0.5
-        # 因此 q = 0.5 ^ (1/n)
-        # a = 1-0.5^(1/n)
         self.target_avg_holding_days = target_avg_holding_days
         self._get_rv = functools.partial(get_rv, target_avg_holding_days)
         self.target_avg_holding_rate = self._get_rv()
@@ -529,7 +524,7 @@ class Framework(object):
         self.epsilon_maker = EpsilonMaker(keep_epsilon_init_4_first_n, epsilon_decay, sin_step, epsilon_min,
                                           epsilon_sin_max=epsilon_sin_max)
         self.random_drop_cache_rate = random_drop_cache_rate
-        self.flag_size = 3
+        self.flag_size = len(FLAGS)
         self.reg_params = reg_params
         self.build_model_layer_count = build_model_layer_count
         self.model_eval = self._build_model()
@@ -585,26 +580,17 @@ class Framework(object):
     def get_deterministic_policy(self, inputs):
         """用于是基于模型预测使用"""
         from keras.utils import to_categorical
-        # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
-        # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
-        action = inputs[1]
-        # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_target.predict(x={'state': np.array(inputs[0]),
-                                                  'flag': to_categorical(action, self.flag_size)})
+                                                  'flag': to_categorical(inputs[1], self.flag_size)})
         if np.any(np.isnan(act_values)):
             self.logger.error("predict error act_values=%s", act_values)
             raise ZeroDivisionError("predict error act_values=%s" % act_values)
         is_available = check_available(act_values)
         if is_available[0]:
-            # if self.action_size == 2:
-            #     return np.argmax(act_values[0]) + 1  # returns action
-            # else:
-            #     return np.argmax(act_values[0])  # returns action
             return self.actions[int(np.argmax(act_values[0]))]
         else:
             self.logger.warning("当期状态预测结果无效，选择保持持仓状态。")
-            from ibats_common.backend.rl.emulator.market import Action
-            return Action.keep
+            return ACTION_KEEP
 
     def get_stochastic_policy(self, inputs):
         """用于模型训练使用，内涵一定几率随机动作"""
@@ -613,11 +599,8 @@ class Framework(object):
         if self.has_fitted and np.random.rand() > self.epsilon:
             # 计算预测动作
             self.model_predict_count += 1
-            # 由于 self.actions[int(np.argmax(act_values[0]))] 以及对上一个动作的 action进行过转化因此不需要再 + 1 了
-            # action = inputs[1] + 1 if self.action_size == 2 else inputs[1]
-            action = inputs[1]
             act_values = self.model_target.predict(
-                x={'state': np.array(inputs[0]), 'flag': to_categorical(action, self.flag_size)})
+                x={'state': np.array(inputs[0]), 'flag': to_categorical(inputs[1], self.flag_size)})
             if np.any(np.isnan(act_values)):
                 self.model_predict_unavailable_count += 1
                 self.logger.error(
@@ -681,11 +664,7 @@ class Framework(object):
     # update experience replay pool
     def update_cache(self, state, action, reward, next_state, done):
         self.cache_state.append(state)
-        # 由于 self.action_size == 2 的情况下 action 只有 0,1 两种状态，而参数action 是 1,2 因此需要 - 1 操作
-        if self.action_size == 2:
-            self.cache_action.append(action - 1)
-        else:
-            self.cache_action.append(action)
+        self.cache_action.append(action)
         self.cache_reward.append(reward)
         self.cache_next_state.append(next_state)
         self.cache_done.append(done)
@@ -780,11 +759,7 @@ class Framework(object):
         # 计算 epsilon
         # 2019-8-21 用衰减的sin函数作为学习曲线
         self.fit_callback.epsilon = self.epsilon = self.epsilon_maker.epsilon_next
-        # 原来的 epsilon 计算函数
-        # if self.epsilon > self.epsilon_min:
-        #     self.epsilon *= self.epsilon_decay
-        #     self.fit_callback.epsilon = self.epsilon
-
+        # 清空 cache_*
         self.cache_state, self.cache_action, self.cache_reward, self.cache_next_state, self.cache_done = \
             [], [], [], [], []
 
