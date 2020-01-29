@@ -15,7 +15,7 @@ from collections import defaultdict, OrderedDict
 import pandas as pd
 from ibats_common.analysis.plot import plot_twin
 from ibats_common.backend.factor import transfer_2_batch, get_factor
-from ibats_common.backend.rl.emulator.account import Account
+from ibats_common.backend.rl.emulator.account import Account, VERSION_V1, VERSION_V2
 from ibats_common.example.data import load_data, OHLCAV_COL_NAME_LIST, get_trade_date_series, get_delivery_date_series
 from ibats_utils.mess import date_2_str, open_file_with_system_app, str_2_date
 
@@ -26,7 +26,7 @@ from drl import DATA_FOLDER_PATH, MODEL_SAVED_FOLDER, MODEL_ANALYSIS_IMAGES_FOLD
 
 def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_agent_func,
                                        tail_n=1, show_plot=True, model_path=f"{MODEL_SAVED_FOLDER}/weights_1.h5",
-                                       key=None, **_):
+                                       key=None, account_version=VERSION_V1, **_):
     """加载 model_path 模型，对batch_factors计算买卖决策，对 md_df 行情进行模拟，回测检验"""
     logger = logging.getLogger(__name__)
     if tail_n is not None and tail_n > 0:
@@ -37,7 +37,7 @@ def load_model_and_predict_through_all(md_df, batch_factors, model_name, get_age
 
     # logger.debug('加载模型执行预测，key=%s, batch_factors.shape=%s, model_name=%s，model_path=%s',
     #              key, batch_factors.shape, model_name, model_path)
-    env = Account(md_df, data_factors=states, state_with_flag=True)
+    env = Account(md_df, data_factors=states, state_with_flag=True, version=account_version)
     agent = get_agent_func(input_shape=states.shape)
     max_date = max(md_df.index)
     max_date_str = date_2_str(max_date)
@@ -210,7 +210,8 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                    reward_2_csv=False, target_round_n_list: (None, list) = None, n_step=60,
                    in_sample_valid=True, off_sample_valid=True,
                    ignore_if_exist=False, pool_worker_num=multiprocessing.cpu_count(),
-                   enable_summary_rewards_2_docx=True, max_valid_data_len=None, **analysis_kwargs):
+                   enable_summary_rewards_2_docx=True, max_valid_data_len=None, account_version=VERSION_V1,
+                   **analysis_kwargs):
     """
     分别验证 model 目录下 各个 round 的模型预测结果
     :param md_loader_func: 数据加载器
@@ -229,6 +230,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
     :param pool_worker_num: 0 代表顺序执行，默认 multiprocessing.cpu_count()
     :param enable_summary_rewards_2_docx: 调用 summary_rewards_2_docx 生成文档
     :param max_valid_data_len: 验证样本长度。从 in_sample_date_line 向前计算长度。默认为 None
+    :param account_version: 默认 v1 兼容老版本
     :param analysis_kwargs: reward 分析相关参数
     :return:
     """
@@ -297,6 +299,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                         md_df=md_df, batch_factors=batch_factors, model_name=model_name,
                         get_agent_func=get_agent_func, show_plot=False,
                         read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_in',
+                        account_version=account_version,
                     )
                     if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
                         logger.warning('round %d/%d) in_sample_date_line: %s 样本内测试起止日期： [%s - %s]，返回结果为空',
@@ -328,6 +331,7 @@ def validate_bunch(md_loader_func, get_factor_func, model_name, get_agent_func, 
                         md_df=md_df, batch_factors=batch_factors, model_name=model_name,
                         get_agent_func=get_agent_func, show_plot=False,
                         read_csv=read_csv, reward_2_csv=reward_2_csv, csv_file_name_key='_off',
+                        account_version=account_version,
                     )
                     if episode_reward_df_dic is None or len(episode_reward_df_dic) == 0:
                         logger.warning('round %d/%d) in_sample_date_line: %s 样本外测试起止日期： [%s - %s]，返回结果为空',
