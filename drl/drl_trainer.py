@@ -143,7 +143,9 @@ def train_for_n_episodes(
         # 一卖一买算换手一次，因此你 "* 2"
         recent_n_days = 500
         avg_holding_days = env.A.max_step_count / env.buffer_action_count[-1] * 2
-        ok_rate = np.sum(is_valid_rate_oks[-recent_n_days:])/len(is_valid_rate_oks[-recent_n_days:])
+        oks_of_recent_n = is_valid_rate_oks[-recent_n_days:]
+        len_of_oks = len(oks_of_recent_n)
+        ok_rate = np.sum(oks_of_recent_n)/len_of_oks if len_of_oks > 0 else 0
         if episode >= available_check_after_n_episode and (avg_holding_days > 20 or ok_rate < 0.5):
             # 平均持仓天数大于20，交易频度过低
             logger.warning(
