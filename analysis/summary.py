@@ -636,6 +636,16 @@ def in_out_example_analysis_result_2_docx(model_param_dic, analysis_result_dic, 
 
     # 保存文件
     if doc_file_path is not None:
+        # 如果文件目录不存在则创建目录
+        if not os.path.exists(doc_file_path):
+            _, extension = os.path.splitext(doc_file_path)
+            if extension == "":
+                os.makedirs(doc_file_path)
+            else:
+                folder_path, _ = os.path.split(doc_file_path)
+                if os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+        # 如果是目录路径，则 file_name == ''
         if os.path.isdir(doc_file_path):
             folder_path, file_name = doc_file_path, ''
         else:
