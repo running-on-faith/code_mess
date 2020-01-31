@@ -21,6 +21,7 @@ from ibats_utils.mess import open_file_with_system_app, date_2_str
 from analysis.summary import in_out_example_analysis_result_2_docx
 from drl import DATA_FOLDER_PATH
 
+DEFAULT_OFF_EXAMPLE_AVAILABLE_DAYS = 60
 logger = logging.getLogger(__name__)
 logger.debug('import %s', ffn)
 
@@ -358,7 +359,8 @@ def check_available_reward(episode, reward_df):
 def analysis_in_out_example_valid_env_result(
         in_out_example_valid_env_result_dic, model_param_dic, in_sample_date_line, episode_model_path_dic=None,
         enable_show_plot=False, enable_save_plot=True, enable_2_docx=True,
-        round_n=0, show_plot_141=False, risk_free=0.03, available_episode_num_filter=0, **kwargs):
+        round_n=0, show_plot_141=False, risk_free=0.03, available_episode_num_filter=0,
+        off_example_available_days=DEFAULT_OFF_EXAMPLE_AVAILABLE_DAYS, **kwargs):
     """对 样本内测试/样本外测试结果 及环境信息进行分析，并形成绩效分析报告"""
 
     # 整理参数
@@ -369,7 +371,6 @@ def analysis_in_out_example_valid_env_result(
     model_name = model_param_dic['model_name']
     title_header = f"{model_name}_{in_sample_date_line_str}_{round_n}"
     episode_reward_df_dic_key = 'episode_reward_df_dic'
-    off_example_available_days = kwargs.setdefault('off_example_available_days', 20)
     for in_off_key in ('in_example', 'off_example'):
         if in_off_key not in in_out_example_valid_env_result_dic or \
                 episode_reward_df_dic_key not in in_out_example_valid_env_result_dic[in_off_key]:
@@ -380,6 +381,14 @@ def analysis_in_out_example_valid_env_result(
             logger.warning("基准日期 %s round=%d %s episode_reward_df_dic is None or length is 0",
                            in_sample_date_line_str, round_n, in_off_key)
             continue
+        available_episode_reward_df_dic = {
+            _:
+                reward_df.iloc[:off_example_available_days] if
+                in_off_key == 'off_example'
+                and off_example_available_days is not None
+                and reward_df.shape[0] > off_example_available_days else
+                reward_df
+            for _, reward_df in episode_reward_df_dic.items()}
         md_df = in_out_example_valid_env_result_dic[in_off_key]['md_df']
         close_s = md_df['close']
         episode_list = [_ for _ in episode_reward_df_dic.keys() if episode_reward_df_dic[_].shape[0] > 0]
@@ -390,12 +399,9 @@ def analysis_in_out_example_valid_env_result(
         enable_kwargs = dict(enable_save_plot=enable_save_plot, enable_show_plot=enable_show_plot, figsize=(5.4, 5.0))
 
         # 筛选有效的模型保存到 available_episode_list，并将模型路经保存到 available_episode_model_path_dic
-        episode_nav_pair_list = [(
-            episode, reward_df['nav'].iloc[-1] if in_off_key == 'in_example' else
-            reward_df['nav'].iloc[-1 if reward_df.shape[0] < off_example_available_days else off_example_available_days]
-        )
-            for episode, reward_df in episode_reward_df_dic.items() if check_available_reward(episode, reward_df)
-        ]
+        episode_nav_pair_list = [(episode, reward_df['nav'].iloc[-1])
+                                 for episode, reward_df in available_episode_reward_df_dic.items()
+                                 if check_available_reward(episode, reward_df)]
         episode_nav_pair_list_len = len(episode_nav_pair_list)
         if episode_nav_pair_list_len == 0:
             logger.warning("基准日期 %s round=%d %s 共 %d 个 Episode，没有找到有效的模型",
@@ -488,8 +494,10 @@ def analysis_in_out_example_valid_env_result(
             # smaller_kwargs = enable_kwargs.copy()
             # smaller_kwargs['figsize'] = (4.8, 6.4)
             episode_nav_plot_path_dic, episode_reward_dic = {}, {}
-            for num, episode in enumerate(episode_list):
-                reward_df = episode_reward_df_dic[episode]
+            for episode, reward_df in available_episode_reward_df_dic.items():
+                if episode not in episode_list:
+                    continue
+                reward_df = reward_df[['nav', 'nav_fee0']]
                 nav_df = pd.DataFrame({f'{episode}_v': reward_df['nav'],
                                        f'{episode}_0': reward_df['nav_fee0']})
 
@@ -508,10 +516,15 @@ def analysis_in_out_example_valid_env_result(
         from ibats_utils.mess import split_chunk
         line_count = 4
         for episode_list_sub in split_chunk(episode_list, line_count):
-            nav_df = pd.DataFrame({f'{episode}_v': episode_reward_df_dic[episode]['nav']
-                                   for num, episode in enumerate(episode_list_sub)})
-            nav_fee0_df = pd.DataFrame({f'{episode}_0': episode_reward_df_dic[episode]['nav_fee0']
-                                        for num, episode in enumerate(episode_list_sub)})
+            episode_list_sub_set = set(episode_list_sub)
+            nav_df = pd.DataFrame({
+                f'{episode}_v': reward_df['nav']
+                for episode, reward_df in available_episode_reward_df_dic.items()
+                if episode in episode_list_sub_set})
+            nav_fee0_df = pd.DataFrame({
+                f'{episode}_0': reward_df['nav_fee0']
+                for episode, reward_df in available_episode_reward_df_dic.items()
+                if episode in episode_list_sub_set})
 
             # 例如：d3qn_in_sample_205-01-01_r0_2019-09-10
             title = f"{title_header}_{in_off_key}_nav_episode[{min(episode_list_sub)}-{max(episode_list_sub)}]"
@@ -521,13 +534,14 @@ def analysis_in_out_example_valid_env_result(
             analysis_result_dic_tmp.setdefault('nav_plot_file_path_list', []).append(file_path)
 
         analysis_result_dic_tmp['episode_reward_df'] = pd.DataFrame(
-            {episode: df.iloc[-1, :] for episode, df in episode_reward_df_dic.items()}
+            {episode: reward_df.iloc[-1, :]
+             for episode, reward_df in available_episode_reward_df_dic.items()}
         ).T.sort_index()
 
         # 绩效分析
         performance_dic, has_close = {}, False
         for num, episode in enumerate(episode_list):
-            reward_df = episode_reward_df_dic[episode][['nav', 'nav_fee0']]
+            reward_df = available_episode_reward_df_dic[episode][['nav', 'nav_fee0']]
             reward_df.rename(columns={'nav': f'{episode}_nav', 'nav_fee0': f'{episode}_nav_fee0'}, inplace=True)
             if not has_close:
                 reward_df = pd.merge(close_s.loc[reward_df.index], reward_df, left_index=True, right_index=True)
