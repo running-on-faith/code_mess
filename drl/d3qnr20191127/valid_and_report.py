@@ -13,6 +13,7 @@
 #     use_cup_only()
 import functools
 import logging
+import os
 
 from ibats_common.backend.factor import get_factor
 from ibats_common.example import get_trade_date_series, get_delivery_date_series
@@ -39,7 +40,7 @@ get_factor_func = functools.partial(get_factor,
                                     trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
 
 
-def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=None, auto_open_file=True,
+def valid_models_and_summary_report(output_folder, in_sample_date_line, target_round_n_list=None, auto_open_file=True,
                                     auto_open_summary_file=True, enable_summary_rewards_2_docx=True,
                                     max_valid_data_len=1000, read_csv=True):
     """
@@ -52,7 +53,7 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         get_factor_func=get_factor_func,
         model_name=MODEL_NAME,
         get_agent_func=get_agent,
-        model_folder=f'/home/mg/github/code_mess/drl/d3qnr20191127/output/{in_sample_date_line}/model',
+        model_folder=os.path.join(output_folder, in_sample_date_line, 'models'),
         in_sample_date_line=in_sample_date_line,
         reward_2_csv=True,
         target_round_n_list=target_round_n_list,
@@ -118,6 +119,7 @@ if __name__ == "__main__":
     #     auto_open_summary_file=False,
     # )
     valid_models_and_summary_report(
+        output_folder='/home/mg/github/code_mess/drl/d3qnr20191127/output2020-01-28',
         in_sample_date_line='2018-09-28',
         target_round_n_list=None,  # target_round_n_list=[1] None
         read_csv=True,

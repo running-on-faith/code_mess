@@ -39,9 +39,9 @@ get_factor_func = functools.partial(get_factor,
                                     trade_date_series=trade_date_series, delivery_date_series=delivery_date_series)
 
 
-def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=None, auto_open_file=True,
+def valid_models_and_summary_report(output_folder, in_sample_date_line, target_round_n_list=None, auto_open_file=True,
                                     auto_open_summary_file=True, enable_summary_rewards_2_docx=True,
-                                    max_valid_data_len=1000, read_csv=True, output_folder=None):
+                                    max_valid_data_len=1000, read_csv=True, ):
     """
     针对model目录进行验证，
     仅样本内验证
@@ -61,7 +61,7 @@ def valid_models_and_summary_report(in_sample_date_line, target_round_n_list=Non
         max_valid_data_len=max_valid_data_len,
         read_csv=read_csv,
         in_sample_valid=True,
-        off_example_available_days=20,
+        off_example_available_days=60,
         account_version=VERSION_V2,
     )
     # 输出有效的模型
@@ -118,8 +118,8 @@ if __name__ == "__main__":
     #     auto_open_summary_file=False,
     # )
     valid_models_and_summary_report(
+        output_folder='/home/mg/github/code_mess/drl/d3qn_r_2019_10_11_2/output2020-01-28',
         in_sample_date_line='2017-01-26',
         target_round_n_list=None,  # target_round_n_list=[1] None
         read_csv=True,
-        output_folder='/home/mg/github/code_mess/drl/d3qn_r_2019_10_11_2/output2020-01-26'
     )
