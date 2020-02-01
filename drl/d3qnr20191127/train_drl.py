@@ -28,7 +28,7 @@ def train_round_iter_func(round_n_per_target_day=2, target_avg_holding_days=[3, 
         for days in target_avg_holding_days:
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001, version=VERSION_V2)
             agent_kwargs = dict(
-                target_avg_holding_days=days, batch_size=128, epochs=5, learning_rate=0.0001,
+                target_avg_holding_days=days, batch_size=128, epochs=5, learning_rate=0.01,
                 epsilon_memory_size=10, random_drop_cache_rate=None,
                 sin_step=np.pi/50, epsilon_decay=0.993, epsilon_min=0.01, epsilon_sin_max=0.1,
                 build_model_layer_count=7,

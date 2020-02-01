@@ -26,7 +26,7 @@ def train_round_iter_func(round_n_per_target_day, target_avg_holding_days=[4, 6,
     for round_n_sub in range(round_n_per_target_day):
         for days in target_avg_holding_days:
             env_kwargs = dict(state_with_flag=True, fee_rate=0.001, version=VERSION_V2)
-            agent_kwargs = dict(keep_last_action=math.pow(0.5, 1 / days), batch_size=512,
+            agent_kwargs = dict(keep_last_action=math.pow(0.5, 1 / days), batch_size=512, learning_rate=0.01,
                                 epsilon_memory_size=10, random_drop_best_cache_rate=0.1)
             num_episodes = 2000 + 200 * round_n_sub
             train_kwargs = dict(round_n=round_n, num_episodes=num_episodes, n_episode_pre_record=int(num_episodes / 6),
