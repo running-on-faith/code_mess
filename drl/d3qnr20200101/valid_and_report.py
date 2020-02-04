@@ -120,7 +120,7 @@ if __name__ == "__main__":
     #     auto_open_summary_file=False,
     # )
     valid_models_and_summary_report(
-        output_folder='/home/mg/github/code_mess/drl/d3qnr20200101/output2020-01-28',
+        output_folder='/home/mg/github/code_mess/drl/d3qnr20200101/output2020-02-01',
         in_sample_date_line='2017-01-26',
         target_round_n_list=None,  # target_round_n_list=[1] None
         read_csv=True,
