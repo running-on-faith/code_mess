@@ -95,10 +95,10 @@ def build_model(input_shape, flag_size, action_count, learning_rate=0.001, dueli
     原有 drl/d3qnr20191127 模型中8层网络，提取出来成为单独函数
     """
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-    from keras.models import Model
-    from keras import metrics, backend as K
-    from keras.optimizers import Nadam
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend as K
+    from tensorflow.keras.optimizers import Nadam
     # Neural Net for Deep-Q learning Model
     input = Input(batch_shape=input_shape, name=f'state')
     net = LSTM(input_shape[-1] * 2)(input)
@@ -141,10 +141,10 @@ def build_model_20200128(input_shape, flag_size, action_count, learning_rate=0.0
     原有 drl/d3qnr20191127 模型中8层网络，提取出来成为单独函数
     """
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-    from keras.models import Model
-    from keras import metrics, backend as K
-    from keras.optimizers import Nadam
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend as K
+    from tensorflow.keras.optimizers import Nadam
     # Neural Net for Deep-Q learning Model
     input = Input(batch_shape=input_shape, name=f'state')
     net = LSTM(input_shape[-1] * 2, dropout=0.3)(input)
@@ -183,11 +183,11 @@ def build_model_20200128(input_shape, flag_size, action_count, learning_rate=0.0
 def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
-    from keras.models import Model
-    from keras import metrics, backend
-    from keras.optimizers import Nadam
-    from keras.regularizers import l2, l1_l2
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend
+    from tensorflow.keras.optimizers import Nadam
+    from tensorflow.keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
     input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
@@ -256,11 +256,11 @@ def build_model_8_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
 def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
-    from keras.models import Model
-    from keras import metrics, backend
-    from keras.optimizers import Nadam
-    from keras.regularizers import l2, l1_l2
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend
+    from tensorflow.keras.optimizers import Nadam
+    from tensorflow.keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
     input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
@@ -324,11 +324,11 @@ def build_model_5_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
 def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS, learning_rate=0.001,
                          dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
-    from keras.models import Model
-    from keras import metrics, backend
-    from keras.optimizers import Nadam
-    from keras.regularizers import l2, l1_l2
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend
+    from tensorflow.keras.optimizers import Nadam
+    from tensorflow.keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
     input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
@@ -387,11 +387,11 @@ def build_model_4_layers(input_shape, flag_size, action_size, reg_params=DEFAULT
 def build_model_3_layers(input_shape, flag_size, action_size, reg_params=DEFAULT_REG_PARAMS,
                          learning_rate=0.001, dueling=True, is_classification=False):
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Input, concatenate, Lambda, Activation
-    from keras.models import Model
-    from keras import metrics, backend
-    from keras.optimizers import Nadam
-    from keras.regularizers import l2, l1_l2
+    from tensorflow.keras.layers import Dense, LSTM, Input, concatenate, Lambda, Activation
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend
+    from tensorflow.keras.optimizers import Nadam
+    from tensorflow.keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
     input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
@@ -456,8 +456,8 @@ class Framework(object):
                  min_data_len_4_multiple_date=30, random_drop_cache_rate=0.01, build_model_layer_count=4,
                  reg_params=[1e-7, 1e-7, 1e-3]):
         import tensorflow as tf
-        from keras import backend
-        from keras.callbacks import Callback
+        from tensorflow.keras import backend
+        from tensorflow.keras.callbacks import Callback
 
         class LogFit(Callback):
 
@@ -516,7 +516,7 @@ class Framework(object):
             [], [], [], [], []
         self.logger = logging.getLogger(str(self.__class__))
         backend.clear_session()
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
         # self.epsilon_min = epsilon_min
@@ -579,7 +579,7 @@ class Framework(object):
 
     def get_deterministic_policy(self, inputs):
         """用于是基于模型预测使用"""
-        from keras.utils import to_categorical
+        from tensorflow.keras.utils import to_categorical
         act_values = self.model_target.predict(x={'state': np.array(inputs[0]),
                                                   'flag': to_categorical(inputs[1], self.flag_size)})
         if np.any(np.isnan(act_values)):
@@ -594,7 +594,7 @@ class Framework(object):
 
     def get_stochastic_policy(self, inputs):
         """用于模型训练使用，内涵一定几率随机动作"""
-        from keras.utils import to_categorical
+        from tensorflow.keras.utils import to_categorical
         self.action_count += 1
         if self.has_fitted and np.random.rand() > self.epsilon:
             # 计算预测动作
@@ -646,8 +646,12 @@ class Framework(object):
         return self.last_action
 
     def save_model_weights(self, file_path, ignore_if_unavailable_rate_over=0.4):
+        model_predict_unavailable_rate = self.model_predict_unavailable_rate
         if ignore_if_unavailable_rate_over is not None and \
-                ignore_if_unavailable_rate_over > self.model_predict_unavailable_rate:
+                model_predict_unavailable_rate > ignore_if_unavailable_rate_over:
+            self.logger.warning(
+                "当前模型参数不被保存，因为样本内测试预测有效数据比例 %.2f > %.2f",
+                model_predict_unavailable_rate, ignore_if_unavailable_rate_over)
             return None
         self.model_eval.save_weights(filepath=file_path)
         return file_path
@@ -671,8 +675,8 @@ class Framework(object):
 
     # train, update value network params
     def update_value_net(self):
-        from keras.utils import to_categorical
-        from keras.callbacks import TensorBoard
+        from tensorflow.keras.utils import to_categorical
+        from tensorflow.keras.callbacks import TensorBoard
 
         self.tot_update_count += 1
         if self.tot_update_count % self.update_target_net_period == 0:
@@ -870,7 +874,7 @@ def _test_calc_cum_reward_with_calmar():
 
 
 def _test_show_model():
-    from keras.utils import plot_model
+    from tensorflow.keras.utils import plot_model
     action_size = 2
     build_model_layer_count = 7
     agent = Framework(input_shape=[None, 120, 93], action_size=action_size, dueling=True,
