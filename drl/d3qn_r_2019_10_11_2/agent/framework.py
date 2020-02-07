@@ -69,10 +69,10 @@ def build_model(input_shape, flag_size, action_count, learning_rate=0.001, dueli
     原有8层网络，提取出来成为单独函数
     """
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-    from keras.models import Model
-    from keras import metrics, backend as K
-    from keras.optimizers import Nadam
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend as K
+    from tensorflow.keras.optimizers import Nadam
     # Neural Net for Deep-Q learning Model
     input = Input(batch_shape=input_shape, name=f'state')
     net = LSTM(input_shape[-1] * 2)(input)
@@ -115,10 +115,10 @@ def build_model_20200128(input_shape, flag_size, action_count, learning_rate=0.0
     原有 drl/d3qnr20191127 模型中8层网络，提取出来成为单独函数
     """
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-    from keras.models import Model
-    from keras import metrics, backend as K
-    from keras.optimizers import Nadam
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend as K
+    from tensorflow.keras.optimizers import Nadam
     # Neural Net for Deep-Q learning Model
     input = Input(batch_shape=input_shape, name=f'state')
     net = LSTM(input_shape[-1] * 2, dropout=0.3)(input)
@@ -162,11 +162,11 @@ def build_model_8_layers(input_shape, flag_size, action_count, reg_params=DEFAUL
     结果表面此网络无法实现有效的优化，放弃
     """
     import tensorflow as tf
-    from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
-    from keras.models import Model
-    from keras import metrics, backend
-    from keras.optimizers import Nadam
-    from keras.regularizers import l2, l1_l2
+    from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda, Activation
+    from tensorflow.keras.models import Model
+    from tensorflow.keras import metrics, backend
+    from tensorflow.keras.optimizers import Nadam
+    from tensorflow.keras.regularizers import l2, l1_l2
     # Neural Net for Deep-Q learning Model
     input_net = Input(batch_shape=input_shape, name=f'state')
     # 2019-11-27 增加对 LSTM 层的正则化
@@ -239,8 +239,8 @@ class Framework(object):
                  cum_reward_back_step=5, epsilon_memory_size=20, keep_last_action=0.9057,
                  min_data_len_4_multiple_date=30, random_drop_best_cache_rate=0.01):
         import tensorflow as tf
-        from keras import backend as K
-        from keras.callbacks import Callback
+        from tensorflow.keras import backend as K
+        from tensorflow.keras.callbacks import Callback
 
         class LogFit(Callback):
 
@@ -284,7 +284,7 @@ class Framework(object):
         self.inputs_2_valid, self.rewards_target_4_valid = None, None
         self.logger = logging.getLogger(str(self.__class__))
         K.clear_session()
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
         # self.epsilon_min = epsilon_min
@@ -312,10 +312,10 @@ class Framework(object):
             learning_rate=self.learning_rate, dueling=self.dueling)
         # 2020-01-26 将model提取处单独函数
         # import tensorflow as tf
-        # from keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
-        # from keras.models import Model
-        # from keras import metrics, backend as K
-        # from keras.optimizers import Nadam
+        # from tensorflow.keras.layers import Dense, LSTM, Dropout, Input, concatenate, Lambda
+        # from tensorflow.keras.models import Model
+        # from tensorflow.keras import metrics, backend as K
+        # from tensorflow.keras.optimizers import Nadam
         # # Neural Net for Deep-Q learning Model
         # input = Input(batch_shape=self.input_shape, name=f'state')
         # net = LSTM(self.input_shape[-1] * 2)(input)
@@ -353,7 +353,7 @@ class Framework(object):
         return model
 
     def get_deterministic_policy(self, inputs):
-        from keras.utils import to_categorical
+        from tensorflow.keras.utils import to_categorical
         # self.logger.debug('flag.shape=%s, flag=%s', np.array(inputs[0]).shape, to_categorical(action, self.flag_size))
         act_values = self.model_eval.predict(x={'state': np.array(inputs[0]),
                                                 'flag': to_categorical(inputs[1], self.flag_size)})
@@ -363,7 +363,7 @@ class Framework(object):
         return self.actions[int(np.argmax(act_values[0]))]
 
     def get_stochastic_policy(self, inputs):
-        from keras.utils import to_categorical
+        from tensorflow.keras.utils import to_categorical
         if np.random.rand() <= self.epsilon:
             if self.last_action is None:
                 action = np.random.choice(self.actions)
@@ -402,8 +402,8 @@ class Framework(object):
 
     # train, update value network params
     def update_value_net(self):
-        from keras.utils import to_categorical
-        from keras.callbacks import TensorBoard
+        from tensorflow.keras.utils import to_categorical
+        from tensorflow.keras.callbacks import TensorBoard
 
         self.tot_update_count += 1
         if self.tot_update_count % self.update_target_net_period == 0:
@@ -524,7 +524,7 @@ def _test_calc_cum_reward():
 
 
 def _test_show_model():
-    from keras.utils import plot_model
+    from tensorflow.keras.utils import plot_model
     action_size = 2
     agent = Framework(input_shape=[None, 250, 78], action_size=action_size, dueling=True,
                       batch_size=16384)
