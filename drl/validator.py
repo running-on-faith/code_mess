@@ -405,7 +405,7 @@ def _test_validate_bunch(auto_open_file=True):
             'RB.csv', folder_path=DATA_FOLDER_PATH, index_col='trade_date', range_to=range_to)[OHLCAV_COL_NAME_LIST],
         get_factor_func=get_factor_func,
         model_name=MODEL_NAME, get_agent_func=get_agent,
-        model_folder=f'/home/mg/github/code_mess/drl/d3qn_r_2019_10_11/output/{in_sample_date_line}/model',
+        model_folder=f'/home/mg/github/code_mess/drl/d3qn_r_2019_10_11/output/{in_sample_date_line}/models',
         in_sample_date_line='2017-01-26',
         reward_2_csv=True,
         read_csv=False,
