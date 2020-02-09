@@ -187,3 +187,6 @@ checkpoint
 *.doc
 *.docx
 *.docx#
+
+# tensorflow tmp files
+local.trace
