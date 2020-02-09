@@ -13,12 +13,12 @@ from ibats_common.example.drl.d3qn2.agent.ddqn import DDQN
 
 class Agent(object):
     def __init__(self, input_shape=None, action_size=3, **kwargs):
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
         input_shape = list(input_shape)
         input_shape[0] = None
         self.agent = DDQN(action_dim=action_size, state_dim=input_shape, **kwargs)
 
-        config = tf.ConfigProto()
+        config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
         self.saver = tf.train.Saver()

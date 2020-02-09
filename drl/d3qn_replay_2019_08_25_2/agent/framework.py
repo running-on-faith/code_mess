@@ -112,7 +112,7 @@ class Framework(object):
         self.inputs_2_valid, self.rewards_target_4_valid = None, None
         self.logger = logging.getLogger(str(self.__class__))
         K.clear_session()
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
 
         self.epsilon = 1.0  # exploration rate
         # self.epsilon_min = epsilon_min

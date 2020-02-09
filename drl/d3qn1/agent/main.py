@@ -20,7 +20,7 @@ from ibats_common.example.drl.d3qn1.agent.framework import Framework
 
 class Agent(object):
     def __init__(self, input_shape=None, **kwargs):
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
         if input_shape is not None:
             input_shape = list(input_shape)
             input_shape[0] = None
@@ -28,7 +28,7 @@ class Agent(object):
         else:
             self.agent = Framework(**kwargs)
 
-        config = tf.ConfigProto()
+        config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
         self.saver = tf.train.Saver()

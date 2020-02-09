@@ -5,7 +5,7 @@ from keras.layers import Conv2D, MaxPooling2D
 def get_session():
     """ Limit session memory usage
     """
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
 

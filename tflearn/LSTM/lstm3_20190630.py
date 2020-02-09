@@ -140,7 +140,7 @@ class AIStg(StgBase):
     def get_model(self, rebuild_model=False) -> tflearn.models.DNN:
         if self._model is None or rebuild_model:
             logger.info('重新构建模型')
-            tf.reset_default_graph()
+            tf.compat.v1.reset_default_graph()
             self._model = self._build_model()
         return self._model
 
