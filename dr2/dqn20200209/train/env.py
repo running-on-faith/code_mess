@@ -85,7 +85,6 @@ def _get_df():
 
 def account_env_test():
     from tf_agents.policies.random_py_policy import RandomPyPolicy
-    from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     from tf_agents.metrics.py_metrics import AverageReturnMetric
     from tf_agents.drivers.py_driver import PyDriver
 
@@ -99,11 +98,34 @@ def account_env_test():
         env, policy, observers, max_steps=1000, max_episodes=10)
     initial_time_step = env.reset()
     final_time_step, _ = driver.run(initial_time_step)
-    print('Replay Buffer:')
+    print(f'Replay Buffer length = {len(replay_buffer)}:')
     for traj in replay_buffer:
         print(traj)
+        break
+    # Replay Buffer length = 1000:
+    # Trajectory(
+    #  step_type=array(1, dtype=int32),
+    #  observation={'state': array([[ 4.48054187e+03,  4.52411822e+03,  4.46154706e+03, ...,
+    #          6.62600325e+01, -6.99948793e+00,  9.86842105e-01],
+    #        [ 4.50847543e+03,  4.51741416e+03,  4.46825111e+03, ...,
+    #          6.33523308e+01, -1.95985662e+01,  9.74025974e-01],
+    #        [ 4.48724593e+03,  4.50400606e+03,  4.47607250e+03, ...,
+    #          6.41403572e+01, -9.46577617e+00,  9.74358974e-01],
+    #        ...,
+    #        [ 4.08121714e+03,  4.10001950e+03,  4.04471845e+03, ...,
+    #          3.75567764e+01, -8.93312399e+01,  2.33082707e-01],
+    #        [ 4.04250641e+03,  4.08453521e+03,  4.03918835e+03, ...,
+    #          3.78037117e+01, -8.68095329e+01,  2.91044776e-01],
+    #        [ 4.06905091e+03,  4.15642657e+03,  4.06794489e+03, ...,
+    #          5.07109403e+01, -6.80287485e+01,  3.92592593e-01]]), 'flag': array([1])},
+    #  action=array([0], dtype=int32),
+    #  policy_info=(),
+    #  next_step_type=array(1, dtype=int32),
+    #  reward=array(0.17562035, dtype=float32),
+    #  discount=array(1., dtype=float32))
 
     print('Average Return: ', metric.result())
+    #     Average Return:  0.0
 
 
 if __name__ == "__main__":
