@@ -74,7 +74,7 @@ class AccountEnv(PyEnvironment):
 
     @property
     def batch_size(self):
-        return super().batch_size if self._batch_size is None else self._batch_size
+        return self._batch_size
 
     @property
     def batched(self):
