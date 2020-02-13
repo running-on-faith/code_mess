@@ -66,6 +66,7 @@ class QuotesMarket(object):
         self.action_count = 0
         if self.state_with_flag:
             self._observation_latest = {'state': self.data_factor[self.step_counter], 'flag': np.array([self.flag])}
+            # self._observation_latest = [self.data_factor[self.step_counter], np.array([self.flag])]
         else:
             self._observation_latest = self.data_factor[self.step_counter]
         self._reward_latest = 0.0
@@ -166,6 +167,8 @@ class QuotesMarket(object):
 
         self._observation_latest = {'state': next_observation, 'flag': np.array([self.flag])}\
             if self.state_with_flag else next_observation
+        # self._observation_latest = [next_observation, np.array([self.flag])]\
+        #     if self.state_with_flag else next_observation
         self._reward_latest = (reward / price, (reward + self.fee_curr_step) / price) if self.reward_with_fee0 else (
                 reward / price)
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done

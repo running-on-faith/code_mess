@@ -30,18 +30,22 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 class AccountEnv(PyEnvironment):
 
     def __init__(self, md_df: pd.DataFrame, data_factors: np.ndarray,
-                 state_with_flag=True, action_kind_count=2, **kwargs):
+                 state_with_flag=True, action_kind_count=2, batch_size=None, **kwargs):
         super(AccountEnv, self).__init__()
         kwargs['state_with_flag'] = state_with_flag
+        self._batch_size = batch_size
         self.market = QuotesMarket(md_df, data_factors, **kwargs)
         self._state_spec = array_spec.ArraySpec(
             shape=data_factors.shape[1:], dtype=np.float32, name='state')
         self._flag_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.float32, name='flag', minimum=0.0, maximum=1.0)
         self._action_spec = array_spec.BoundedArraySpec(
-            shape=(1,), dtype=np.int32, name='action', minimum=0.0, maximum=max(ACTIONS[:action_kind_count]))
+            shape=(1,), dtype=np.int32, name='action', minimum=0.0,
+            maximum=max(ACTIONS[:action_kind_count]))
+
         if state_with_flag:
-            self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec}
+            # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec}
+            self._observation_spec = [self._state_spec, self._flag_spec]
         else:
             self._observation_spec = self._state_spec
 
@@ -68,6 +72,14 @@ class AccountEnv(PyEnvironment):
     def _reset(self):
         return ts.transition(self.market.reset(), 0.0)
 
+    @property
+    def batch_size(self):
+        return super().batch_size if self._batch_size is None else self._batch_size
+
+    @property
+    def batched(self):
+        return self.batch_size is not None
+
 
 def _get_df():
     n_step = 60
@@ -84,24 +96,48 @@ def _get_df():
 
 
 def account_env_test():
-    from tf_agents.policies.random_py_policy import RandomPyPolicy
     from tf_agents.metrics.py_metrics import AverageReturnMetric
     from tf_agents.drivers.py_driver import PyDriver
 
     md_df, data_factors = _get_df()
-    env = AccountEnv(md_df=md_df, data_factors=data_factors)
-    policy = RandomPyPolicy(time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
-    replay_buffer = []
-    metric = AverageReturnMetric()
-    observers = [replay_buffer.append, metric]
-    driver = PyDriver(
-        env, policy, observers, max_steps=1000, max_episodes=10)
-    initial_time_step = env.reset()
-    final_time_step, _ = driver.run(initial_time_step)
-    print(f'Replay Buffer length = {len(replay_buffer)}:')
-    for traj in replay_buffer:
-        print(traj)
-        break
+    env = AccountEnv(md_df=md_df, data_factors=data_factors, state_with_flag=False)
+
+    use_list = True
+    if use_list:
+        from tf_agents.policies.random_py_policy import RandomPyPolicy
+        policy = RandomPyPolicy(time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
+        replay_buffer = []
+        metric = AverageReturnMetric()
+        observers = [replay_buffer.append, metric]
+        driver = PyDriver(
+            env, policy, observers, max_steps=1000, max_episodes=10)
+        initial_time_step = env.reset()
+        final_time_step, _ = driver.run(initial_time_step)
+        print(f'Replay Buffer length = {len(replay_buffer)}:')
+        for traj in replay_buffer:
+            print(traj)
+            break
+    else:
+        from tf_agents.policies.random_tf_policy import RandomTFPolicy
+        from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
+        from tf_agents.utils.nest_utils import batch_nested_array
+        from tf_agents.environments.tf_py_environment import TFPyEnvironment
+        from tf_agents.trajectories import trajectory
+        env = TFPyEnvironment(env)  # TFPyEnvironment 会自动将 env 置为 batched=True batch_size = 1
+        policy = RandomTFPolicy(time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
+        replay_buffer = TFUniformReplayBuffer(policy.trajectory_spec, env.batch_size)
+        metric = AverageReturnMetric()
+        # observers = [lambda x: replay_buffer.add_batch(batch_nested_array(x)), metric]
+        observers = [replay_buffer.add_batch, metric]
+        driver = PyDriver(
+            env, policy, observers, max_steps=1000, max_episodes=10)
+        initial_time_step = env.reset()
+        final_time_step, _ = driver.run(initial_time_step)  # 这里会出错，××ReplayBuffer无法与当前 env 连用
+        print(f'Replay Buffer length = {replay_buffer.size}:')
+        for traj in replay_buffer.as_dataset(3, num_steps=2):
+            print(traj)
+            break
+
     # Replay Buffer length = 1000:
     # Trajectory(
     #  step_type=array(1, dtype=int32),
