@@ -8,7 +8,6 @@
 """
 import logging
 from tf_agents.agents.dqn import dqn_agent
-from tf_agents.environments import tf_py_environment
 
 
 logger = logging.getLogger()
@@ -60,8 +59,10 @@ def compute_avg_return(environment, policy, num_episodes=10):
 
 def test_agent_run():
     import tensorflow as tf
+    from tf_agents.environments.tf_py_environment import TFPyEnvironment
     from tf_agents.utils import common
-    from tf_agents.metrics.py_metrics import AverageReturnMetric
+    # from tf_agents.metrics.py_metrics import AverageReturnMetric
+    from tf_agents.metrics.tf_metrics import AverageReturnMetric
     from tf_agents.drivers.py_driver import PyDriver
     from dr2.dqn20200209.train.env import AccountEnv
     from tf_agents.policies.random_tf_policy import RandomTFPolicy
@@ -81,9 +82,9 @@ def test_agent_run():
     eval_interval = 1000  # @param {type:"integer"}
 
     md_df, data_factors = _get_df()
-    train_env = tf_py_environment.TFPyEnvironment(AccountEnv(
+    train_env = TFPyEnvironment(AccountEnv(
         md_df=md_df, data_factors=data_factors, state_with_flag=False))
-    eval_env = tf_py_environment.TFPyEnvironment(AccountEnv(
+    eval_env = TFPyEnvironment(AccountEnv(
         md_df=md_df, data_factors=data_factors, state_with_flag=False))
     q_net = _get_net_4_test(train_env)
 
@@ -114,21 +115,33 @@ def test_agent_run():
 
     replay_buffer = []
 
-    # @test {"skip": true}
-    def collect_step(environment, policy, buffer):
-        time_step = environment.current_time_step()
-        action_step = policy.action(time_step)
-        next_time_step = environment.step(action_step.action)
-        traj = trajectory.from_transition(time_step, action_step, next_time_step)
+    collect_mode = False
+    if collect_mode:
+        # 展示 collect_data 函数作用方法
+        # @test {"skip": true}
+        def collect_step(environment, policy, buffer):
+            time_step = environment.current_time_step()
+            action_step = policy.action(time_step)
+            next_time_step = environment.step(action_step.action)
+            traj = trajectory.from_transition(time_step, action_step, next_time_step)
 
-        # Add trajectory to the replay buffer
-        buffer.append(traj)
+            # Add trajectory to the replay buffer
+            buffer.append(traj)
 
-    def collect_data(env, policy, buffer, steps):
-        for _ in range(steps):
-            collect_step(env, policy, buffer)
+        def collect_data(env, policy, buffer, steps):
+            for _ in range(steps):
+                collect_step(env, policy, buffer)
 
-    collect_data(train_env, random_policy, replay_buffer, steps=100)
+        collect_data(train_env, random_policy, replay_buffer, steps=100)
+    else:
+        # 展示 Driver 作用方法
+        policy = RandomTFPolicy(time_step_spec=train_env.time_step_spec(), action_spec=train_env.action_spec())
+        metric = AverageReturnMetric()
+        observers = [replay_buffer.append, metric]
+        driver = PyDriver(
+            train_env, policy, observers, max_steps=1000, max_episodes=10)
+        initial_time_step = train_env.reset()
+        final_time_step, _ = driver.run(initial_time_step)
 
     logger.debug('replay_buffer length=%d', len(replay_buffer))
     for _ in replay_buffer:
