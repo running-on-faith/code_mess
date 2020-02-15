@@ -102,16 +102,19 @@ def test_agent_run():
 
     agent.initialize()
 
-    eval_policy = agent.policy
-    collect_policy = agent.collect_policy
+    avg_return = False
+    if avg_return:
+        # 计算平均 rewards
+        eval_policy = agent.policy
+        collect_policy = agent.collect_policy
 
-    time_step = train_env.reset()
-    random_policy = RandomTFPolicy(train_env.time_step_spec(),
-                                   train_env.action_spec())
-    random_policy.action(time_step)
+        time_step = train_env.reset()
+        random_policy = RandomTFPolicy(train_env.time_step_spec(),
+                                       train_env.action_spec())
+        random_policy.action(time_step)
 
-    avg_return = compute_avg_return(eval_env, random_policy, num_eval_episodes)
-    logger.debug('avg_return=%.4f', avg_return)
+        avg_return = compute_avg_return(eval_env, random_policy, num_eval_episodes)
+        logger.debug('avg_return=%.4f', avg_return)
 
     replay_buffer = []
 
