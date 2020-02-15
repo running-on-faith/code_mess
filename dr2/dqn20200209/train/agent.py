@@ -7,10 +7,26 @@
 @desc    : 
 """
 import logging
+import tensorflow as tf
 from tf_agents.agents.dqn import dqn_agent
+from dr2.dqn20200209.train.network import get_network
 
 
 logger = logging.getLogger()
+
+
+def get_agent(env):
+    from tf_agents.agents import DqnAgent
+    network, optimizer, loss_fn = get_network(env.observation_spec(), env.action_spec())
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+    agent = DqnAgent(
+        env.time_step_spec(),
+        env.action_spec(),
+        q_network=network,
+        optimizer=optimizer,
+        td_errors_loss_fn=loss_fn,
+        train_step_counter=global_step)
+    return agent
 
 
 def _get_df():
