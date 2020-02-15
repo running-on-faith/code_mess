@@ -117,6 +117,9 @@ class QuotesMarket(object):
         self.action_count += 1
 
     def step(self, action: int):
+        if self._done:
+            raise ValueError(f"It's Done state. max_step_count={self.max_step_count}, "
+                             f"current step={self.step_counter}, total_value={self.total_value}")
         self.fee_curr_step = 0
         if action == ACTION_LONG:
             if self._flag == _FLAG_EMPTY:
