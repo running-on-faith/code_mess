@@ -7,6 +7,7 @@
 @desc    :
 环境信息，此模块稍后将被移植入 ibats_commons
 """
+import functools
 import pandas as pd
 import numpy as np
 from tf_agents.environments.py_environment import PyEnvironment
@@ -42,7 +43,7 @@ class AccountEnv(PyEnvironment):
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.int32, name='action', minimum=0.0,
             maximum=max(ACTIONS[:action_kind_count]))
-
+        self.last_done_state = False
         if state_with_flag:
             # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec}
             self._observation_spec = [self._state_spec, self._flag_spec]
@@ -63,14 +64,17 @@ class AccountEnv(PyEnvironment):
             return ts.transition(observation, rewards)
 
     def _step(self, action):
-        observation, rewards, done = self.market.step(action)
-        if done:
+        if self.last_done_state:
+            return self._reset()
+        observation, rewards, self.last_done_state = self.market.step(action)
+        if self.last_done_state:
             return ts.termination(observation, rewards)
         else:
             return ts.transition(observation, rewards)
 
     def _reset(self):
-        return ts.transition(self.market.reset(), 0.0)
+        self.last_done_state = False
+        return ts.restart(self.market.reset())
 
     @property
     def batch_size(self):
@@ -81,6 +85,7 @@ class AccountEnv(PyEnvironment):
         return self.batch_size is not None
 
 
+@functools.lru_cache()
 def _get_df():
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
@@ -93,6 +98,14 @@ def _get_df():
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
     return md_df[['close', 'open']], data_arr_batch
+
+
+def get_env(state_with_flag=True):
+    from tf_agents.environments.tf_py_environment import TFPyEnvironment
+    md_df, data_factors = _get_df()
+    env = TFPyEnvironment(AccountEnv(
+        md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag))
+    return env
 
 
 def account_env_test():
