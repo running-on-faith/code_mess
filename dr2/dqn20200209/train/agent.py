@@ -16,10 +16,11 @@ logger = logging.getLogger()
 
 
 def get_agent(env):
-    from tf_agents.agents import DqnAgent
+    # from tf_agents.agents import DqnAgent
+    from tf_agents.agents.dqn.dqn_agent import DdqnAgent
     network, optimizer, loss_fn = get_network(env.observation_spec(), env.action_spec())
     global_step = tf.compat.v1.train.get_or_create_global_step()
-    agent = DqnAgent(
+    agent = DdqnAgent(
         env.time_step_spec(),
         env.action_spec(),
         q_network=network,
