@@ -37,7 +37,7 @@ class AccountEnv(PyEnvironment):
         self._batch_size = batch_size
         self.market = QuotesMarket(md_df, data_factors, **kwargs)
         self._state_spec = array_spec.ArraySpec(
-            shape=data_factors.shape[1:], dtype=np.float32, name='state')
+            shape=data_factors.shape[1:], dtype=np.float64, name='state')
         self._flag_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.float32, name='flag', minimum=0.0, maximum=1.0)
         self._action_spec = array_spec.BoundedArraySpec(

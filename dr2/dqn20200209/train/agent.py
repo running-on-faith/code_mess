@@ -27,6 +27,9 @@ def get_agent(env):
         optimizer=optimizer,
         td_errors_loss_fn=loss_fn,
         train_step_counter=global_step)
+    agent.initialize()
+    # Reset the train step
+    agent.train_step_counter.assign(0)
     return agent
 
 
