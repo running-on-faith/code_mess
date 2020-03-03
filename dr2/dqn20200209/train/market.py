@@ -23,12 +23,13 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5, fee_rate=3e-3,
+    def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5, fee_rate=3e-3, position_unit=10,
                  state_with_flag=False, reward_with_fee0=False, md_close_label='close', md_open_label='open'):
         self.data_close = md_df[md_close_label]
         self.data_open = md_df[md_open_label]
         self.data_factor = data_factors
         self.action_operations = ACTION_OPS
+        self.position_unit = position_unit
         self.fee_rate = fee_rate  # 千三手续费
         self.fee_curr_step = 0
         self.fee_tot = 0
@@ -37,9 +38,9 @@ class QuotesMarket(object):
         # reset use
         self.step_counter = 0
         self.cash = self.init_cash
-        self.position = 0
-        self.total_value = self.cash + self.position
-        self.total_value_fee0 = self.cash + self.position
+        self.position_value = 0
+        self.total_value = self.cash + self.position_value
+        self.total_value_fee0 = self.cash + self.position_value
         self._flag = _FLAG_EMPTY
         self.state_with_flag = state_with_flag
         self.reward_with_fee0 = reward_with_fee0
@@ -57,15 +58,18 @@ class QuotesMarket(object):
     def reset(self):
         self.step_counter = 0
         self.cash = self.init_cash
-        self.position = 0
-        self.total_value = self.cash + self.position
-        self.total_value_fee0 = self.cash + self.position
+        self.position_value = 0
+        self.total_value = self.cash + self.position_value
+        self.total_value_fee0 = self.cash + self.position_value
         self._flag = _FLAG_EMPTY
         self.fee_curr_step = 0
         self.fee_tot = 0
         self.action_count = 0
         if self.state_with_flag:
-            self._observation_latest = {'state': self.data_factor[self.step_counter], 'flag': np.array([self.flag])}
+            rr = self.total_value / self.init_cash - 1
+            self._observation_latest = {'state': self.data_factor[self.step_counter],
+                                        'flag': np.array([self.flag]),
+                                        'rr': rr}
             # self._observation_latest = [self.data_factor[self.step_counter], np.array([self.flag])]
         else:
             self._observation_latest = self.data_factor[self.step_counter]
@@ -82,37 +86,37 @@ class QuotesMarket(object):
 
     def long(self):
         self._flag = _FLAG_LONG
-        quotes = self.data_open[self.step_counter] * 10
+        quotes = self.data_open[self.step_counter] * self.position_unit
         self.cash -= quotes * (1 + self.fee_rate)
-        self.position = quotes
+        self.position_value = quotes
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
 
     def short(self):
         self._flag = _FLAG_SHORT
-        quotes = self.data_open[self.step_counter] * 10
+        quotes = self.data_open[self.step_counter] * self.position_unit
         self.cash += quotes * (1 - self.fee_rate)
-        self.position = - quotes
+        self.position_value = - quotes
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
 
     def keep(self):
-        quotes = self.data_open[self.step_counter] * 10
-        self.position = quotes * self._flag
+        quotes = self.data_open[self.step_counter] * self.position_unit
+        self.position_value = quotes * self._flag
 
     def close_long(self):
         self._flag = _FLAG_EMPTY
-        quotes = self.data_open[self.step_counter] * 10
+        quotes = self.data_open[self.step_counter] * self.position_unit
         self.cash += quotes * (1 - self.fee_rate)
-        self.position = 0
+        self.position_value = 0
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
 
     def close_short(self):
         self._flag = _FLAG_EMPTY
-        quotes = self.data_open[self.step_counter] * 10
+        quotes = self.data_open[self.step_counter] * self.position_unit
         self.cash -= quotes * (1 + self.fee_rate)
-        self.position = 0
+        self.position_value = 0
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
 
@@ -157,10 +161,10 @@ class QuotesMarket(object):
 
         # 计算价值
         price = self.data_close[self.step_counter]
-        position = price * 10 * self._flag
-        reward = self.cash + position - self.total_value
+        position_value = price * self.position_unit * self._flag
+        reward = self.cash + position_value - self.total_value
         self.step_counter += 1
-        self.total_value = position + self.cash
+        self.total_value = position_value + self.cash
         next_observation = self.data_factor[self.step_counter]
 
         if self.total_value < price:
@@ -168,12 +172,14 @@ class QuotesMarket(object):
         if self.step_counter >= self.max_step_count:
             self._done = True
 
-        self._observation_latest = {'state': next_observation, 'flag': np.array([self.flag])}\
+        self._observation_latest = {'state': next_observation, 'flag': np.array([self.flag])} \
             if self.state_with_flag else next_observation
         # self._observation_latest = [next_observation, np.array([self.flag])]\
         #     if self.state_with_flag else next_observation
-        self._reward_latest = (reward / price, (reward + self.fee_curr_step) / price) if self.reward_with_fee0 else (
-                reward / price)
+        self._reward_latest = (
+            reward / price / self.position_unit, (reward + self.fee_curr_step) / price / self.position_unit
+        ) if self.reward_with_fee0 else (
+                reward / price / self.position_unit)
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
         return self.step_ret_latest
 
