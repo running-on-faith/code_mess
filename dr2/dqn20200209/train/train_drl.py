@@ -47,10 +47,10 @@ def compute_rr(driver):
 
 
 def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
-              log_interval=2,
+              log_interval=2, state_with_flag=True,
               eval_interval=5):
-    env = get_env(state_with_flag=False)
-    agent = get_agent(env)
+    env = get_env(state_with_flag=state_with_flag)
+    agent = get_agent(env, state_with_flag=state_with_flag)
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
 

@@ -15,10 +15,11 @@ from dr2.dqn20200209.train.network import get_network
 logger = logging.getLogger()
 
 
-def get_agent(env):
+def get_agent(env, state_with_flag=False):
     # from tf_agents.agents import DqnAgent
     from tf_agents.agents.dqn.dqn_agent import DdqnAgent
-    network, optimizer, loss_fn = get_network(env.observation_spec(), env.action_spec())
+    network, optimizer, loss_fn = get_network(
+        env.observation_spec(), env.action_spec(), state_with_flag=state_with_flag)
     global_step = tf.compat.v1.train.get_or_create_global_step()
     agent = DdqnAgent(
         env.time_step_spec(),
@@ -26,7 +27,8 @@ def get_agent(env):
         q_network=network,
         optimizer=optimizer,
         td_errors_loss_fn=loss_fn,
-        train_step_counter=global_step)
+        train_step_counter=global_step,
+    )
     agent.initialize()
     # Reset the train step
     agent.train_step_counter.assign(0)
@@ -58,7 +60,6 @@ def _get_net_4_test(train_env):
     return q_net
 
 
-#@test {"skip": true}
 def compute_avg_return(environment, policy, num_episodes=10):
 
   total_return = 0.0
