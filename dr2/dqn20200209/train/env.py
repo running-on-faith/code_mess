@@ -37,16 +37,25 @@ class AccountEnv(PyEnvironment):
         self._batch_size = batch_size
         self.market = QuotesMarket(md_df, data_factors, **kwargs)
         self._state_spec = array_spec.ArraySpec(
-            shape=data_factors.shape[1:], dtype=np.float64, name='state')
+            shape=data_factors.shape[1:], dtype=data_factors.dtype, name='state')
         self._flag_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.float32, name='flag', minimum=0.0, maximum=1.0)
+        self._rr_spec = array_spec.ArraySpec(
+            shape=(1,), dtype=np.float32, name='rr')
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.int32, name='action', minimum=0.0,
             maximum=max(ACTIONS[:action_kind_count]))
         self.last_done_state = False
         if state_with_flag:
-            # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec}
-            self._observation_spec = [self._state_spec, self._flag_spec]
+            # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec, 'rr': self._rr_spec}
+            # _observation_spec 只能是数组形式,字典形式将会导致 encoding_network.EncodingNetwork 报错:
+            # encoder(observation, step_type=step_type, network_state=network_state)
+            # Key Error: 0
+            # File "/home/mg/github/code_mess/venv/lib/python3.6/site-packages/
+            #   tensorflow_core/python/util/nest.py", line 676,
+            # in _yield_flat_up_to
+            # at input_subtree = input_tree[shallow_key]
+            self._observation_spec = (self._state_spec, self._flag_spec, self._rr_spec)
         else:
             self._observation_spec = self._state_spec
 
