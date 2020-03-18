@@ -16,7 +16,7 @@ ACTION_OPS = [ACTION_OP_LONG, ACTION_OP_SHORT, ACTION_OP_CLOSE, ACTION_OP_KEEP]
 ACTION_OP_DIC = {_: ACTION_OPS[_] for _ in ACTIONS}
 OP_ACTION_DIC = {ACTION_OPS[_]: _ for _ in ACTIONS}
 # 内部访问的flag
-_FLAG_LONG, _FLAG_SHORT, _FLAG_EMPTY = 1, -1, 0
+_FLAG_LONG, _FLAG_SHORT, _FLAG_EMPTY = 1.0, -1.0, 0.0
 # one-hot 模式的flag
 FLAG_LONG, FLAG_SHORT, FLAG_EMPTY = _FLAG_LONG + 1, _FLAG_SHORT + 1, _FLAG_EMPTY + 1
 FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
@@ -67,16 +67,34 @@ class QuotesMarket(object):
         self.action_count = 0
         if self.state_with_flag:
             rr = self.total_value / self.init_cash - 1
-            self._observation_latest = {'state': self.data_factor[self.step_counter],
-                                        'flag': np.array([self.flag]),
-                                        'rr': rr}
-            # self._observation_latest = [self.data_factor[self.step_counter], np.array([self.flag])]
+            # self._observation_latest = {'state': self.data_factor[self.step_counter],
+            #                             'flag': np.array([self.flag]),
+            #                             'rr': np.array([rr])}
+            # 此处需要与 env.observation_spec 对应一致
+            # 当前 env.observation_spec 不支持字典形式,因此只能使用数组形式
+            self._observation_latest = self._get_observation_latest()
         else:
             self._observation_latest = self.data_factor[self.step_counter]
         self._reward_latest = 0.0
         self._done = False
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
         return self._observation_latest
+
+    def _get_observation_latest(self):
+        """根据 step_counter state_with_flag 生成最新的 observation"""
+        if self.state_with_flag:
+            rr = self.total_value / self.init_cash - 1
+            # self._observation_latest = {'state': self.data_factor[self.step_counter],
+            #                             'flag': np.array([self.flag]),
+            #                             'rr': np.array([rr])}
+            # 此处需要与 env.observation_spec 对应一致
+            # 当前 env.observation_spec 不支持字典形式,因此只能使用数组形式
+            observation_latest = (self.data_factor[self.step_counter],
+                                  np.array([self.flag], dtype=np.float32),
+                                  np.array([rr], dtype=np.float32))
+        else:
+            observation_latest = self.data_factor[self.step_counter]
+        return observation_latest
 
     def observation_latest(self):
         return self._observation_latest
@@ -165,17 +183,13 @@ class QuotesMarket(object):
         reward = self.cash + position_value - self.total_value
         self.step_counter += 1
         self.total_value = position_value + self.cash
-        next_observation = self.data_factor[self.step_counter]
 
         if self.total_value < price:
             self._done = True
         if self.step_counter >= self.max_step_count:
             self._done = True
 
-        self._observation_latest = {'state': next_observation, 'flag': np.array([self.flag])} \
-            if self.state_with_flag else next_observation
-        # self._observation_latest = [next_observation, np.array([self.flag])]\
-        #     if self.state_with_flag else next_observation
+        self._observation_latest = self._get_observation_latest()
         self._reward_latest = (
             reward / price / self.position_unit, (reward + self.fee_curr_step) / price / self.position_unit
         ) if self.reward_with_fee0 else (
