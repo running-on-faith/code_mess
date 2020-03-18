@@ -7,6 +7,7 @@
 @desc    : 
 """
 import tensorflow as tf
+from tensorflow_core.python.keras.layers import LSTM, Flatten, Lambda
 from tf_agents.networks.network import Network
 from tf_agents.networks.q_network import validate_specs
 from tf_agents.networks import encoding_network
@@ -66,6 +67,11 @@ class DQN(Network):
           ValueError: If `input_tensor_spec` contains more than one observation. Or
             if `action_spec` contains more than one action.
         """
+        super().__init__(
+            input_tensor_spec=input_tensor_spec,
+            state_spec=(),
+            name=name)
+
         validate_specs(action_spec, input_tensor_spec)
         action_spec = tf.nest.flatten(action_spec)[0]
         num_actions = action_spec.maximum - action_spec.minimum + 1
@@ -78,11 +84,15 @@ class DQN(Network):
         # ]
         self.state_with_flag = state_with_flag
         if state_with_flag:
-            preprocessing_layers = None,
+            state_spec = input_tensor_spec[0]
+            self._state_layers = LSTM(state_spec.shape[-1] * 2)
+            self._flag_layers = Lambda(lambda x: x)
+            self._rr_layers = Lambda(lambda x: x)
+            preprocessing_layers = [self._state_layers, self._flag_layers, self._rr_layers]
             preprocessing_combiner = tf.keras.layers.Concatenate(axis=-1)
         else:
-            preprocessing_layers = None,
-            preprocessing_combiner = None,
+            preprocessing_layers = None
+            preprocessing_combiner = None
 
         encoder = encoding_network.EncodingNetwork(
             input_tensor_spec,
@@ -104,11 +114,6 @@ class DQN(Network):
             bias_initializer=tf.compat.v1.initializers.constant(-0.2),
             dtype=dtype)
 
-        super().__init__(
-            input_tensor_spec=input_tensor_spec,
-            state_spec=(),
-            name=name)
-
         self._encoder = encoder
         self._q_value_layer = q_value_layer
 
@@ -125,9 +130,9 @@ class DQN(Network):
           A tuple `(logits, network_state)`.
         """
         if self.state_with_flag:
-            encoder_input, flag_input = observation
+            # encoder_input, flag_input = observation
             state, network_state = self._encoder(
-                encoder_input, step_type=step_type, network_state=network_state)
+                observation, step_type=step_type, network_state=network_state)
         else:
             state, network_state = self._encoder(
             observation, step_type=step_type, network_state=network_state)
