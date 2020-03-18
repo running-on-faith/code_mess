@@ -123,6 +123,8 @@ def test_agent_run():
 
     agent.initialize()
 
+    random_policy = RandomTFPolicy(train_env.time_step_spec(),
+                                   train_env.action_spec())
     avg_return = False
     if avg_return:
         # 计算平均 rewards
@@ -130,8 +132,6 @@ def test_agent_run():
         collect_policy = agent.collect_policy
 
         time_step = train_env.reset()
-        random_policy = RandomTFPolicy(train_env.time_step_spec(),
-                                       train_env.action_spec())
         random_policy.action(time_step)
 
         avg_return = compute_avg_return(eval_env, random_policy, num_eval_episodes)
