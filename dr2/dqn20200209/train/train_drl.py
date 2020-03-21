@@ -83,14 +83,14 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
         collect_driver.run()
 
         # Sample a batch of data from the buffer and update the agent's network.
-        batch_size = 256
+        batch_size = 512
         database = iter(collect_replay_buffer.as_dataset(
             sample_batch_size=batch_size, num_steps=agent.train_sequence_length).prefetch(3))
         for num, data in enumerate(database):
             try:
                 experience, unused_info = data
                 try:
-                    logger.debug("iterations=%d, step=%d training", _, step)
+                    logger.debug("iterations=%d, step=%d training %d", _, step, num)
                     train_loss = agent.train(experience)
                 except Exception as exp:
                     if isinstance(exp, KeyboardInterrupt):
@@ -99,6 +99,9 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
                     break
             except ValueError:
                 pass
+
+            if num >= 10:
+                break
 
         logger.debug("clear buffer")
         collect_replay_buffer.clear()
