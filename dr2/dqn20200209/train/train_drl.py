@@ -46,7 +46,7 @@ def compute_rr(driver):
     return final_trajectory_rr.result()
 
 
-def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
+def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               log_interval=2, state_with_flag=True,
               eval_interval=5):
     logger.info("Train started")
@@ -61,12 +61,12 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
     collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
-        env, agent.collect_policy, collect_observers, num_episodes=num_collect_episodes)
-    # eval
+        env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
+    # eval 由于历史行情相对确定,因此,获取最终汇报只需要跑一次即可
     final_trajectory_rr = FinalTrajectoryMetric()
     eval_observers = [final_trajectory_rr]
     eval_driver = DynamicEpisodeDriver(
-        env, agent.policy, eval_observers, num_episodes=num_eval_episodes)
+        env, eval_policy, eval_observers, num_episodes=num_eval_episodes)
 
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     # agent.train = common.function(agent.train)
@@ -76,38 +76,41 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
     rr = compute_rr(eval_driver)
     rr_list = [rr]
     step, step_last = 0, None
-    for _ in range(num_iterations):
+    for loop_n in range(train_loop_count):
 
         # Collect a few steps using collect_policy and save to the replay buffer.
-        logger.debug("iterations=%d, collecting", _)
+        logger.debug("%d/%d) collecting %d episodes", loop_n, train_loop_count, num_collect_episodes)
         collect_driver.run()
 
         # Sample a batch of data from the buffer and update the agent's network.
-        batch_size = 512
+        batch_size, prefetch_count = 1024, 4
         database = iter(collect_replay_buffer.as_dataset(
-            sample_batch_size=batch_size, num_steps=agent.train_sequence_length).prefetch(3))
-        for num, data in enumerate(database):
+            sample_batch_size=batch_size, num_steps=agent.train_sequence_length).prefetch(prefetch_count))
+        train_loss = None
+        for fetch_num, (experience, unused_info) in enumerate(database, start=1):
             try:
-                experience, unused_info = data
                 try:
-                    logger.debug("iterations=%d, step=%d training %d", _, step, num)
+                    logger.debug(
+                        "%d/%d) step=%d training %d -> %d of batch_size=%d data",
+                        loop_n, train_loop_count, step, fetch_num,
+                        len(experience.observation), experience.observation[0].shape[0])
                     train_loss = agent.train(experience)
+                    step = agent.train_step_counter.numpy()
                 except Exception as exp:
                     if isinstance(exp, KeyboardInterrupt):
                         raise exp from exp
-                    logger.exception("%d loops train error", num)
+                    logger.exception("%d/%d) train error", loop_n, train_loop_count)
                     break
             except ValueError:
-                pass
+                logger.exception('train error')
 
-            if num >= 10:
+            if fetch_num >= prefetch_count:
                 break
 
         logger.debug("clear buffer")
         collect_replay_buffer.clear()
 
-        step = agent.train_step_counter.numpy()
-        logger.info("iterations=%d, step=%d", _, step)
+        logger.info("%d/%d) step=%d", loop_n, train_loop_count, step)
         if step_last is not None and step_last == step:
             logger.warning('keep train error. stop loop.')
             break
@@ -115,13 +118,15 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
             step_last = step
 
         if step % log_interval == 0:
-            print('step = {0}: loss = {1}'.format(step, train_loss.loss))
+            logger.info('%d/%d) step=%d loss=%.8f', loop_n, train_loop_count, step,
+                        train_loss.loss if train_loss else None)
 
         if step % eval_interval == 0:
             rr = compute_rr(eval_driver)
-            print('step = {0}: Return Rate = {1}'.format(step, rr))
+            logger.info('%d/%d) step=%d rr = %.2f%%', loop_n, train_loop_count, step, rr * 100)
             rr_list.append(rr)
 
+    logger.info("rr_list=%s", rr_list)
     logger.info("Train finished")
 
 
