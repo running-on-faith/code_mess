@@ -49,6 +49,7 @@ def compute_rr(driver):
 def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
               log_interval=2, state_with_flag=True,
               eval_interval=5):
+    logger.info("Train started")
     env = get_env(state_with_flag=state_with_flag)
     agent = get_agent(env, state_with_flag=state_with_flag)
     eval_policy = agent.policy
@@ -74,28 +75,36 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
     # Evaluate the agent's policy once before training.
     rr = compute_rr(eval_driver)
     rr_list = [rr]
-    step_last = None
+    step, step_last = 0, None
     for _ in range(num_iterations):
 
         # Collect a few steps using collect_policy and save to the replay buffer.
+        logger.debug("iterations=%d, collecting", _)
         collect_driver.run()
 
         # Sample a batch of data from the buffer and update the agent's network.
-        batch_size = 5
+        batch_size = 256
         database = iter(collect_replay_buffer.as_dataset(
             sample_batch_size=batch_size, num_steps=agent.train_sequence_length).prefetch(3))
         for num, data in enumerate(database):
             try:
                 experience, unused_info = data
                 try:
+                    logger.debug("iterations=%d, step=%d training", _, step)
                     train_loss = agent.train(experience)
-                except:
+                except Exception as exp:
+                    if isinstance(exp, KeyboardInterrupt):
+                        raise exp from exp
                     logger.exception("%d loops train error", num)
                     break
             except ValueError:
                 pass
 
+        logger.debug("clear buffer")
+        collect_replay_buffer.clear()
+
         step = agent.train_step_counter.numpy()
+        logger.info("iterations=%d, step=%d", _, step)
         if step_last is not None and step_last == step:
             logger.warning('keep train error. stop loop.')
             break
@@ -109,7 +118,8 @@ def train_drl(num_iterations=20, num_eval_episodes=2, num_collect_episodes=4,
             rr = compute_rr(eval_driver)
             print('step = {0}: Return Rate = {1}'.format(step, rr))
             rr_list.append(rr)
-            pass
+
+    logger.info("Train finished")
 
 
 if __name__ == "__main__":
