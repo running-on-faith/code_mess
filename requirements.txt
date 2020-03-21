@@ -3,7 +3,7 @@ decorator==4.4.1
 ffn==0.3.4
 future==0.18.2
 h5py==2.10.0
-IBATS-Common==0.17.2
+IBATS-Common==0.18.1
 IBATS-Utils==1.2.8
 lxml==4.4.2
 Markdown==3.1.1
