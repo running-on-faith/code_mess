@@ -49,6 +49,15 @@ def compute_rr(driver):
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               log_interval=2, state_with_flag=True,
               eval_interval=5):
+    """
+    :param train_loop_count: 总体训练轮数
+    :param num_eval_episodes: 评估测试次数
+    :param num_collect_episodes: 数据采集次数
+    :param log_interval:日志间隔
+    :param state_with_flag:带 flag 标识
+    :param eval_interval:评估间隔
+    :return:
+    """
     logger.info("Train started")
     env = get_env(state_with_flag=state_with_flag)
     agent = get_agent(env, state_with_flag=state_with_flag)
@@ -83,7 +92,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         collect_driver.run()
 
         # Sample a batch of data from the buffer and update the agent's network.
-        batch_size, prefetch_count = 1024, 4
+        batch_size, prefetch_count = 1024, 10
         database = iter(collect_replay_buffer.as_dataset(
             sample_batch_size=batch_size, num_steps=agent.train_sequence_length).prefetch(prefetch_count))
         train_loss = None
@@ -131,4 +140,4 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
 
 
 if __name__ == "__main__":
-    train_drl()
+    train_drl(train_loop_count=50)
