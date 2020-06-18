@@ -79,7 +79,7 @@ class DQN(Network):
 
         validate_specs(action_spec, input_tensor_spec)
         action_spec = tf.nest.flatten(action_spec)[0]
-        num_actions = action_spec.maximum - action_spec.minimum + 1
+        action_count = action_spec.maximum - action_spec.minimum + 1
         # if state_with_flag=True.
         # input_tensor_spec =
         # [
@@ -100,6 +100,7 @@ class DQN(Network):
             preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
             preprocessing_combiner = Concatenate(axis=-1)
         else:
+            input_shape = input_tensor_spec.shape[-1]
             preprocessing_layers = None
             preprocessing_combiner = None
 
@@ -115,13 +116,29 @@ class DQN(Network):
             batch_squash=batch_squash,
             dtype=dtype)
 
-        q_value_layer = tf.keras.layers.Dense(
-            num_actions,
-            activation=activation_fn,
-            kernel_initializer=tf.compat.v1.initializers.random_uniform(
-                minval=-0.03, maxval=0.03),
-            bias_initializer=tf.compat.v1.initializers.constant(-0.2),
-            dtype=dtype)
+        # q_value_layer = tf.keras.layers.Dense(
+        #     action_count,
+        #     activation=activation_fn,
+        #     kernel_initializer=tf.compat.v1.initializers.random_uniform(
+        #         minval=-0.03, maxval=0.03),
+        #     bias_initializer=tf.compat.v1.initializers.constant(-0.2),
+        #     dtype=dtype)
+        q_value_layer = Sequential()
+        q_value_layer.add(Dense(input_shape // 2))
+        q_value_layer.add(Dropout(0.2))
+        q_value_layer.add(Dense(input_shape // 4))  # 减少一层，降低网络复杂度
+        q_value_layer.add(Dropout(0.2))
+        if dueling:
+            q_value_layer.add(Dense(action_count + 1, activation=activation_fn))
+            q_value_layer.add(
+                Lambda(
+                    lambda i: (backend.expand_dims(i[:, 0], -1) + i[:, 1:] -
+                               backend.mean(i[:, 1:], keepdims=True)),
+                    output_shape=(action_count,)
+                )
+            )
+        else:
+            q_value_layer.add(Dense(action_count, activation=activation_fn))
 
         self._encoder = encoder
         self._q_value_layer = q_value_layer
@@ -152,10 +169,24 @@ class DQN(Network):
 def get_network(observation_spec, action_spec, **kwargs):
     from tf_agents.networks.q_network import QNetwork
     from tf_agents.utils import common
+    # TODO: fc_layer_params 需要参数化
     network = DQN(observation_spec, action_spec, fc_layer_params=(100,), **kwargs)
     learning_rate = 1e-3
-    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
-    loss_fn = common.element_wise_squared_loss
+    # optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = Nadam(learning_rate)
+
+    def _huber_loss(y_true, y_pred, clip_delta=1.0):
+        error = y_true - y_pred
+        cond = backend.abs(error) <= clip_delta
+
+        squared_loss = 0.5 * backend.square(error)
+        quadratic_loss = 0.5 * backend.square(clip_delta) + (
+                clip_delta * (backend.abs(error) - clip_delta))
+
+        return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
+
+    # loss_fn = common.element_wise_squared_loss
+    loss_fn = _huber_loss
     return network, optimizer, loss_fn
 
 
