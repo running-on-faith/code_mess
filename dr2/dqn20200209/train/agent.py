@@ -15,7 +15,7 @@ from dr2.dqn20200209.train.network import get_network
 logger = logging.getLogger()
 
 
-def get_agent(env, state_with_flag=False):
+def get_agent(env, state_with_flag=False, epsilon_greedy=0.1):
     # from tf_agents.agents import DqnAgent
     from tf_agents.agents.dqn.dqn_agent import DdqnAgent
     network, optimizer, loss_fn = get_network(
@@ -26,6 +26,7 @@ def get_agent(env, state_with_flag=False):
         env.action_spec(),
         q_network=network,
         optimizer=optimizer,
+        epsilon_greedy=epsilon_greedy,
         td_errors_loss_fn=loss_fn,
         train_step_counter=global_step,
     )
