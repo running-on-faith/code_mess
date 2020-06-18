@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class Config(ConfigBase):
     DB_SCHEMA_IBATS = 'ibats'
     DB_URL_DIC = {
-        DB_SCHEMA_IBATS: 'mysql://mg:Dcba1234@localhost/' + DB_SCHEMA_IBATS,
+        DB_SCHEMA_IBATS: 'mysql://mg:Abcd1234@localhost:3307/' + DB_SCHEMA_IBATS,
     }
 
     BACKTEST_UPDATE_OR_INSERT_PER_ACTION = False
