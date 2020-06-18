@@ -7,10 +7,13 @@
 @desc    : 
 """
 import tensorflow as tf
-from tensorflow_core.python.keras.layers import LSTM, Flatten, Lambda
+from tensorflow.keras.optimizers import Nadam
+from tensorflow.keras import metrics, backend as backend
+from tensorflow.keras.layers import Dense, LSTM, Lambda, Dropout, Concatenate
 from tf_agents.networks.network import Network
 from tf_agents.networks.q_network import validate_specs
 from tf_agents.networks import encoding_network
+from tensorflow.keras.models import Sequential
 
 
 class DQN(Network):
@@ -26,7 +29,9 @@ class DQN(Network):
                  batch_squash=True,
                  dtype=tf.float32,
                  name='QNetwork',
-                 state_with_flag=False):
+                 state_with_flag=False,
+                 dueling=True,
+                 learning_rate=0.001):
         """Creates an instance of `QNetwork`.
 
         Args:
@@ -83,13 +88,17 @@ class DQN(Network):
         #     minimum=array(0., dtype=float32), maximum=array(1., dtype=float32))
         # ]
         self.state_with_flag = state_with_flag
+        self.dueling = dueling
+        self.learning_rate = learning_rate
         if state_with_flag:
             state_spec = input_tensor_spec[0]
-            self._state_layers = LSTM(state_spec.shape[-1] * 2)
-            self._flag_layers = Lambda(lambda x: x)
-            self._rr_layers = Lambda(lambda x: x)
-            preprocessing_layers = [self._state_layers, self._flag_layers, self._rr_layers]
-            preprocessing_combiner = tf.keras.layers.Concatenate(axis=-1)
+            input_shape = state_spec.shape[-1]
+            model = LSTM(input_shape * 2, dropout=0.2, recurrent_dropout=0.2)
+            self._state_layer = model
+            self._flag_layer = Lambda(lambda x: x)
+            self._rr_layer = Lambda(lambda x: x)
+            preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
+            preprocessing_combiner = Concatenate(axis=-1)
         else:
             preprocessing_layers = None
             preprocessing_combiner = None
@@ -108,7 +117,7 @@ class DQN(Network):
 
         q_value_layer = tf.keras.layers.Dense(
             num_actions,
-            activation=None,
+            activation=activation_fn,
             kernel_initializer=tf.compat.v1.initializers.random_uniform(
                 minval=-0.03, maxval=0.03),
             bias_initializer=tf.compat.v1.initializers.constant(-0.2),
@@ -135,7 +144,7 @@ class DQN(Network):
                 observation, step_type=step_type, network_state=network_state)
         else:
             state, network_state = self._encoder(
-            observation, step_type=step_type, network_state=network_state)
+                observation, step_type=step_type, network_state=network_state)
 
         return self._q_value_layer(state), network_state
 
