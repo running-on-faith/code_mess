@@ -8,6 +8,7 @@
 """
 import logging
 import numpy as np
+import pandas as pd
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.utils import common
 from tf_agents.policies import greedy_policy
@@ -62,7 +63,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     logger.info("Train started")
     loop_n = 0
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(env, state_with_flag=state_with_flag, epsilon_greedy=lambda: 0.1*(0.9**loop_n))
+    agent = get_agent(env, state_with_flag=state_with_flag, epsilon_greedy=lambda: 0.2*(0.98**loop_n))
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
 
@@ -85,8 +86,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
 
     # Evaluate the agent's policy once before training.
     rr = compute_rr(eval_driver)
-    rr_list = [rr]
     train_step, step_last = 0, None
+    rr_dic, loss_dic = {train_step: rr}, {}
     for loop_n in range(1, train_loop_count + 1):
 
         # Collect a few steps using collect_policy and save to the replay buffer.
@@ -130,15 +131,25 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
             step_last = train_step
 
         if train_step % log_interval == 0:
+            _loss = train_loss.loss if train_loss else None
+            loss_dic[train_step] = _loss
             logger.info('%d/%d) train_step=%d loss=%.8f', loop_n, train_loop_count, train_step,
-                        train_loss.loss if train_loss else None)
+                        _loss)
 
         if train_step % eval_interval == 0:
             rr = compute_rr(eval_driver)
             logger.info('%d/%d) train_step=%d rr = %.2f%%', loop_n, train_loop_count, train_step, rr * 100)
-            rr_list.append(rr)
+            rr_dic[train_step] = rr
 
-    logger.info("rr_list=%s", rr_list)
+    rr_df = pd.DataFrame(rr_dic)
+    loss_df = pd.DataFrame(loss_dic)
+    logger.info("rr_df\n%s", rr_df)
+    logger.info("loss_df\n%s", loss_df)
+    import matplotlib.pyplot as plt
+    rr_df.plot()
+    plt.show()
+    loss_df.plot()
+    plt.show()
     logger.info("Train finished")
 
 
