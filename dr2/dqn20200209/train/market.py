@@ -23,8 +23,23 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 
 
 class QuotesMarket(object):
-    def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5, fee_rate=3e-3, position_unit=10,
-                 state_with_flag=False, reward_with_fee0=False, md_close_label='close', md_open_label='open'):
+    def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5,
+                 fee_rate=3e-3, position_unit=10, state_with_flag=False,
+                 reward_with_fee0=False, return_tot_reward=False,
+                 md_close_label='close', md_open_label='open'):
+        """
+        :param md_df: 行情数据
+        :param data_factors: 因子数据,将作为 observation 返回
+        :param init_cash: 初始现金
+        :param fee_rate: 费率
+        :param position_unit: 持仓单位
+        :param state_with_flag: 默认False, observation 是否包含 多空标识,以及 当前 累计收益率 rr
+        :param reward_with_fee0: 默认False, reward 是否包含 fee=0 状态的 reward
+        :param return_tot_reward: 默认True, reward 是否是累计 rr, 如果 False, 仅返回当前状态与上一状态的 rr 净值
+        :param md_close_label: close 标识 key
+        :param md_open_label: open 标识 key
+        :return:
+        """
         self.data_close = md_df[md_close_label]
         self.data_open = md_df[md_open_label]
         self.data_factor = data_factors
@@ -44,6 +59,7 @@ class QuotesMarket(object):
         self._flag = _FLAG_EMPTY
         self.state_with_flag = state_with_flag
         self.reward_with_fee0 = reward_with_fee0
+        self.return_tot_reward = return_tot_reward
         self.action_count = 0
         self._observation_latest = None
         self._reward_latest = 0.0
@@ -65,16 +81,7 @@ class QuotesMarket(object):
         self.fee_curr_step = 0
         self.fee_tot = 0
         self.action_count = 0
-        if self.state_with_flag:
-            rr = self.total_value / self.init_cash - 1
-            # self._observation_latest = {'state': self.data_factor[self.step_counter],
-            #                             'flag': np.array([self.flag]),
-            #                             'rr': np.array([rr])}
-            # 此处需要与 env.observation_spec 对应一致
-            # 当前 env.observation_spec 不支持字典形式,因此只能使用数组形式
-            self._observation_latest = self._get_observation_latest()
-        else:
-            self._observation_latest = self.data_factor[self.step_counter]
+        self._observation_latest = self._get_observation_latest()
         self._reward_latest = 0.0
         self._done = False
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
@@ -143,6 +150,7 @@ class QuotesMarket(object):
             raise ValueError(f"It's Done state. max_step_count={self.max_step_count}, "
                              f"current step={self.step_counter}, total_value={self.total_value}")
         self.fee_curr_step = 0
+        reward_last = self._reward_latest
         if action == ACTION_LONG:
             if self._flag == _FLAG_EMPTY:
                 self.long()
@@ -190,10 +198,20 @@ class QuotesMarket(object):
             self._done = True
 
         self._observation_latest = self._get_observation_latest()
-        self._reward_latest = (
-            reward / price / self.position_unit, (reward + self.fee_curr_step) / price / self.position_unit
-        ) if self.reward_with_fee0 else (
-                reward / price / self.position_unit)
+        if self.reward_with_fee0:
+            if self.return_tot_reward:
+                self._reward_latest = reward / price / self.position_unit, (
+                        reward + self.fee_curr_step) / price / self.position_unit
+            else:
+                self._reward_latest = reward / price / self.position_unit - reward_last[0], (
+                        reward + self.fee_curr_step) / price / self.position_unit - reward_last[1]
+
+        else:
+            if self.return_tot_reward:
+                self._reward_latest = reward / price / self.position_unit
+            else:
+                self._reward_latest = reward / price / self.position_unit - reward_last
+
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
         return self.step_ret_latest
 
