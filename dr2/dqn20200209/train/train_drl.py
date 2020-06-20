@@ -47,13 +47,12 @@ def compute_rr(driver):
 
 
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
-              log_interval=2, state_with_flag=True,
-              eval_interval=5, train_count_per_loop=10, train_sample_batch_size=1024):
+              state_with_flag=True, eval_interval=5,
+              train_count_per_loop=10, train_sample_batch_size=1024):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
     :param num_collect_episodes: 数据采集次数
-    :param log_interval:日志间隔
     :param state_with_flag:带 flag 标识
     :param eval_interval:评估间隔
     :param train_count_per_loop: 每轮次的训练次数
@@ -103,10 +102,10 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         for fetch_num, (experience, unused_info) in enumerate(database, start=1):
             try:
                 try:
-                    logger.debug(
-                        "%d/%d) train_step=%d training %d -> %d of batch_size=%d data",
-                        loop_n, train_loop_count, train_step, fetch_num,
-                        len(experience.observation), experience.observation[0].shape[0])
+                    # logger.debug(
+                    #     "%d/%d) train_step=%d training %d -> %d of batch_size=%d data",
+                    #     loop_n, train_loop_count, train_step, fetch_num,
+                    #     len(experience.observation), experience.observation[0].shape[0])
                     train_loss = agent.train(experience)
                     train_step = agent.train_step_counter.numpy()
                 except Exception as exp:
@@ -120,37 +119,40 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
             if fetch_num >= train_count_per_loop:
                 break
 
-        logger.debug("clear buffer")
+        # logger.debug("clear buffer")
         collect_replay_buffer.clear()
 
-        logger.info("%d/%d) train_step=%d", loop_n, train_loop_count, train_step)
+        # logger.info("%d/%d) train_step=%d", loop_n, train_loop_count, train_step)
         if step_last is not None and step_last == train_step:
             logger.warning('keep train error. stop loop.')
             break
         else:
             step_last = train_step
 
-        if train_step % log_interval == 0:
-            _loss = train_loss.loss if train_loss else None
-            loss_dic[train_step] = _loss
-            logger.info('%d/%d) train_step=%d loss=%.8f', loop_n, train_loop_count, train_step,
-                        _loss)
+        _loss = train_loss.loss if train_loss else None
+        loss_dic[train_step] = _loss
+        logger.info('%d/%d) train_step=%d loss=%.8f',
+                    loop_n, train_loop_count, train_step, _loss)
 
         if train_step % eval_interval == 0:
             rr = compute_rr(eval_driver)
             logger.info('%d/%d) train_step=%d rr = %.2f%%', loop_n, train_loop_count, train_step, rr * 100)
             rr_dic[train_step] = rr
 
-    rr_df = pd.DataFrame(rr_dic)
-    loss_df = pd.DataFrame(loss_dic)
+    show_result(rr_dic, loss_dic)
+    logger.info("Train finished")
+
+
+def show_result(rr_dic, loss_dic):
+    rr_df = pd.DataFrame([rr_dic]).T
+    loss_df = pd.DataFrame([loss_dic]).T
     logger.info("rr_df\n%s", rr_df)
     logger.info("loss_df\n%s", loss_df)
     import matplotlib.pyplot as plt
-    rr_df.plot()
+    _, axes = plt.subplots(2, 1)
+    rr_df.plot(ax=axes[0])
+    loss_df.plot(logy=True, ax=axes[1])
     plt.show()
-    loss_df.plot()
-    plt.show()
-    logger.info("Train finished")
 
 
 if __name__ == "__main__":
