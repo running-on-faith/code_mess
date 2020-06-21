@@ -67,6 +67,7 @@ class PlotTrajectoryMatrix:
             rr_df.plot()
             file_name = datetime_2_str(datetime.now())+'.png'
             plt.savefig(file_name)
+            plt.close()
             logger.debug("file_name: %s saved", file_name)
             self.replay_buffer = []
             self.rr_dic = {}
