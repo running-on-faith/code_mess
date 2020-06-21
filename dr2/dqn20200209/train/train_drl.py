@@ -129,7 +129,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         else:
             step_last = train_step
 
-        _loss = train_loss.loss if train_loss else None
+        _loss = train_loss.loss.numpy() if train_loss else None
         loss_dic[train_step] = _loss
         logger.info('%d/%d) train_step=%d loss=%.8f',
                     loop_n, train_loop_count, train_step, _loss)
