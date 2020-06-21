@@ -26,7 +26,6 @@ class FinalTrajectoryMetric:
         self.final_rr = []
 
     def __call__(self, trajectory):
-        import numpy as np
         self.replay_buffer.append(trajectory)
         if trajectory.is_last():
             pct_chgs = np.ones(len(self.replay_buffer))
@@ -40,9 +39,46 @@ class FinalTrajectoryMetric:
         return np.mean(self.final_rr)
 
 
+class PlotTrajectoryMatrix:
+
+    def __init__(self):
+        self.replay_buffer = []
+        self.rr_dic = {}
+
+    def __call__(self, trajectory):
+        self.replay_buffer.append(trajectory)
+        if trajectory.is_last():
+            pct_chgs = np.ones(len(self.replay_buffer))
+            for idx, _ in enumerate(self.replay_buffer):
+                pct_chgs[idx] += _.reward.numpy()
+            self.rr_dic[len(self.rr_dic)] = pct_chgs.cumprod() - 1
+            self.replay_buffer = []
+            # logger.info("trajectory.is_last, len(self.replay_buffer)=%d\nrr list=%s",
+            #             len(self.replay_buffer), pct_chgs.cumprod() - 1)
+
+    def result(self):
+        import matplotlib.pyplot as plt
+        from datetime import datetime
+        from ibats_utils.mess import datetime_2_str
+
+        # logger.info("len(self.rr_dic)=%d\n%s", len(self.rr_dic), self.rr_dic)
+        if len(self.rr_dic) > 0:
+            rr_df = pd.DataFrame(self.rr_dic)
+            rr_df.plot()
+            file_name = datetime_2_str(datetime.now())+'.png'
+            plt.savefig(file_name)
+            logger.debug("file_name: %s saved", file_name)
+            self.replay_buffer = []
+            self.rr_dic = {}
+        else:
+            rr_df = None
+        return rr_df
+
+
 def compute_rr(driver):
     driver.run()
     final_trajectory_rr = driver.observers[0]
+    driver.observers[1].result()
     return final_trajectory_rr.result()
 
 
@@ -74,8 +110,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
     # eval 由于历史行情相对确定,因此,获取最终汇报只需要跑一次即可
-    final_trajectory_rr = FinalTrajectoryMetric()
-    eval_observers = [final_trajectory_rr]
+    final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix()
+    eval_observers = [final_trajectory_rr, plot_rr]
     eval_driver = DynamicEpisodeDriver(
         env, eval_policy, eval_observers, num_episodes=num_eval_episodes)
 
