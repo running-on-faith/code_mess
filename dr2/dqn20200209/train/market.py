@@ -188,7 +188,9 @@ class QuotesMarket(object):
         # 计算价值
         price = self.data_close[self.step_counter]
         position_value = price * self.position_unit * self._flag
-        reward = self.cash + position_value - self.total_value
+        # self.total_value 此时记录的是上一轮操作结果时的总资产.
+        # 当前现金流+持仓价值 - 上一轮的总资产 = 当期资产净增长
+        net_reward = self.cash + position_value - self.total_value
         self.step_counter += 1
         self.total_value = position_value + self.cash
 
@@ -200,17 +202,17 @@ class QuotesMarket(object):
         self._observation_latest = self._get_observation_latest()
         if self.reward_with_fee0:
             if self.return_tot_reward:
-                self._reward_latest = reward / price / self.position_unit, (
-                        reward + self.fee_curr_step) / price / self.position_unit
+                self._reward_latest = net_reward / price / self.position_unit + reward_last[0], (
+                        net_reward + self.fee_curr_step) / price / self.position_unit + reward_last[1]
             else:
-                self._reward_latest = reward / price / self.position_unit - reward_last[0], (
-                        reward + self.fee_curr_step) / price / self.position_unit - reward_last[1]
+                self._reward_latest = net_reward / price / self.position_unit, (
+                        net_reward + self.fee_curr_step) / price / self.position_unit
 
         else:
             if self.return_tot_reward:
-                self._reward_latest = reward / price / self.position_unit
+                self._reward_latest = net_reward / price / self.position_unit + reward_last
             else:
-                self._reward_latest = reward / price / self.position_unit - reward_last
+                self._reward_latest = net_reward / price / self.position_unit
 
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
         return self.step_ret_latest
