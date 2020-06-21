@@ -6,6 +6,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras import metrics, backend as backend
@@ -24,7 +25,7 @@ class DQN(Network):
                  conv_layer_params=None,
                  fc_layer_params=(75, 40),
                  dropout_layer_params=None,
-                 activation_fn=tf.keras.activations.relu,
+                 activation_fn=tf.keras.activations.tanh,
                  kernel_initializer=None,
                  batch_squash=True,
                  dtype=tf.float32,
@@ -124,9 +125,9 @@ class DQN(Network):
         #     bias_initializer=tf.compat.v1.initializers.constant(-0.2),
         #     dtype=dtype)
         q_value_layer = Sequential()
-        q_value_layer.add(Dense(input_shape // 2))
+        q_value_layer.add(Dense(input_shape // 2, activation=activation_fn))
         q_value_layer.add(Dropout(0.2))
-        q_value_layer.add(Dense(input_shape // 4))  # 减少一层，降低网络复杂度
+        q_value_layer.add(Dense(input_shape // 4, activation=activation_fn))  # 减少一层，降低网络复杂度
         q_value_layer.add(Dropout(0.2))
         if dueling:
             q_value_layer.add(Dense(action_count + 1, activation=activation_fn))
@@ -163,7 +164,24 @@ class DQN(Network):
             state, network_state = self._encoder(
                 observation, step_type=step_type, network_state=network_state)
 
-        return self._q_value_layer(state), network_state
+        q_value = self._q_value_layer(state)
+        try:
+            q_numpy = q_value.numpy()
+            if np.isnan(q_numpy).any():
+                import logging
+                logger = logging.getLogger()
+                logger.warning("q_numpy=%s is nan. state=\n%s", q_numpy, state)
+            elif q_numpy.shape == (1, 2) and q_numpy[0, 0] == q_numpy[0, 1]:
+                import logging
+                logger = logging.getLogger()
+                logger.warning("q_numpy=%s is equal. state=\n%s", q_numpy, state)
+        except AttributeError:
+            import logging
+            logger = logging.getLogger()
+            logger.exception("q_value=%s. state=%s", q_value, state)
+            pass
+
+        return q_value, network_state
 
 
 def get_network(observation_spec, action_spec, **kwargs):
