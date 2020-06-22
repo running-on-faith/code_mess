@@ -65,7 +65,7 @@ class PlotTrajectoryMatrix:
         if len(self.rr_dic) > 0:
             rr_df = pd.DataFrame(self.rr_dic)
             rr_df.plot()
-            file_name = datetime_2_str(datetime.now())+'.png'
+            file_name = datetime_2_str(datetime.now()) + '.png'
             plt.savefig(file_name)
             plt.close()
             logger.debug("file_name: %s saved", file_name)
@@ -74,6 +74,19 @@ class PlotTrajectoryMatrix:
         else:
             rr_df = None
         return rr_df
+
+
+class DeclinedTFUniformReplayBuffer(TFUniformReplayBuffer):
+
+    def __init__(self, data_spec, batch_size, max_length=1000, reward_decline_ratio=0.8):
+        super().__init__(data_spec, batch_size, max_length=max_length)
+        self.reward_decline_ratio = reward_decline_ratio
+
+    def add_batch(self, items):
+        super().add_batch(items)
+
+    def clear(self):
+        super().clear()
 
 
 def compute_rr(driver):
@@ -99,7 +112,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     logger.info("Train started")
     loop_n = 0
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(env, state_with_flag=state_with_flag, epsilon_greedy=lambda: 0.2*(0.98**loop_n))
+    agent = get_agent(env, state_with_flag=state_with_flag)
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
 
@@ -168,13 +181,14 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
 
         _loss = train_loss.loss.numpy() if train_loss else None
         loss_dic[train_step] = _loss
-        logger.info('%d/%d) train_step=%d loss=%.8f',
-                    loop_n, train_loop_count, train_step, _loss)
-
         if train_step % eval_interval == 0:
             rr = compute_rr(eval_driver)
-            logger.info('%d/%d) train_step=%d rr = %.2f%%', loop_n, train_loop_count, train_step, rr * 100)
+            logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%%',
+                        loop_n, train_loop_count, train_step, _loss, rr * 100)
             rr_dic[train_step] = rr
+        else:
+            logger.info('%d/%d) train_step=%d loss=%.8f',
+                        loop_n, train_loop_count, train_step, _loss)
 
     show_result(rr_dic, loss_dic)
     logger.info("Train finished")
@@ -193,4 +207,4 @@ def show_result(rr_dic, loss_dic):
 
 
 if __name__ == "__main__":
-    train_drl(train_loop_count=100, num_collect_episodes=5)
+    train_drl(train_loop_count=150, num_collect_episodes=5)
