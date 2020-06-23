@@ -76,19 +76,6 @@ class PlotTrajectoryMatrix:
         return rr_df
 
 
-class DeclinedTFUniformReplayBuffer(TFUniformReplayBuffer):
-
-    def __init__(self, data_spec, batch_size, max_length=1000, reward_decline_ratio=0.8):
-        super().__init__(data_spec, batch_size, max_length=max_length)
-        self.reward_decline_ratio = reward_decline_ratio
-
-    def add_batch(self, items):
-        super().add_batch(items)
-
-    def clear(self):
-        super().clear()
-
-
 def compute_rr(driver):
     driver.run()
     final_trajectory_rr = driver.observers[0]
