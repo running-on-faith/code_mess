@@ -39,22 +39,30 @@ class DeclinedTFUniformReplayBuffer(TFUniformReplayBuffer):
         super().clear()
 
 
-def _test_declained_replay_buffer():
+def _test_declined_replay_buffer():
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     from dr2.dqn20200209.train.env import get_env
     from dr2.dqn20200209.train.agent import get_agent
+    # 建立环境
     state_with_flag = True
     env = get_env(state_with_flag=state_with_flag)
     agent = get_agent(env, state_with_flag=state_with_flag)
-    collect_policy = agent.collect_policy
+    eval_policy = agent.policy
     collect_replay_buffer = DeclinedTFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
-    collect_observers = [collect_replay_buffer.add_batch]
-    collect_driver = DynamicEpisodeDriver(
-        env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
-    collect_driver.run()
-    observer = collect_driver.observers[0]
-    observer.result()
+    eval_observers = [collect_replay_buffer.add_batch]
+    eval_driver = DynamicEpisodeDriver(
+        env, eval_policy, eval_observers, num_episodes=1)
+    # 运行收集数据
+    eval_driver.run()
+
+    database = iter(collect_replay_buffer.as_dataset(
+        sample_batch_size=10,
+        num_steps=10
+    ).prefetch(10))
+    for fetch_num, (experience, unused_info) in enumerate(database, start=1):
+        print(fetch_num)
+        print(experience)
 
 
 if __name__ == "__main__":
-    _test_declained_replay_buffer()
+    _test_declined_replay_buffer()
