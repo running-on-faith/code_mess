@@ -108,7 +108,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     # collect
     # collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
-    collect_replay_buffer = DeclinedTFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
+    collect_replay_buffer = DeclinedTFUniformReplayBuffer(
+        agent.collect_data_spec, env.batch_size, max_length=2000, gamma=0.8)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
@@ -184,8 +185,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
 
 
 def show_result(rr_dic, loss_dic):
-    rr_df = pd.DataFrame([rr_dic]).T
-    loss_df = pd.DataFrame([loss_dic]).T
+    rr_df = pd.DataFrame([rr_dic]).T.rename(columns={0: 'rr'})
+    loss_df = pd.DataFrame([loss_dic]).T.rename(columns={0: 'loss'})
     logger.info("rr_df\n%s", rr_df)
     logger.info("loss_df\n%s", loss_df)
     import matplotlib.pyplot as plt
