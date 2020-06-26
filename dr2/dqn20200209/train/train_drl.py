@@ -10,6 +10,7 @@ import logging
 import numpy as np
 import pandas as pd
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
+from dr2.dqn20200209.replay_buffer import DeclinedTFUniformReplayBuffer
 from tf_agents.utils import common
 from tf_agents.policies import greedy_policy
 from dr2.dqn20200209.train.agent import get_agent
@@ -106,7 +107,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     from tf_agents.metrics import tf_metrics
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     # collect
-    collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
+    # collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
+    collect_replay_buffer = DeclinedTFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
