@@ -44,7 +44,7 @@ class DeclinedTFUniformReplayBuffer(TFUniformReplayBuffer):
         if self.window_size is None:
             loop_count = len(self._trajectory_list) + 1
         else:
-            loop_count = min(len(self._trajectory_list), self.window_size)  + 1
+            loop_count = min(len(self._trajectory_list), self.window_size) + 1
 
         # 此过程需要不断的重新创建 Trajectory 对象,效率极低但目前没有找到更有效的方法
         for num in range(1, loop_count):
