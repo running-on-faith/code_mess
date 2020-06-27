@@ -109,7 +109,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     # collect
     # collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
     collect_replay_buffer = DeclinedTFUniformReplayBuffer(
-        agent.collect_data_spec, env.batch_size, max_length=2000, gamma=0.8)
+        agent.collect_data_spec, env.batch_size, max_length=2000, gamma=0.6)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
@@ -197,4 +197,4 @@ def show_result(rr_dic, loss_dic):
 
 
 if __name__ == "__main__":
-    train_drl(train_loop_count=150, num_collect_episodes=5)
+    train_drl(train_loop_count=300, num_collect_episodes=10)
