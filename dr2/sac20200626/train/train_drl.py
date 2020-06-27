@@ -85,7 +85,8 @@ def compute_rr(driver):
 
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
-              train_count_per_loop=10, train_sample_batch_size=1024):
+              train_count_per_loop=10, train_sample_batch_size=1024,
+              agent_kwargs=None):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -94,6 +95,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     :param eval_interval:评估间隔
     :param train_count_per_loop: 每轮次的训练次数
     :param train_sample_batch_size: 每次训练提取样本数量
+    :param agent_kwargs: agent 参数
     :return:
     """
     logger.info("Train started")
@@ -102,8 +104,9 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     train_env = get_env(state_with_flag=state_with_flag, is_continuous_action=True)
     eval_env = get_env(state_with_flag=state_with_flag, is_continuous_action=True)
 
-    agent = get_agent(train_env, state_with_flag=state_with_flag)
-    eval_policy = agent.policy
+    agent = get_agent(train_env, state_with_flag=state_with_flag,
+                      **({} if agent_kwargs is None else agent_kwargs))
+    eval_policy = greedy_policy.GreedyPolicy(agent.policy)
     collect_policy = agent.collect_policy
 
     from tf_agents.metrics import tf_metrics
@@ -198,4 +201,4 @@ def show_result(rr_dic, loss_dic):
 
 
 if __name__ == "__main__":
-    train_drl(train_loop_count=150, num_collect_episodes=10)
+    train_drl(train_loop_count=300, num_collect_episodes=10)
