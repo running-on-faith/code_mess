@@ -19,7 +19,6 @@ logger = logging.getLogger()
 def get_agent(
         env,
         state_with_flag=False,
-        epsilon_greedy=0.1,
         critic_learning_rate=3e-4,
         actor_learning_rate=3e-4,
         alpha_learning_rate=3e-4,
