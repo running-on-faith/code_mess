@@ -31,11 +31,15 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 class AccountEnv(PyEnvironment):
 
     def __init__(self, md_df: pd.DataFrame, data_factors: np.ndarray,
-                 state_with_flag=True, action_kind_count=2, batch_size=None, **kwargs):
+                 state_with_flag=True, action_kind_count=2, batch_size=None,
+                 is_continuous_action=False,
+                 **kwargs):
         super(AccountEnv, self).__init__()
         kwargs['state_with_flag'] = state_with_flag
         self._batch_size = batch_size
         self.market = QuotesMarket(md_df, data_factors, **kwargs)
+        self.is_continuous_action = is_continuous_action
+        self.action_kind_count = action_kind_count
         self._state_spec = array_spec.ArraySpec(
             shape=data_factors.shape[1:], dtype=data_factors.dtype, name='state')
         self._flag_spec = array_spec.BoundedArraySpec(
@@ -43,8 +47,8 @@ class AccountEnv(PyEnvironment):
         self._rr_spec = array_spec.ArraySpec(
             shape=(1,), dtype=np.float32, name='rr')
         self._action_spec = array_spec.BoundedArraySpec(
-            shape=(1,), dtype=np.int32, name='action', minimum=0.0,
-            maximum=max(ACTIONS[:action_kind_count]))
+            shape=(1,), dtype=np.int32 if not is_continuous_action else np.float32,
+            name='action', minimum=0.0, maximum=max(ACTIONS[:action_kind_count]))
         self.last_done_state = False
         if state_with_flag:
             # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec, 'rr': self._rr_spec}
@@ -75,6 +79,9 @@ class AccountEnv(PyEnvironment):
     def _step(self, action):
         if self.last_done_state:
             return self._reset()
+        if self.is_continuous_action:
+            action = int(np.round(action))
+
         observation, rewards, self.last_done_state = self.market.step(action)
         if self.last_done_state:
             return ts.termination(observation, rewards)
@@ -109,11 +116,12 @@ def _get_df():
     return md_df[['close', 'open']], data_arr_batch
 
 
-def get_env(state_with_flag=True):
+def get_env(state_with_flag=True, is_continuous_action=False):
     from tf_agents.environments.tf_py_environment import TFPyEnvironment
     md_df, data_factors = _get_df()
     env = TFPyEnvironment(AccountEnv(
-        md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag))
+        md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag,
+        is_continuous_action=is_continuous_action))
     return env
 
 
