@@ -110,7 +110,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     # collect
     # collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
     collect_replay_buffer = DeclinedTFUniformReplayBuffer(
-        agent.collect_data_spec, env.batch_size, max_length=2500 * num_collect_episodes, gamma=gamma)
+        agent.collect_data_spec, env.batch_size, max_length=2500 * num_collect_episodes,
+        gamma=gamma)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
