@@ -20,8 +20,6 @@ class FinalTrajectoryMetric:
     def __init__(self, stat_action_count=True):
         self.replay_buffer = []
         self.data_dic = defaultdict(list)
-        self.final_rr = []
-        self.final_action_count = []
         self.stat_action_count = stat_action_count
 
     def __call__(self, trajectory: Trajectory):
@@ -45,11 +43,13 @@ class FinalTrajectoryMetric:
             self.replay_buffer = []
 
     def result(self):
-        return {
+        stat_dic = {
             'rr': np.mean(self.data_dic['rr']),
             'action_count': np.mean(self.data_dic['action_count']),
             'avg_action_period': np.mean(self.data_dic['avg_action_period']),
         }
+        self.data_dic = defaultdict(list)
+        return stat_dic
 
 
 class PlotTrajectoryMatrix:
@@ -96,6 +96,7 @@ class PlotTrajectoryMatrix:
             logger.debug("file_name: %s saved", file_name)
             self.replay_buffer = []
             self.rr_dic = {}
+            self.action_dic = {}
         else:
             rr_df = None
         return rr_df
