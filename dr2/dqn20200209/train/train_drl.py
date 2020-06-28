@@ -86,7 +86,7 @@ def compute_rr(driver):
 
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
-              train_count_per_loop=10, train_sample_batch_size=1024):
+              train_count_per_loop=30, train_sample_batch_size=1024, gamma=0.5):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -95,6 +95,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     :param eval_interval:评估间隔
     :param train_count_per_loop: 每轮次的训练次数
     :param train_sample_batch_size: 每次训练提取样本数量
+    :param gamma: reward衰减率
     :return:
     """
     logger.info("Train started")
@@ -109,11 +110,11 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     # collect
     # collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
     collect_replay_buffer = DeclinedTFUniformReplayBuffer(
-        agent.collect_data_spec, env.batch_size, max_length=2000, gamma=0.6)
+        agent.collect_data_spec, env.batch_size, max_length=2500 * num_collect_episodes, gamma=gamma)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
-    # eval 由于历史行情相对确定,因此,获取最终汇报只需要跑一次即可
+    # eval 由于历史行情相对确定,因此,获取最终rr只需要跑一次即可
     final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix()
     eval_observers = [final_trajectory_rr, plot_rr]
     eval_driver = DynamicEpisodeDriver(
