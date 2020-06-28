@@ -112,7 +112,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     from tf_agents.metrics import tf_metrics
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     # collect
-    collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, train_env.batch_size)
+    collect_replay_buffer = TFUniformReplayBuffer(
+        agent.collect_data_spec, train_env.batch_size, max_length=2500 * num_collect_episodes)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         train_env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
