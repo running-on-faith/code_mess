@@ -10,71 +10,13 @@ import logging
 import numpy as np
 import pandas as pd
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
-from dr2.dqn20200209.replay_buffer import DeclinedTFUniformReplayBuffer
 from tf_agents.utils import common
-from tf_agents.policies import greedy_policy
+from dr2.common.metrics import FinalTrajectoryMetric, PlotTrajectoryMatrix
+from dr2.dqn20200209.replay_buffer import DeclinedTFUniformReplayBuffer
 from dr2.dqn20200209.train.agent import get_agent
 from dr2.dqn20200209.train.env import get_env
-from dr2.dqn20200209.train.policy import get_policy
 
 logger = logging.getLogger()
-
-
-class FinalTrajectoryMetric:
-
-    def __init__(self):
-        self.replay_buffer = []
-        self.final_rr = []
-
-    def __call__(self, trajectory):
-        self.replay_buffer.append(trajectory)
-        if trajectory.is_last():
-            pct_chgs = np.ones(len(self.replay_buffer))
-            for idx, _ in enumerate(self.replay_buffer):
-                pct_chgs[idx] += _.reward.numpy()
-            rr = pct_chgs.prod() - 1
-            self.final_rr.append(rr)
-            self.replay_buffer = []
-
-    def result(self):
-        return np.mean(self.final_rr)
-
-
-class PlotTrajectoryMatrix:
-
-    def __init__(self):
-        self.replay_buffer = []
-        self.rr_dic = {}
-
-    def __call__(self, trajectory):
-        self.replay_buffer.append(trajectory)
-        if trajectory.is_last():
-            pct_chgs = np.ones(len(self.replay_buffer))
-            for idx, _ in enumerate(self.replay_buffer):
-                pct_chgs[idx] += _.reward.numpy()
-            self.rr_dic[len(self.rr_dic)] = pct_chgs.cumprod() - 1
-            self.replay_buffer = []
-            # logger.info("trajectory.is_last, len(self.replay_buffer)=%d\nrr list=%s",
-            #             len(self.replay_buffer), pct_chgs.cumprod() - 1)
-
-    def result(self):
-        import matplotlib.pyplot as plt
-        from datetime import datetime
-        from ibats_utils.mess import datetime_2_str
-
-        # logger.info("len(self.rr_dic)=%d\n%s", len(self.rr_dic), self.rr_dic)
-        if len(self.rr_dic) > 0:
-            rr_df = pd.DataFrame(self.rr_dic)
-            rr_df.plot()
-            file_name = datetime_2_str(datetime.now()) + '.png'
-            plt.savefig(file_name)
-            plt.close()
-            logger.debug("file_name: %s saved", file_name)
-            self.replay_buffer = []
-            self.rr_dic = {}
-        else:
-            rr_df = None
-        return rr_df
 
 
 def compute_rr(driver):
@@ -126,9 +68,9 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     collect_driver.run = common.function(collect_driver.run)
 
     # Evaluate the agent's policy once before training.
-    rr = compute_rr(eval_driver)
+    stat_dic = compute_rr(eval_driver)
     train_step, step_last = 0, None
-    rr_dic, loss_dic = {train_step: rr}, {}
+    rr_dic, loss_dic = {train_step: stat_dic['rr']}, {}
     for loop_n in range(1, train_loop_count + 1):
 
         # Collect a few steps using collect_policy and save to the replay buffer.
@@ -174,10 +116,12 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         _loss = train_loss.loss.numpy() if train_loss else None
         loss_dic[train_step] = _loss
         if train_step % eval_interval == 0:
-            rr = compute_rr(eval_driver)
-            logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%%',
-                        loop_n, train_loop_count, train_step, _loss, rr * 100)
-            rr_dic[train_step] = rr
+            stat_dic = compute_rr(eval_driver)
+            logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%% action_count = %.1f '
+                        'avg_action_period = %.2f',
+                        loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
+                        stat_dic['action_count'], stat_dic['avg_action_period'])
+            rr_dic[train_step] = stat_dic['rr']
         else:
             logger.info('%d/%d) train_step=%d loss=%.8f',
                         loop_n, train_loop_count, train_step, _loss)
