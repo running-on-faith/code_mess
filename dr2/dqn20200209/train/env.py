@@ -10,10 +10,12 @@
 import functools
 import pandas as pd
 import numpy as np
+from ibats_common.example import get_trade_date_series, get_delivery_date_series
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
 from dr2.dqn20200209.train.market import QuotesMarket
+from drl import DATA_FOLDER_PATH
 
 ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP = 0, 1, 2, 3
 ACTIONS = [ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP]
@@ -105,12 +107,15 @@ class AccountEnv(PyEnvironment):
 def _get_df():
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    instrument_type = 'RB'
     from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv', folder_path='/home/mg/github/IBATS_Common/ibats_common/example/data'
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
-    factors_df = get_factor(md_df, dropna=True)
+    factors_df = get_factor(md_df, trade_date_series, delivery_date_series, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
     return md_df[['close', 'open']], data_arr_batch
