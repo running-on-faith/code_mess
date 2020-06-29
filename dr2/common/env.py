@@ -14,7 +14,7 @@ from ibats_common.example import get_trade_date_series, get_delivery_date_series
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
-from dr2.dqn20200209.train.market import QuotesMarket
+from dr2.common.market import QuotesMarket
 from drl import DATA_FOLDER_PATH
 
 ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP = 0, 1, 2, 3

@@ -11,19 +11,12 @@ import numpy as np
 import pandas as pd
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.utils import common
-from dr2.common.metrics import FinalTrajectoryMetric, PlotTrajectoryMatrix
+from dr2.common.metrics import FinalTrajectoryMetric, PlotTrajectoryMatrix, run_and_get_result
+from dr2.common.env import get_env
 from dr2.dqn20200209.replay_buffer import DeclinedTFUniformReplayBuffer
 from dr2.dqn20200209.train.agent import get_agent
-from dr2.dqn20200209.train.env import get_env
 
 logger = logging.getLogger()
-
-
-def compute_rr(driver):
-    driver.run()
-    final_trajectory_rr = driver.observers[0]
-    driver.observers[1].result()
-    return final_trajectory_rr.result()
 
 
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
@@ -68,7 +61,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     collect_driver.run = common.function(collect_driver.run)
 
     # Evaluate the agent's policy once before training.
-    stat_dic = compute_rr(eval_driver)
+    stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
     train_step, step_last = 0, None
     rr_dic, loss_dic = {train_step: stat_dic['rr']}, {}
     for loop_n in range(1, train_loop_count + 1):
@@ -116,7 +109,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         _loss = train_loss.loss.numpy() if train_loss else None
         loss_dic[train_step] = _loss
         if train_step % eval_interval == 0:
-            stat_dic = compute_rr(eval_driver)
+            stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
             logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%% action_count = %.1f '
                         'avg_action_period = %.2f',
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,

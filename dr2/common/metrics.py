@@ -102,5 +102,18 @@ class PlotTrajectoryMatrix:
         return rr_df
 
 
+def run_and_get_result(driver, matrix_class=None):
+    """模拟运算，进行收益统计"""
+    driver.run()
+    results = []
+    for matrix in driver.observers:
+        if matrix_class is None:
+            results.append(matrix.result())
+        elif matrix_class is not None and isinstance(matrix, FinalTrajectoryMetric):
+            return matrix.result()
+
+    return results if matrix_class is None else None
+
+
 if __name__ == "__main__":
     pass
