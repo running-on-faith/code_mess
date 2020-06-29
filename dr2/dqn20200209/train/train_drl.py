@@ -9,12 +9,14 @@
 import logging
 import numpy as np
 import pandas as pd
+from tf_agents.policies.policy_saver import PolicySaver
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.utils import common
 from dr2.common.metrics import FinalTrajectoryMetric, PlotTrajectoryMatrix, run_and_get_result
 from dr2.common.env import get_env
 from dr2.dqn20200209.replay_buffer import DeclinedTFUniformReplayBuffer
 from dr2.dqn20200209.train.agent import get_agent
+from dr2.dqn20200209.train.policy import save_policy
 
 logger = logging.getLogger()
 
@@ -59,6 +61,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     agent.train = common.function(agent.train)
     collect_driver.run = common.function(collect_driver.run)
+    saver = PolicySaver(eval_driver.policy)
 
     # Evaluate the agent's policy once before training.
     stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
@@ -115,6 +118,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
                         stat_dic['action_count'], stat_dic['avg_action_period'])
             rr_dic[train_step] = stat_dic['rr']
+            save_policy(saver, train_step)
         else:
             logger.info('%d/%d) train_step=%d loss=%.8f',
                         loop_n, train_loop_count, train_step, _loss)
