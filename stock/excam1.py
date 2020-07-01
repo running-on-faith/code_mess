@@ -4,7 +4,7 @@ import ffn
 import os
 import matplotlib
 import empyrical
-matplotlib.use('agg')
+# matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from collections import OrderedDict, defaultdict
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -72,8 +72,8 @@ def backtest(factor_df, rr_future_df):
 
 def plot_cum_rr(rr_dic):
     rr_df = pd.DataFrame([rr_dic], index=['stg1_rr']).T
-    rr_df['Portfolio Cum RR'] = (rr_df['stg1_rr'] + 1).cumprod()
-    rr_df['Portfolio Cum RR'].plot(grid=True)
+    rr_df['Wealth Curve'] = (rr_df['stg1_rr'] + 1).cumprod()
+    rr_df[['Wealth Curve']].plot(grid=True, title="Wealth Curve")
     plt.savefig('Wealth Curve(Portfolio Cum RR).png')
     plt.close()
 
@@ -95,7 +95,7 @@ def plot_coverage_quantile(long_each_period_dic: dict, short_each_period_dic: di
 def plot_bar_year_avg(coverage_df, bar_title, file_name, avg_title='12-month moving average'):
     ax = coverage_df.rolling('365D').mean().rename(columns={bar_title: avg_title}).plot(color='r')
     ax2 = plt.twiny(ax)
-    coverage_df.plot(y=bar_title, kind='bar', ax=ax2)
+    coverage_df.plot(y=bar_title, kind='bar', ax=ax2, title=bar_title)
     # plot 图标显示存在问题，稍后解决
     plt.legend(["b", "g"], labels=[bar_title, avg_title], loc=0)
     plt.savefig(file_name)
@@ -113,32 +113,35 @@ def plot_ann(portfolio_rr):
     cum_rr_df = (rr_df + 1).cumprod()
     portfolio_stat_dic = {_: cum_rr_df[_].calc_perf_stats() for _ in cum_rr_df.columns}
     # Annualized Returns
-    cagr_df = pd.DataFrame([{key: _.cagr for key, _ in portfolio_stat_dic.items()}]).T
-    cagr_df.plot(kind='bar')
+    cagr_df = pd.DataFrame([{key: _.cagr for key, _ in portfolio_stat_dic.items()}],
+                           index=['Annualized Returns']).T
+    cagr_df.plot(kind='bar', title='Annualized Returns')
     plt.savefig('Annualized Returns.png')
     plt.close()
     # Annualized Volatility
-    vol_df = pd.DataFrame([{key: _.yearly_vol for key, _ in portfolio_stat_dic.items()}], index=["Annualized Volatility"]).T
-    vol_df.plot(kind='bar')
+    vol_df = pd.DataFrame([{key: _.yearly_vol for key, _ in portfolio_stat_dic.items()}],
+                          index=["Annualized Volatility"]).T
+    vol_df.plot(kind='bar', title='Annualized Volatility')
     plt.savefig('Annualized Volatility.png')
     plt.close()
     # Portfolio IR (Information Ratio)
-    vol_df = pd.DataFrame([{key: _.calc_sharpe(0) for key, _ in cum_rr_df.items()}], index=["sharpe ratio"]).T
-    vol_df.plot(kind='bar')
+    vol_df = pd.DataFrame([{key: _.calc_sharpe(0) for key, _ in cum_rr_df.items()}],
+                          index=["sharpe ratio"]).T
+    vol_df.plot(kind='bar', title='sharpe ratio')
     plt.savefig('Sharpe Ratio（没有用指数进行对标，因此没有求信息比率，用夏普比率替代一下）')
     plt.close()
     # Portfolio Returns
     portfolio_return = cum_rr_df.iloc[-1, :].rename("Portfolio Returns")
-    portfolio_return.plot(kind='bar')
+    portfolio_return.plot(kind='bar', title='Portfolio Returns')
     plt.savefig('Portfolio Returns.png')
     # Quantile Returns
-    cum_rr_df.resample('1M').last().plot()
+    cum_rr_df.resample('1M').last().plot(title='Quantile Returns')
     plt.savefig('Quantile Returns.png')
     plt.close()
     # Sortino Ratio
     ratio_df = pd.DataFrame(empyrical.sortino_ratio(rr_df), columns=["Sortino Ratio"])
     ratio_df.index = rr_df.columns
-    ratio_df.plot(kind='bar')
+    ratio_df.plot(kind='bar', title='Sortino Ratio')
     plt.savefig("Sortino Ratio.png")
     plt.close()
 
@@ -183,7 +186,7 @@ def info_coefficient(factor_df: pd.DataFrame, rr_future_df: pd.DataFrame):
 
     info_coefficient_df = pd.DataFrame([info_coefficient_dic],
                                        index=['Spearson rank IC (information coefficient)']).T
-    info_coefficient_df.plot()
+    info_coefficient_df.plot(title='Spearson rank IC')
     plt.savefig('Spearson rank IC.png')
     plt.close()
 
@@ -192,16 +195,13 @@ def time_series_spread(portfolio_rr):
     portfolio_rr_df = pd.DataFrame({_: portfolio_rr[_] for _ in ['antile1', 'antile5']})
     spread_s = portfolio_rr_df['antile1'] - portfolio_rr_df['antile5']
     spread_s.name = 'Time Series Spread'
-    pd.DataFrame(spread_s).plot()
+    pd.DataFrame(spread_s).plot(title='Time Series Spread')
     plt.savefig('Time Series Spread.png')
     plt.close()
 
 
-
 def analyse(factor_df, rr_future_df, long_each_period_dic, short_each_period_dic, portfolio_rr, stocks_fractile_dic):
     rr_dic = portfolio_rr['S']
-    # plot cum rr
-    plot_cum_rr(rr_dic)
 
     # 计算 Coverage
     # Coverage: This shows the number of stocks covered by the strategy (Factor data) in all quintile (meaning
@@ -224,6 +224,7 @@ def analyse(factor_df, rr_future_df, long_each_period_dic, short_each_period_dic
     # Time Series Spread
     time_series_spread(portfolio_rr)
     # Wealth Curve
+    plot_cum_rr(rr_dic)
 
 
 def backtest_and_analyse():
