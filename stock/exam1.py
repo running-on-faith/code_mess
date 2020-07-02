@@ -9,10 +9,8 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict, defaultdict
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
-DIR_PATH = r'C:\Users\26559\Downloads\弗居投资笔试 20200630\Data'
-
-
-# DIR_PATH = r'/home/mg/Downloads/Data'
+# DIR_PATH = r'C:\Users\26559\Downloads\弗居投资笔试 20200630\Data'
+DIR_PATH = r'/home/mg/Downloads/Data'
 
 
 def get_df(dir_path=r'/home/mg/Downloads/Data'):
