@@ -62,22 +62,26 @@ class PlotTrajectoryMatrix:
 
     def __call__(self, trajectory: Trajectory):
         self.replay_buffer.append(trajectory)
-        if trajectory.is_last():
-            pct_chgs = np.ones(len(self.replay_buffer))
-            action_counts, last_flag = np.zeros(len(self.replay_buffer)), None
-            for idx, _ in enumerate(self.replay_buffer):
-                pct_chgs[idx] += _.reward.numpy()
-                if self.stat_action_count:
-                    flag = _.observation[1].numpy()[0, 0]
-                    if last_flag != flag:
-                        action_counts[idx] += 1
-                        last_flag = flag
+        try:
+            is_last = trajectory.is_last().numpy()[0]
+            if is_last:
+                pct_chgs = np.ones(len(self.replay_buffer))
+                action_counts, last_flag = np.zeros(len(self.replay_buffer)), None
+                for idx, _ in enumerate(self.replay_buffer):
+                    pct_chgs[idx] += _.reward.numpy()
+                    if self.stat_action_count:
+                        flag = _.observation[1].numpy()[0, 0]
+                        if last_flag != flag:
+                            action_counts[idx] += 1
+                            last_flag = flag
 
-            self.rr_dic[f"rr_{len(self.rr_dic)}"] = pct_chgs.cumprod() - 1
-            self.action_dic[f"action_count_{len(self.action_dic)}"] = action_counts.cumsum()
-            self.replay_buffer = []
-            # logger.info("trajectory.is_last, len(self.replay_buffer)=%d\nrr list=%s",
-            #             len(self.replay_buffer), pct_chgs.cumprod() - 1)
+                self.rr_dic[f"rr_{len(self.rr_dic)}"] = pct_chgs.cumprod() - 1
+                self.action_dic[f"action_count_{len(self.action_dic)}"] = action_counts.cumsum()
+                self.replay_buffer = []
+                # logger.info("trajectory.is_last, len(self.replay_buffer)=%d\nrr list=%s",
+                #             len(self.replay_buffer), pct_chgs.cumprod() - 1)
+        except ValueError:
+            pass
 
     def result(self):
         import matplotlib.pyplot as plt
@@ -89,7 +93,7 @@ class PlotTrajectoryMatrix:
             dic = self.rr_dic.copy()
             dic.update(self.action_dic)
             rr_df = pd.DataFrame(dic)
-            rr_df.plot()
+            rr_df.plot(secondary_y=[_ for _ in rr_df.columns if _.startswith('action')])
             file_name = f"{datetime_2_str(datetime.now())}_episode_final_plot.png"
             plt.savefig(file_name)
             plt.close()
@@ -115,5 +119,24 @@ def run_and_get_result(driver, matrix_class=None):
     return results if matrix_class is None else None
 
 
+def _test_matrix(matrix_class=PlotTrajectoryMatrix):
+    num_episodes = 1
+    state_with_flag = True
+    from dr2.common.env import get_env
+    from dr2.dqn20200209.train.agent import get_agent
+    from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
+    env = get_env(state_with_flag=state_with_flag)
+    agent = get_agent(env, state_with_flag=state_with_flag)
+    collect_policy = agent.collect_policy
+    matrix = matrix_class()
+    observers = [matrix]
+    driver = DynamicEpisodeDriver(
+        env, collect_policy, observers, num_episodes=num_episodes)
+
+    driver.run()
+    result = matrix.result()
+    print(result)
+
+
 if __name__ == "__main__":
-    pass
+    _test_matrix()
