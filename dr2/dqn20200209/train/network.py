@@ -309,13 +309,9 @@ class DDQN(Network):
         Returns:
           A tuple `(logits, network_state)`.
         """
-        if self.state_with_flag:
-            # encoder_input, flag_input = observation
-            state, network_state = self._encoder(
-                observation, step_type=step_type, network_state=network_state)
-        else:
-            state, network_state = self._encoder(
-                observation, step_type=step_type, network_state=network_state)
+        # encoder_input, flag_input = observation
+        state, network_state = self._encoder(
+            observation, step_type=step_type, network_state=network_state)
 
         q_value = self._q_value_layer(state)
         try:
