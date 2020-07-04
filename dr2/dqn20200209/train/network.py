@@ -190,13 +190,14 @@ class DDQN(Network):
                  input_tensor_spec,
                  action_spec,
                  conv_layer_params=None,
+                 recurrent_dropout=0.2,
                  fc_dropout_layer_params=0.2,
                  activation_fn=tf.keras.activations.sigmoid,
                  kernel_initializer=None,
                  batch_squash=True,
                  dtype=tf.float32,
                  name='QNetwork',
-                 state_with_flag=False,
+                 state_with_flag=True,  # 现在假设都是带 flag 的逻辑,该判断目前不用
                  dueling=True,
                  learning_rate=0.001):
         """Creates an instance of `QNetwork`.
@@ -206,21 +207,12 @@ class DDQN(Network):
             input observations.
           action_spec: A nest of `tensor_spec.BoundedTensorSpec` representing the
             actions.
-          preprocessing_layers: (Optional.) A nest of `tf.keras.layers.Layer`
-            representing preprocessing for the different observations.
-            All of these layers must not be already built. For more details see
-            the documentation of `networks.EncodingNetwork`.
-          preprocessing_combiner: (Optional.) A keras layer that takes a flat list
-            of tensors and combines them. Good options include
-            `tf.keras.layers.Add` and `tf.keras.layers.Concatenate(axis=-1)`.
-            This layer must not be already built. For more details see
-            the documentation of `networks.EncodingNetwork`.
           conv_layer_params: Optional list of convolution layers parameters, where
             each item is a length-three tuple indicating (filters, kernel_size,
             stride).
-          fc_layer_params: Optional list of fully_connected parameters, where each
-            item is the number of units in the layer.
-          dropout_layer_params: Optional list of dropout layer parameters, where
+          recurrent_dropout: a float number within range [0, 1). The ratio that the
+            recurrent state weights need to dropout.
+          fc_dropout_layer_params: Optional list of dropout layer parameters, where
             each item is the fraction of input units to drop. The dropout layers are
             interleaved with the fully connected layers; there is a dropout layer
             after each fully connected layer, except if the entry in the list is
@@ -251,24 +243,28 @@ class DDQN(Network):
         self.learning_rate = learning_rate
         state_spec = input_tensor_spec[0]
         input_shape = state_spec.shape[-1]
-        # model = LSTM(input_shape * 2, dropout=0.2, recurrent_dropout=0.2)
-        layers = tf.keras.models.Sequential([
-            LSTM(input_shape * 2, dropout=0.2, recurrent_dropout=0.2),
-            Dense(input_shape // 2, activation=activation_fn),
-            Dropout(0.2),
-            Dense(input_shape // 4, activation=activation_fn),
-            Dropout(0.2),
-            Dense(input_shape // 8, activation=activation_fn),
-            Dropout(0.2),
-        ])
-        self._state_layer = layers
+        layer = LSTM(input_shape * 2, dropout=fc_dropout_layer_params,
+                     recurrent_dropout=recurrent_dropout)
+        # Sequential 将会抛出异常:
+        #   Weights for model sequential have not yet been created
+        # layer = Sequential([
+        #     LSTM(input_shape * 2, dropout=fc_dropout_layer_params, recurrent_dropout=recurrent_dropout),
+        #     Dense(input_shape // 2, activation=activation_fn),
+        #     Dropout(0.2),
+        #     Dense(input_shape // 4, activation=activation_fn),
+        #     Dropout(0.2),
+        #     Dense(input_shape // 8, activation=activation_fn),
+        #     Dropout(0.2),
+        # ])
+        self._state_layer = layer
         self._flag_layer = Lambda(lambda x: x)
         self._rr_layer = Lambda(lambda x: x)
         preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
         preprocessing_combiner = Concatenate(axis=-1)
         # 形成一次递减的多个全连接层,比如,当前网络层数40,则向下将形成 [16, 8] 两层网络
-        fc_layer_params = [2**_ for _ in range(int(np.log2(input_shape // 16 + 2)) - 1, 2, -1)]
-        dropout_layer_params = [fc_dropout_layer_params for _ in range(int(np.log2(input_shape // 16 + 2)) - 1, 2, -1)]
+        fc_layers_counter_range = range(int(np.log2(input_shape * 2 + 2)) - 1, 2, -1)
+        fc_layer_params = [2**_ for _ in fc_layers_counter_range]
+        dropout_layer_params = [fc_dropout_layer_params for _ in fc_layers_counter_range]
         encoder = encoding_network.EncodingNetwork(
             input_tensor_spec,
             preprocessing_layers=preprocessing_layers,
@@ -354,8 +350,9 @@ def get_network(observation_spec, action_spec, **kwargs):
 
         return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
-    # loss_fn = common.element_wise_squared_loss
-    loss_fn = _huber_loss
+    # loss_fn = _huber_loss
+    loss_fn = common.element_wise_squared_loss
+    # loss_fn = common.element_wise_huber_loss
     return network, optimizer, loss_fn
 
 
