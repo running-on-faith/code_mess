@@ -13,6 +13,7 @@ from tf_agents.trajectories import time_step as ts
 
 
 class DeclinedTFUniformReplayBuffer(TFUniformReplayBuffer):
+    """由于DQN以及存在gamma参数,因此当前类已经没有实用价值了,日后不再维护"""
 
     def __init__(self, data_spec, batch_size, max_length=1000, gamma=0.5, window_size='auto'):
         """
