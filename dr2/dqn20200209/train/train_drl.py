@@ -14,7 +14,6 @@ from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuf
 from tf_agents.utils import common
 from dr2.common.metrics import FinalTrajectoryMetric, PlotTrajectoryMatrix, run_and_get_result
 from dr2.common.env import get_env
-from dr2.dqn20200209.replay_buffer import DeclinedTFUniformReplayBuffer
 from dr2.dqn20200209.train.agent import get_agent
 from dr2.dqn20200209.train.policy import save_policy
 
@@ -23,7 +22,7 @@ logger = logging.getLogger()
 
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
-              train_count_per_loop=30, train_sample_batch_size=1024, gamma=0.5):
+              train_count_per_loop=30, train_sample_batch_size=1024, epsilon_greedy=0.1, gamma=0.8):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -32,23 +31,22 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     :param eval_interval:评估间隔
     :param train_count_per_loop: 每轮次的训练次数
     :param train_sample_batch_size: 每次训练提取样本数量
+    :param epsilon_greedy: probability of choosing a random action in the default
+        epsilon-greedy collect policy (used only if a wrapper is not provided to
+        the collect_policy method).
     :param gamma: reward衰减率
     :return:
     """
     logger.info("Train started")
     loop_n = 0
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(env, state_with_flag=state_with_flag)
+    agent = get_agent(env, state_with_flag=state_with_flag, epsilon_greedy=epsilon_greedy, gamma=gamma)
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
-
-    from tf_agents.metrics import tf_metrics
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     # collect
-    # collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
-    collect_replay_buffer = DeclinedTFUniformReplayBuffer(
-        agent.collect_data_spec, env.batch_size, max_length=2500 * num_collect_episodes,
-        gamma=gamma)
+    collect_replay_buffer = TFUniformReplayBuffer(
+        agent.collect_data_spec, env.batch_size, max_length=2500 * num_collect_episodes)
     collect_observers = [collect_replay_buffer.add_batch]
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
@@ -66,7 +64,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     # Evaluate the agent's policy once before training.
     stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
     train_step, step_last = 0, None
-    rr_dic, loss_dic = {train_step: stat_dic['rr']}, {}
+    tot_stat_dic, loss_dic = {train_step: stat_dic}, {}
     for loop_n in range(1, train_loop_count + 1):
 
         # Collect a few steps using collect_policy and save to the replay buffer.
@@ -117,27 +115,27 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
                         'avg_action_period = %.2f',
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
                         stat_dic['action_count'], stat_dic['avg_action_period'])
-            rr_dic[train_step] = stat_dic['rr']
+            tot_stat_dic[train_step] = stat_dic
             save_policy(saver, train_step)
         else:
             logger.info('%d/%d) train_step=%d loss=%.8f',
                         loop_n, train_loop_count, train_step, _loss)
 
-    show_result(rr_dic, loss_dic)
+    show_result(tot_stat_dic, loss_dic)
     logger.info("Train finished")
 
 
-def show_result(rr_dic, loss_dic):
-    rr_df = pd.DataFrame([rr_dic]).T.rename(columns={0: 'rr'})
+def show_result(tot_stat_dic, loss_dic):
+    stat_df = pd.DataFrame([tot_stat_dic]).T[['rr', 'action_count']]
     loss_df = pd.DataFrame([loss_dic]).T.rename(columns={0: 'loss'})
-    logger.info("rr_df\n%s", rr_df)
+    logger.info("rr_df\n%s", stat_df)
     logger.info("loss_df\n%s", loss_df)
     import matplotlib.pyplot as plt
     _, axes = plt.subplots(2, 1)
-    rr_df.plot(ax=axes[0])
+    stat_df.plot(secondary_y=['action_count'], ax=axes[0])
     loss_df.plot(logy=True, ax=axes[1])
     plt.show()
 
 
 if __name__ == "__main__":
-    train_drl(train_loop_count=300, num_collect_episodes=10)
+    train_drl(train_loop_count=200, num_collect_episodes=20, epsilon_greedy=0.1)
