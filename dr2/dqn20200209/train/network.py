@@ -184,11 +184,166 @@ class DQN(Network):
         return q_value, network_state
 
 
+class DDQN(Network):
+
+    def __init__(self,
+                 input_tensor_spec,
+                 action_spec,
+                 conv_layer_params=None,
+                 fc_dropout_layer_params=0.2,
+                 activation_fn=tf.keras.activations.sigmoid,
+                 kernel_initializer=None,
+                 batch_squash=True,
+                 dtype=tf.float32,
+                 name='QNetwork',
+                 state_with_flag=False,
+                 dueling=True,
+                 learning_rate=0.001):
+        """Creates an instance of `QNetwork`.
+
+        Args:
+          input_tensor_spec: A nest of `tensor_spec.TensorSpec` representing the
+            input observations.
+          action_spec: A nest of `tensor_spec.BoundedTensorSpec` representing the
+            actions.
+          preprocessing_layers: (Optional.) A nest of `tf.keras.layers.Layer`
+            representing preprocessing for the different observations.
+            All of these layers must not be already built. For more details see
+            the documentation of `networks.EncodingNetwork`.
+          preprocessing_combiner: (Optional.) A keras layer that takes a flat list
+            of tensors and combines them. Good options include
+            `tf.keras.layers.Add` and `tf.keras.layers.Concatenate(axis=-1)`.
+            This layer must not be already built. For more details see
+            the documentation of `networks.EncodingNetwork`.
+          conv_layer_params: Optional list of convolution layers parameters, where
+            each item is a length-three tuple indicating (filters, kernel_size,
+            stride).
+          fc_layer_params: Optional list of fully_connected parameters, where each
+            item is the number of units in the layer.
+          dropout_layer_params: Optional list of dropout layer parameters, where
+            each item is the fraction of input units to drop. The dropout layers are
+            interleaved with the fully connected layers; there is a dropout layer
+            after each fully connected layer, except if the entry in the list is
+            None. This list must have the same length of fc_layer_params, or be
+            None.
+          activation_fn: Activation function, e.g. tf.keras.activations.relu.
+          kernel_initializer: Initializer to use for the kernels of the conv and
+            dense layers. If none is provided a default variance_scaling_initializer
+          batch_squash: If True the outer_ranks of the observation are squashed into
+            the batch dimension. This allow encoding networks to be used with
+            observations with shape [BxTx...].
+          dtype: The dtype to use by the convolution and fully connected layers.
+          name: A string representing the name of the network.
+
+        Raises:
+          ValueError: If `input_tensor_spec` contains more than one observation. Or
+            if `action_spec` contains more than one action.
+        """
+        super().__init__(
+            input_tensor_spec=input_tensor_spec,
+            state_spec=(),
+            name=name)
+
+        validate_specs(action_spec, input_tensor_spec)
+        action_spec = tf.nest.flatten(action_spec)[0]
+        action_count = action_spec.maximum - action_spec.minimum + 1
+        self.dueling = dueling
+        self.learning_rate = learning_rate
+        state_spec = input_tensor_spec[0]
+        input_shape = state_spec.shape[-1]
+        # model = LSTM(input_shape * 2, dropout=0.2, recurrent_dropout=0.2)
+        layers = tf.keras.models.Sequential([
+            LSTM(input_shape * 2, dropout=0.2, recurrent_dropout=0.2),
+            Dense(input_shape // 2, activation=activation_fn),
+            Dropout(0.2),
+            Dense(input_shape // 4, activation=activation_fn),
+            Dropout(0.2),
+            Dense(input_shape // 8, activation=activation_fn),
+            Dropout(0.2),
+        ])
+        self._state_layer = layers
+        self._flag_layer = Lambda(lambda x: x)
+        self._rr_layer = Lambda(lambda x: x)
+        preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
+        preprocessing_combiner = Concatenate(axis=-1)
+        # 形成一次递减的多个全连接层,比如,当前网络层数40,则向下将形成 [16, 8] 两层网络
+        fc_layer_params = [2**_ for _ in range(int(np.log2(input_shape // 16 + 2)) - 1, 2, -1)]
+        dropout_layer_params = [fc_dropout_layer_params for _ in range(int(np.log2(input_shape // 16 + 2)) - 1, 2, -1)]
+        encoder = encoding_network.EncodingNetwork(
+            input_tensor_spec,
+            preprocessing_layers=preprocessing_layers,
+            preprocessing_combiner=preprocessing_combiner,
+            conv_layer_params=conv_layer_params,
+            fc_layer_params=fc_layer_params,
+            dropout_layer_params=dropout_layer_params,
+            activation_fn=activation_fn,
+            kernel_initializer=kernel_initializer,
+            batch_squash=batch_squash,
+            dtype=dtype)
+
+        q_value_layer = Sequential()
+        if dueling:
+            q_value_layer.add(Dense(action_count + 1, activation=activation_fn))
+            q_value_layer.add(
+                Lambda(
+                    lambda i: (backend.expand_dims(i[:, 0], -1) + i[:, 1:] -
+                               backend.mean(i[:, 1:], keepdims=True)),
+                    output_shape=(action_count,)
+                )
+            )
+        else:
+            q_value_layer.add(Dense(action_count, activation=activation_fn))
+
+        self._encoder = encoder
+        self._q_value_layer = q_value_layer
+
+    def call(self, observation, step_type=None, network_state=()):
+        """Runs the given observation through the network.
+
+        Args:
+          observation: The observation to provide to the network.
+          step_type: The step type for the given observation. See `StepType` in
+            time_step.py.
+          network_state: A state tuple to pass to the network, mainly used by RNNs.
+
+        Returns:
+          A tuple `(logits, network_state)`.
+        """
+        if self.state_with_flag:
+            # encoder_input, flag_input = observation
+            state, network_state = self._encoder(
+                observation, step_type=step_type, network_state=network_state)
+        else:
+            state, network_state = self._encoder(
+                observation, step_type=step_type, network_state=network_state)
+
+        q_value = self._q_value_layer(state)
+        try:
+            q_numpy = q_value.numpy()
+            if np.isnan(q_numpy).any():
+                import logging
+                logger = logging.getLogger()
+                logger.warning("q_numpy=%s is nan. state=\n%s", q_numpy, state)
+            elif q_numpy.shape == (1, 2) and q_numpy[0, 0] == q_numpy[0, 1]:
+                import logging
+                logger = logging.getLogger()
+                logger.warning("q_numpy=%s is equal. state=\n%s", q_numpy, state)
+        except AttributeError:
+            import logging
+            logger = logging.getLogger()
+            logger.exception("q_value=%s. state=%s. It always happen at the beginning of drl training. Just ignore it",
+                             q_value, state)
+            pass
+
+        return q_value, network_state
+
+
 def get_network(observation_spec, action_spec, **kwargs):
     from tf_agents.networks.q_network import QNetwork
     from tf_agents.utils import common
     # TODO: fc_layer_params 需要参数化
-    network = DQN(observation_spec, action_spec, fc_layer_params=(100,), **kwargs)
+    # network = DQN(observation_spec, action_spec, fc_layer_params=(100,), **kwargs)
+    network = DDQN(observation_spec, action_spec, **kwargs)
     learning_rate = 1e-3
     # optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
     optimizer = Nadam(learning_rate)
