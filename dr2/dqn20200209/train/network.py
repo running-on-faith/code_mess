@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras import metrics, backend as backend
-from tensorflow.keras.layers import Dense, LSTM, Lambda, Dropout, Concatenate
+from tensorflow.keras.layers import Dense, LSTM, Lambda, Dropout, Concatenate, BatchNormalization
 from tf_agents.networks.network import Network
 from tf_agents.networks.q_network import validate_specs
 from tf_agents.networks import encoding_network
@@ -243,6 +243,7 @@ class DDQN(Network):
         self.learning_rate = learning_rate
         state_spec = input_tensor_spec[0]
         input_shape = state_spec.shape[-1]
+        self.bn = BatchNormalization(trainable=False)
         layer = LSTM(input_shape * 2, dropout=fc_dropout_layer_params,
                      recurrent_dropout=recurrent_dropout)
         # Sequential 将会抛出异常:
@@ -288,7 +289,8 @@ class DDQN(Network):
                 )
             )
         else:
-            q_value_layer.add(Dense(action_count, activation=activation_fn))
+            q_value_layer.add(Dense(action_count, activation=activation_fn,
+                                    kernel_initializer='random_normal'))
 
         self._encoder = encoder
         self._q_value_layer = q_value_layer
@@ -306,8 +308,9 @@ class DDQN(Network):
           A tuple `(logits, network_state)`.
         """
         # encoder_input, flag_input = observation
+        new_obsercation = self.bn(observation[0]), observation[1], observation[2]
         state, network_state = self._encoder(
-            observation, step_type=step_type, network_state=network_state)
+            new_obsercation, step_type=step_type, network_state=network_state)
 
         q_value = self._q_value_layer(state)
         try:
