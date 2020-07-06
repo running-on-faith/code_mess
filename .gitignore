@@ -190,3 +190,9 @@ checkpoint
 
 # tensorflow tmp files
 local.trace
+
+# keras model saved params
+*.pbtxt
+*.pb
+variables.data-*
+variables.index
