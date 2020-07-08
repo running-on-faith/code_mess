@@ -189,7 +189,6 @@ class DDQN(Network):
     def __init__(self,
                  input_tensor_spec,
                  action_spec,
-                 conv_layer_params=None,
                  recurrent_dropout=0.2,
                  fc_dropout_layer_params=0.2,
                  activation_fn=tf.keras.activations.sigmoid,
@@ -207,9 +206,6 @@ class DDQN(Network):
             input observations.
           action_spec: A nest of `tensor_spec.BoundedTensorSpec` representing the
             actions.
-          conv_layer_params: Optional list of convolution layers parameters, where
-            each item is a length-three tuple indicating (filters, kernel_size,
-            stride).
           recurrent_dropout: a float number within range [0, 1). The ratio that the
             recurrent state weights need to dropout.
           fc_dropout_layer_params: Optional list of dropout layer parameters, where
@@ -264,15 +260,21 @@ class DDQN(Network):
         self._rr_layer = Lambda(lambda x: x)
         preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
         preprocessing_combiner = Concatenate(axis=-1)
+        #
+        conv_layer_params = [
+            ((input_shape * 2 + 2) // 2, 3, 1),
+            ((input_shape * 2 + 2) // 4, 3, 1),
+            ((input_shape * 2 + 2) // 8, 3, 1),
+        ]
         # 形成一次递减的多个全连接层,比如,当前网络层数40,则向下将形成 [16, 8] 两层网络
         fc_layers_counter_range = range(int(np.log2(input_shape * 2 + 2)) - 1, 2, -1)
-        fc_layer_params = [2**_ for _ in fc_layers_counter_range]
+        fc_layer_params = [2 ** _ for _ in fc_layers_counter_range]
         dropout_layer_params = [fc_dropout_layer_params for _ in fc_layers_counter_range]
         encoder = encoding_network.EncodingNetwork(
             input_tensor_spec,
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
-            # conv_layer_params=conv_layer_params,
+            conv_layer_params=conv_layer_params,
             # fc_layer_params=fc_layer_params,
             # dropout_layer_params=dropout_layer_params,
             # activation_fn=activation_fn,
