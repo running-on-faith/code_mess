@@ -244,8 +244,10 @@ class DDQN(Network):
         state_spec = input_tensor_spec[0]
         input_shape = state_spec.shape[-1]
         self.bn = BatchNormalization(trainable=False)
-        layer = LSTM(input_shape * 2, dropout=fc_dropout_layer_params,
-                     recurrent_dropout=recurrent_dropout)
+        layer = LSTM(input_shape * 2,
+                     dropout=fc_dropout_layer_params,
+                     recurrent_dropout=recurrent_dropout
+                     )
         # Sequential 将会抛出异常:
         #   Weights for model sequential have not yet been created
         # layer = Sequential([
@@ -270,17 +272,19 @@ class DDQN(Network):
             input_tensor_spec,
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
-            conv_layer_params=conv_layer_params,
-            fc_layer_params=fc_layer_params,
-            dropout_layer_params=dropout_layer_params,
-            activation_fn=activation_fn,
+            # conv_layer_params=conv_layer_params,
+            # fc_layer_params=fc_layer_params,
+            # dropout_layer_params=dropout_layer_params,
+            # activation_fn=activation_fn,
             kernel_initializer=kernel_initializer,
             batch_squash=batch_squash,
             dtype=dtype)
 
         q_value_layer = Sequential()
         if dueling:
-            q_value_layer.add(Dense(action_count + 1, activation=activation_fn))
+            q_value_layer.add(Dense(action_count + 1,
+                                    activation=activation_fn
+                                    ))
             q_value_layer.add(
                 Lambda(
                     lambda i: (backend.expand_dims(i[:, 0], -1) + i[:, 1:] -
