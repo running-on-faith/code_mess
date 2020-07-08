@@ -111,8 +111,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         loss_dic[train_step] = _loss
         if train_step % eval_interval == 0:
             stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
-            logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%% action_count = %.1f '
-                        'avg_action_period = %.2f',
+            logger.info('%d/%d) train_step=%4d loss=%.8f rr = %6.2f%% action_count =%3.0f '
+                        'avg_action_period = %6.2f',
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
                         stat_dic['action_count'], stat_dic['avg_action_period'])
             tot_stat_dic[train_step] = stat_dic
