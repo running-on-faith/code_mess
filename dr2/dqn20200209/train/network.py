@@ -11,6 +11,7 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras import metrics, backend as backend
 from tensorflow.keras.layers import Dense, LSTM, Lambda, Dropout, Concatenate, BatchNormalization
+from tf_agents.networks.encoding_network import CONV_TYPE_1D
 from tf_agents.networks.network import Network
 from tf_agents.networks.q_network import validate_specs
 from tf_agents.networks import encoding_network
@@ -275,6 +276,7 @@ class DDQN(Network):
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
             conv_layer_params=conv_layer_params,
+            conv_type=CONV_TYPE_1D,
             # fc_layer_params=fc_layer_params,
             # dropout_layer_params=dropout_layer_params,
             # activation_fn=activation_fn,
