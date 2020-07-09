@@ -65,7 +65,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     # eval_driver.run = common.function(collect_driver.run)
 
     # Evaluate the agent's policy once before training.
-    stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
+    results_dic = run_and_get_result(eval_driver)
+    stat_dic = results_dic[FinalTrajectoryMetric]
     train_step, step_last = 0, None
     rr_dic, loss_dic = {train_step: stat_dic['rr']}, {}
     for loop_n in range(1, train_loop_count + 1):
@@ -113,7 +114,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         _loss = train_loss.loss.numpy() if train_loss else np.nan
         loss_dic[train_step] = _loss
         if train_step % eval_interval == 0:
-            stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
+            results_dic = run_and_get_result(eval_driver)
+            stat_dic = results_dic[FinalTrajectoryMetric]
             logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%% action_count = %.1f '
                         'avg_action_period = %.2f',
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,

@@ -62,7 +62,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     saver = PolicySaver(eval_driver.policy)
 
     # Evaluate the agent's policy once before training.
-    stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
+    results_dic = run_and_get_result(eval_driver)
+    stat_dic = results_dic[FinalTrajectoryMetric]
     train_step, step_last = 0, None
     tot_stat_dic, loss_dic = {train_step: stat_dic}, {}
     for loop_n in range(1, train_loop_count + 1):
@@ -110,7 +111,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         _loss = train_loss.loss.numpy() if train_loss else None
         loss_dic[train_step] = _loss
         if train_step % eval_interval == 0:
-            stat_dic = run_and_get_result(eval_driver, FinalTrajectoryMetric)
+            results_dic = run_and_get_result(eval_driver)
+            stat_dic = results_dic[FinalTrajectoryMetric]
             logger.info('%d/%d) train_step=%4d loss=%.8f rr = %6.2f%% action_count =%3.0f '
                         'avg_action_period = %6.2f',
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
@@ -126,15 +128,19 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
 
 
 def show_result(tot_stat_dic, loss_dic):
-    stat_df = pd.DataFrame([tot_stat_dic]).T[['rr', 'action_count']]
-    loss_df = pd.DataFrame([loss_dic]).T.rename(columns={0: 'loss'})
-    logger.info("rr_df\n%s", stat_df)
-    logger.info("loss_df\n%s", loss_df)
-    import matplotlib.pyplot as plt
-    _, axes = plt.subplots(2, 1)
-    stat_df.plot(secondary_y=['action_count'], ax=axes[0])
-    loss_df.plot(logy=True, ax=axes[1])
-    plt.show()
+    try:
+        stat_df = pd.DataFrame(tot_stat_dic).T[['rr', 'action_count']]
+        loss_df = pd.DataFrame([loss_dic]).T.rename(columns={0: 'loss'})
+        logger.info("rr_df\n%s", stat_df)
+        logger.info("loss_df\n%s", loss_df)
+        import matplotlib.pyplot as plt
+        _, axes = plt.subplots(2, 1)
+        stat_df.plot(secondary_y=['action_count'], ax=axes[0])
+        loss_df.plot(logy=True, ax=axes[1])
+        plt.show()
+    except KeyError:
+        logger.exception("error")
+        logger.info(tot_stat_dic)
 
 
 if __name__ == "__main__":
