@@ -276,21 +276,24 @@ class DDQN(Network):
             ((input_shape * 2) * 2, 3, 1),
         ]
         # 形成一次递减的多个全连接层,比如,当前网络层数40,则向下将形成 [16, 8] 两层网络
-        fc_layers_counter_range = range(int(np.log2(input_shape * 2 + 2)) - 1, 2, -1)
-        fc_layer_params = [2 ** _ for _ in fc_layers_counter_range]
-        dropout_layer_params = [fc_dropout_layer_params for _ in fc_layers_counter_range]
+        # fc_layers_counter_range = range(int(np.log2(input_shape * 2 * 2)) - 1, 2, -1)
+        # fc_layer_params = [2 ** _ for _ in fc_layers_counter_range]
+        # dropout_layer_params = [fc_dropout_layer_params for _ in fc_layers_counter_range]
+        fc_layer_params = [input_shape]
+        dropout_layer_params = [fc_dropout_layer_params]
         encoder = encoding_network.EncodingNetwork(
             input_tensor_spec,
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
             conv_layer_params=conv_layer_params,
             conv_type=CONV_TYPE_1D,
-            # fc_layer_params=fc_layer_params,
-            # dropout_layer_params=dropout_layer_params,
+            fc_layer_params=fc_layer_params,
+            dropout_layer_params=dropout_layer_params,
             activation_fn=activation_fn,
             kernel_initializer=kernel_initializer,
             batch_squash=batch_squash,
-            dtype=dtype)
+            dtype=dtype
+        )
 
         q_value_layer = Sequential()
         if dueling:
