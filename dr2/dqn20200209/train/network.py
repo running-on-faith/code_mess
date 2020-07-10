@@ -287,7 +287,7 @@ class DDQN(Network):
             conv_type=CONV_TYPE_1D,
             # fc_layer_params=fc_layer_params,
             # dropout_layer_params=dropout_layer_params,
-            # activation_fn=activation_fn,
+            activation_fn=activation_fn,
             kernel_initializer=kernel_initializer,
             batch_squash=batch_squash,
             dtype=dtype)
