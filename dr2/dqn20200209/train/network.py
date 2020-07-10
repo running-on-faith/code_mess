@@ -10,7 +10,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras import metrics, backend as backend
-from tensorflow.keras.layers import Dense, LSTM, Lambda, Dropout, Concatenate, BatchNormalization
+from tensorflow.keras.layers import Dense, LSTM, Lambda, Dropout, \
+    Concatenate, BatchNormalization, RepeatVector, Reshape
 from tf_agents.networks.encoding_network import CONV_TYPE_1D
 from tf_agents.networks.network import Network
 from tf_agents.networks.q_network import validate_specs
@@ -241,10 +242,11 @@ class DDQN(Network):
         state_spec = input_tensor_spec[0]
         input_shape = state_spec.shape[-1]
         self.bn = BatchNormalization(trainable=False)
-        layer = LSTM(input_shape * 2,
-                     dropout=fc_dropout_layer_params,
-                     recurrent_dropout=recurrent_dropout
-                     )
+        layer = LSTM(
+            input_shape * 2,
+            dropout=fc_dropout_layer_params,
+            recurrent_dropout=recurrent_dropout
+        )
         # Sequential 将会抛出异常:
         #   Weights for model sequential have not yet been created
         # layer = Sequential([
@@ -257,15 +259,21 @@ class DDQN(Network):
         #     Dropout(0.2),
         # ])
         self._state_layer = layer
-        self._flag_layer = Lambda(lambda x: x)
-        self._rr_layer = Lambda(lambda x: x)
+        self._flag_layer = RepeatVector(input_shape * 2)
+        self._rr_layer = RepeatVector(input_shape * 2)
         preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
-        preprocessing_combiner = Concatenate(axis=-1)
-        #
+        # Reshape((-1, input_shape * 2))(x[1]) -> output_shape = (0, 1, 186)
+        # Concatenate(axis=1) -> output_shape = (0, 3, 186)
+        preprocessing_combiner = Lambda(
+            lambda x: Concatenate(axis=1)(
+                [Reshape((-1, input_shape * 2))(x[1]),
+                 Reshape((-1, input_shape * 2))(x[0]),
+                 Reshape((-1, input_shape * 2))(x[2])]
+            )
+        )
+        # (0, 3, 186) -> (0, 1, 372)
         conv_layer_params = [
-            ((input_shape * 2 + 2) // 2, 3, 1),
-            ((input_shape * 2 + 2) // 4, 3, 1),
-            ((input_shape * 2 + 2) // 8, 3, 1),
+            ((input_shape * 2) * 2, 3, 1),
         ]
         # 形成一次递减的多个全连接层,比如,当前网络层数40,则向下将形成 [16, 8] 两层网络
         fc_layers_counter_range = range(int(np.log2(input_shape * 2 + 2)) - 1, 2, -1)
