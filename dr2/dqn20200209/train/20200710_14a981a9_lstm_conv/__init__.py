@@ -4,7 +4,7 @@
 @Time    : 2020/7/8 下午10:41
 @File    : __init__.py.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    : 各种方式尝试后发现只要加入FC全连接层就会出现强化学习失效的情况
 """
 from dr2.dqn20200209.train.train_drl import train_drl
 
