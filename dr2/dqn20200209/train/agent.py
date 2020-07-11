@@ -15,11 +15,14 @@ from dr2.dqn20200209.train.network import get_network
 logger = logging.getLogger()
 
 
-def get_agent(env, state_with_flag=False, epsilon_greedy=0.1, gamma=0.8):
-    # from tf_agents.agents import DqnAgent
+def get_agent(env, epsilon_greedy=0.1, gamma=0.8, network_kwargs_func=None):
+    """
+    get DdqnAgent
+    """
     from tf_agents.agents.dqn.dqn_agent import DdqnAgent
     network, optimizer, loss_fn = get_network(
-        env.observation_spec(), env.action_spec(), state_with_flag=state_with_flag)
+        env.observation_spec(), env.action_spec(),
+        network_kwargs_func=network_kwargs_func)
     global_step = tf.compat.v1.train.get_or_create_global_step()
     agent = DdqnAgent(
         env.time_step_spec(),
