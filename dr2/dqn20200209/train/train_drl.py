@@ -22,7 +22,8 @@ logger = logging.getLogger()
 
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
-              train_count_per_loop=30, train_sample_batch_size=1024, epsilon_greedy=0.1, gamma=0.8):
+              train_count_per_loop=30, train_sample_batch_size=1024, epsilon_greedy=0.1, gamma=0.8,
+              network_kwargs_func=None):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -35,12 +36,15 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         epsilon-greedy collect policy (used only if a wrapper is not provided to
         the collect_policy method).
     :param gamma: reward衰减率
+    :param network_kwargs_func: network kwargs function
     :return:
     """
     logger.info("Train started")
     loop_n = 0
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(env, state_with_flag=state_with_flag, epsilon_greedy=epsilon_greedy, gamma=gamma)
+    agent = get_agent(
+        env, epsilon_greedy=epsilon_greedy, gamma=gamma,
+        network_kwargs_func=network_kwargs_func)
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
