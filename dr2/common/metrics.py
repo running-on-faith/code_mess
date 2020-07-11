@@ -124,7 +124,7 @@ def _test_matrix(matrix_class=PlotTrajectoryMatrix):
     from dr2.dqn20200209.train.agent import get_agent
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(env, state_with_flag=state_with_flag)
+    agent = get_agent(env)
     collect_policy = agent.collect_policy
     matrix = matrix_class()
     observers = [matrix]
