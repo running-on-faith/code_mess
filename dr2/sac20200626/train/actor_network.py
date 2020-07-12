@@ -19,7 +19,7 @@ from dr2.dqn20200209.train import plot_modal_2_file
 logger = logging.getLogger()
 
 
-def get_actor_network(env: TFPyEnvironment, state_with_flag: bool, activation_fn=activations.tanh):
+def get_actor_network(env: TFPyEnvironment, state_with_flag: bool, activation_fn=activations.tanh, **kwargs):
     observation_spec, action_spec = env.observation_spec(), env.action_spec()
     state_spec = observation_spec[0]
     input_shape = state_spec.shape[-1]

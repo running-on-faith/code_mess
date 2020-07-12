@@ -81,10 +81,10 @@ class CriticLSTMNetwork(network.Network):
         return tf.reshape(joint, [-1]), network_state
 
 
-def get_critic_network(env: TFPyEnvironment, state_with_flag: bool):
+def get_critic_network(env: TFPyEnvironment, state_with_flag: bool, **kwargs):
     observation_spec, action_spec = env.observation_spec(), env.action_spec()
     net = CriticLSTMNetwork(
-        input_tensor_spec=(observation_spec, action_spec),
+        input_tensor_spec=(observation_spec, action_spec), **kwargs
     )
     # plot_modal_2_file(net, 'critic.png')
     return net
