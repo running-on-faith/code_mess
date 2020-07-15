@@ -70,5 +70,96 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
                    train_count_per_loop, train_loop_count, train_sample_batch_size)
 
 
+def _test_train():
+
+    def _actor_net_kwargs_func(input_tensor_spec, output_tensor_spec):
+        observation_spec, action_spec = input_tensor_spec(), output_tensor_spec()
+        state_spec = observation_spec[0]
+        input_shape = state_spec.shape[-1]
+        net_kwargs = {
+            "lstm_kwargs": {
+                "dropout": 0.2,
+                "recurrent_dropout": 0.2,
+            },
+            # (filters, kernel_size, stride, dilation_rate, padding)`
+            # filters: Integer, the dimensionality of the output space
+            #       (i.e. the number of output filters in the convolution).
+            # kernel_size: An integer or tuple/list of 2 integers, specifying the
+            #       height and width of the 2D convolution window.
+            #       Can be a single integer to specify the same value for
+            #       all spatial dimensions.
+            # strides: An integer or tuple/list of 2 integers,
+            #       specifying the strides of the convolution along the height and width.
+            #       Can be a single integer to specify the same value for
+            #       all spatial dimensions.
+            #       Specifying any stride value != 1 is incompatible with specifying
+            #       any `dilation_rate` value != 1.
+            # dilation_rate: an integer or tuple/list of 2 integers, specifying
+            #       the dilation rate to use for dilated convolution.
+            #       Can be a single integer to specify the same value for
+            #       all spatial dimensions.
+            #       Currently, specifying any `dilation_rate` value != 1 is
+            #       incompatible with specifying any stride value != 1.
+            # padding: one of `"valid"` or `"same"` (case-insensitive).
+            "conv_layer_params": {
+                # (0, 3, 186) -> (0, 3, 93)
+                (input_shape, 3, 1, 1, 'same'),
+                # (0, 3, 93) -> (0, 1, 186)
+                (input_shape * 2, 3, 1),
+            },
+            "activation_fn": "sigmoid"
+        }
+        return net_kwargs
+
+    def _critic_net_kwargs_func(input_tensor_spec, output_tensor_spec):
+        observation_spec, action_spec = input_tensor_spec(), output_tensor_spec()
+        state_spec = observation_spec[0]
+        input_shape = state_spec.shape[-1]
+        net_kwargs = {
+            # (filters, kernel_size, stride, dilation_rate, padding)`
+            # filters: Integer, the dimensionality of the output space
+            #       (i.e. the number of output filters in the convolution).
+            # kernel_size: An integer or tuple/list of 2 integers, specifying the
+            #       height and width of the 2D convolution window.
+            #       Can be a single integer to specify the same value for
+            #       all spatial dimensions.
+            # strides: An integer or tuple/list of 2 integers,
+            #       specifying the strides of the convolution along the height and width.
+            #       Can be a single integer to specify the same value for
+            #       all spatial dimensions.
+            #       Specifying any stride value != 1 is incompatible with specifying
+            #       any `dilation_rate` value != 1.
+            # dilation_rate: an integer or tuple/list of 2 integers, specifying
+            #       the dilation rate to use for dilated convolution.
+            #       Can be a single integer to specify the same value for
+            #       all spatial dimensions.
+            #       Currently, specifying any `dilation_rate` value != 1 is
+            #       incompatible with specifying any stride value != 1.
+            # padding: one of `"valid"` or `"same"` (case-insensitive).
+            "conv_layer_params": {
+                # (0, 3, 186) -> (0, 3, 93)
+                (input_shape, 3, 1, 1, 'same'),
+                # (0, 3, 93) -> (0, 1, 186)
+                (input_shape * 2, 3, 1),
+            },
+            "activation_fn": "sigmoid"
+        }
+        return net_kwargs
+
+    agent_kwargs = {
+        "action_net_kwargs": {
+            "lstm_kwargs": {
+                "dropout": 0.2,
+                "recurrent_dropout": 0.2,
+            },
+            "actor_net_kwargs_func": _actor_net_kwargs_func
+        },
+        "critic_net_kwargs": {
+            "critic_net_kwargs_func": _critic_net_kwargs_func
+        }
+    }
+    train_drl(train_loop_count=300, num_collect_episodes=10, agent_kwargs=agent_kwargs)
+
+
 if __name__ == "__main__":
-    train_drl(train_loop_count=300, num_collect_episodes=10)
+    _test_train()
