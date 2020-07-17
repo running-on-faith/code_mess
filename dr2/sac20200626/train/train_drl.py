@@ -72,8 +72,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
 
 def _test_train():
 
-    def _actor_net_kwargs_func(input_tensor_spec, output_tensor_spec):
-        observation_spec, action_spec = input_tensor_spec(), output_tensor_spec()
+    def _actor_net_kwargs_func(observation_spec, action_spec):
         state_spec = observation_spec[0]
         input_shape = state_spec.shape[-1]
         net_kwargs = {
@@ -111,11 +110,14 @@ def _test_train():
         }
         return net_kwargs
 
-    def _critic_net_kwargs_func(input_tensor_spec, output_tensor_spec):
-        observation_spec, action_spec = input_tensor_spec(), output_tensor_spec()
+    def _critic_net_kwargs_func(observation_spec, action_spec):
         state_spec = observation_spec[0]
         input_shape = state_spec.shape[-1]
         net_kwargs = {
+            "lstm_kwargs": {
+                "dropout": 0.2,
+                "recurrent_dropout": 0.2,
+            },
             # (filters, kernel_size, stride, dilation_rate, padding)`
             # filters: Integer, the dimensionality of the output space
             #       (i.e. the number of output filters in the convolution).
@@ -148,10 +150,6 @@ def _test_train():
 
     agent_kwargs = {
         "action_net_kwargs": {
-            "lstm_kwargs": {
-                "dropout": 0.2,
-                "recurrent_dropout": 0.2,
-            },
             "actor_net_kwargs_func": _actor_net_kwargs_func
         },
         "critic_net_kwargs": {

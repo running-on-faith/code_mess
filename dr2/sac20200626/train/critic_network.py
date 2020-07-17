@@ -17,6 +17,7 @@ from tf_agents.environments.tf_py_environment import TFPyEnvironment
 from tf_agents.networks import network, utils
 from tf_agents.networks.encoding_network import EncodingNetwork
 from dr2.dqn20200209.train import plot_modal_2_file
+from dr2.dqn20200209.train.network import EnhanceEncodingNetwork
 
 logger = logging.getLogger()
 
@@ -54,7 +55,7 @@ class CriticLSTMNetwork(network.Network):
                  Reshape((-1, input_shape * 2))(x[2])]
             )
         )
-        self._encoder = EncodingNetwork(
+        self._encoder = EnhanceEncodingNetwork(
             observation_spec,
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
@@ -87,8 +88,9 @@ class CriticLSTMNetwork(network.Network):
         return tf.reshape(joint, [-1]), network_state
 
 
-def get_critic_network(env: TFPyEnvironment, state_with_flag: bool, **kwargs):
+def get_critic_network(env: TFPyEnvironment, state_with_flag: bool, critic_net_kwargs_func=None, **kwargs):
     observation_spec, action_spec = env.observation_spec(), env.action_spec()
+    kwargs.update(**critic_net_kwargs_func(observation_spec, action_spec))
     net = CriticLSTMNetwork(
         input_tensor_spec=(observation_spec, action_spec), **kwargs
     )

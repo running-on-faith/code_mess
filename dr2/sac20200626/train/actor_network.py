@@ -20,12 +20,13 @@ from dr2.dqn20200209.train import plot_modal_2_file
 logger = logging.getLogger()
 
 
-def get_actor_network(env: TFPyEnvironment, state_with_flag: bool, lstm_kwargs, actor_net_kwargs_func, **kwargs):
+def get_actor_network(env: TFPyEnvironment, state_with_flag: bool, actor_net_kwargs_func, **kwargs):
     observation_spec, action_spec = env.observation_spec(), env.action_spec()
+    kwargs.update(**actor_net_kwargs_func(observation_spec, action_spec))
     state_spec = observation_spec[0]
     input_shape = state_spec.shape[-1]
     unit = input_shape * 2
-    lstm_kwargs = {} if lstm_kwargs is None else lstm_kwargs
+    lstm_kwargs = kwargs.pop('lstm_kwargs') if 'lstm_kwargs' in kwargs else {}
     _state_layer = LSTM(unit, **lstm_kwargs)
     _flag_layer = RepeatVector(unit)
     _rr_layer = RepeatVector(unit)
@@ -42,7 +43,7 @@ def get_actor_network(env: TFPyEnvironment, state_with_flag: bool, lstm_kwargs, 
         output_tensor_spec=action_spec,
         preprocessing_layers=preprocessing_layers,
         preprocessing_combiner=preprocessing_combiner,
-        **actor_net_kwargs_func(observation_spec, action_spec)
+
     )
     # plot_modal_2_file(net, 'actor.png')
     return net
