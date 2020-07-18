@@ -16,7 +16,7 @@ def get_policy(env):
     return tf_policy
 
 
-def save_policy(saver, key):
+def save_policy(saver, key, base_path=None):
     """
     将 policy 参数进行保存
     可通过一下方式进行加载并使用
@@ -29,10 +29,15 @@ def save_policy(saver, key):
       time_step = f(policy_step.action)
     ...
     :param saver:
-    :param key:
+    :param key: 保存文件名
+    :param base_path: 基础路径
     :return:
     """
-    save_path = os.path.join(os.curdir, 'model', f"{key}")
+    if base_path is None:
+        save_path = os.path.join(os.curdir, 'model', f"{key}")
+    else:
+        save_path = os.path.join(base_path, 'model', f"{key}")
+
     saver.save(save_path)
     return save_path
 
