@@ -6,7 +6,9 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import json
 import logging
+import os
 from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.policies import greedy_policy
@@ -21,7 +23,7 @@ logger = logging.getLogger()
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
               train_count_per_loop=10, train_sample_batch_size=1024,
-              agent_kwargs=None):
+              agent_kwargs=None, record_params=True, base_path=None):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -41,16 +43,36 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         gradient_clipping=None,
         action_net_kwargs=None,
         critic_net_kwargs=None,
+    :param record_params: 记录参数道文件:
+    :param base_path: 安装key_path分目录保存训练结果及参数
     :return:
     """
     logger.info("Train started")
-    loop_n = 0
     # 建立环境
     train_env = get_env(state_with_flag=state_with_flag, is_continuous_action=True)
     eval_env = get_env(state_with_flag=state_with_flag, is_continuous_action=True)
 
-    agent = get_agent(train_env, state_with_flag=state_with_flag,
-                      **({} if agent_kwargs is None else agent_kwargs))
+    agent, agent_kwargs = get_agent(train_env, state_with_flag=state_with_flag,
+                                    **({} if agent_kwargs is None else agent_kwargs))
+    if record_params:
+        train_params = {
+            "train_loop_count": train_loop_count,
+            "num_eval_episodes": num_eval_episodes,
+            "num_collect_episodes": num_collect_episodes,
+            "state_with_flag": state_with_flag,
+            "eval_interval": eval_interval,
+            "train_count_per_loop": train_count_per_loop,
+            "train_sample_batch_size": train_sample_batch_size,
+            "agent_kwargs": agent_kwargs,
+        }
+
+        def json_default_func(obj):
+            if isinstance(obj, set):
+                return list(obj)
+
+        params_file_path = "params.json" if base_path is None else os.path.join(base_path, "params.json")
+        with open(params_file_path, 'w') as f:
+            json.dump(train_params, f, default=json_default_func, indent=4)
     eval_policy = greedy_policy.GreedyPolicy(agent.policy)
     collect_policy = agent.collect_policy
 
@@ -61,17 +83,16 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     collect_driver = DynamicEpisodeDriver(
         train_env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
     # eval 由于历史行情相对确定,因此,获取最终汇报只需要跑一次即可
-    final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix()
+    final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix(base_path)
     eval_observers = [final_trajectory_rr, plot_rr]
     eval_driver = DynamicEpisodeDriver(
         eval_env, eval_policy, eval_observers, num_episodes=num_eval_episodes)
 
     run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collect_episodes,
-                   train_count_per_loop, train_loop_count, train_sample_batch_size)
+                   train_count_per_loop, train_loop_count, train_sample_batch_size, base_path)
 
 
 def _test_train():
-
     def _actor_net_kwargs_func(observation_spec, action_spec):
         state_spec = observation_spec[0]
         input_shape = state_spec.shape[-1]
@@ -149,14 +170,13 @@ def _test_train():
         return net_kwargs
 
     agent_kwargs = {
-        "action_net_kwargs": {
-            "actor_net_kwargs_func": _actor_net_kwargs_func
-        },
-        "critic_net_kwargs": {
-            "critic_net_kwargs_func": _critic_net_kwargs_func
-        }
+        "actor_net_kwargs_func": _actor_net_kwargs_func,
+        "critic_net_kwargs_func": _critic_net_kwargs_func
     }
-    train_drl(train_loop_count=300, num_collect_episodes=10, agent_kwargs=agent_kwargs)
+    import datetime
+    from ibats_utils.mess import date_2_str
+    train_drl(train_loop_count=300, num_collect_episodes=10, agent_kwargs=agent_kwargs,
+              base_path=date_2_str(datetime.datetime.today()))
 
 
 if __name__ == "__main__":

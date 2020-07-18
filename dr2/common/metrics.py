@@ -6,6 +6,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import os
 import logging
 import numpy as np
 import pandas as pd
@@ -54,17 +55,22 @@ class FinalTrajectoryMetric:
 
 class PlotTrajectoryMatrix:
 
-    def __init__(self, stat_action_count=True):
+    def __init__(self, base_path=None, stat_action_count=True):
+        self.base_path = os.path.join(os.path.curdir if base_path is None else base_path, 'images')
+        if not os.path.exists(self.base_path):
+            os.makedirs(self.base_path, exist_ok=True)
         self.replay_buffer = []
         self.rr_dic = {}
         self.action_dic = {}
         self.stat_action_count = stat_action_count
+        self.epsilon_count = 0
 
     def __call__(self, trajectory: Trajectory):
         self.replay_buffer.append(trajectory)
         try:
             is_last = trajectory.is_last().numpy()[0]
             if is_last:
+                self.epsilon_count += 1
                 pct_chgs = np.ones(len(self.replay_buffer))
                 action_counts, last_flag = np.zeros(len(self.replay_buffer)), None
                 for idx, _ in enumerate(self.replay_buffer):
@@ -94,10 +100,11 @@ class PlotTrajectoryMatrix:
             dic.update(self.action_dic)
             rr_df = pd.DataFrame(dic)
             rr_df.plot(secondary_y=[_ for _ in rr_df.columns if _.startswith('action')])
-            file_name = f"{datetime_2_str(datetime.now())}_episode_final_plot.png"
-            plt.savefig(file_name)
+            file_name = f"{self.epsilon_count:04d}_{datetime_2_str(datetime.now())}_episode_final_plot.png"
+            file_path = os.path.abspath(os.path.join(self.base_path, 'images', file_name))
+            plt.savefig(file_path)
             plt.close()
-            logger.debug("file_name: %s saved", file_name)
+            logger.debug("file_name: %s saved", file_path)
             self.replay_buffer = []
             self.rr_dic = {}
             self.action_dic = {}

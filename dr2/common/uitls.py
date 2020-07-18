@@ -40,7 +40,20 @@ def show_result(tot_stat_dic, loss_dic, file_name=None):
 
 
 def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collect_episodes,
-                   train_count_per_loop, train_loop_count, train_sample_batch_size):
+                   train_count_per_loop, train_loop_count, train_sample_batch_size, base_path=None):
+    """
+    进行循环训练
+    :param agent: 总体轮次数
+    :param collect_driver: 评估测试次数
+    :param eval_driver: 数据采集次数
+    :param eval_interval:评估间隔
+    :param num_collect_episodes: 收集数据轮数
+    :param train_count_per_loop: 每轮次的训练次数
+    :param train_loop_count: 总训练轮数
+    :param train_sample_batch_size: 每次训练提取样本数量
+    :param base_path: 安装key_path分目录保存训练结果及参数
+    :return:
+    """
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     agent.train = common.function(agent.train)
     collect_driver.run = common.function(collect_driver.run)
@@ -104,7 +117,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
                         stat_dic['action_count'], stat_dic['avg_action_period'])
             tot_stat_dic[train_step] = stat_dic
-            save_policy(saver, train_step)
+            save_policy(saver, train_step, base_path=base_path)
         else:
             logger.info('%d/%d) train_step=%d loss=%.8f',
                         loop_n, train_loop_count, train_step, _loss)
