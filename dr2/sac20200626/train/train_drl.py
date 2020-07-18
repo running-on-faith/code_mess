@@ -55,6 +55,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     agent, agent_kwargs = get_agent(train_env, state_with_flag=state_with_flag,
                                     **({} if agent_kwargs is None else agent_kwargs))
     if record_params:
+        # 记录本次执行程序的参数
         train_params = {
             "train_loop_count": train_loop_count,
             "num_eval_episodes": num_eval_episodes,
@@ -70,9 +71,15 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
             if isinstance(obj, set):
                 return list(obj)
 
-        params_file_path = "params.json" if base_path is None else os.path.join(base_path, "params.json")
+        if base_path is not None:
+            os.makedirs(base_path, exist_ok=True)
+        else:
+            base_path = os.path.curdir
+
+        params_file_path = os.path.join(base_path, "params.json")
         with open(params_file_path, 'w') as f:
             json.dump(train_params, f, default=json_default_func, indent=4)
+
     eval_policy = greedy_policy.GreedyPolicy(agent.policy)
     collect_policy = agent.collect_policy
 

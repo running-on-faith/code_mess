@@ -101,7 +101,7 @@ class PlotTrajectoryMatrix:
             rr_df = pd.DataFrame(dic)
             rr_df.plot(secondary_y=[_ for _ in rr_df.columns if _.startswith('action')])
             file_name = f"{self.epsilon_count:04d}_{datetime_2_str(datetime.now())}_episode_final_plot.png"
-            file_path = os.path.abspath(os.path.join(self.base_path, 'images', file_name))
+            file_path = os.path.abspath(os.path.join(self.base_path, file_name))
             plt.savefig(file_path)
             plt.close()
             logger.debug("file_name: %s saved", file_path)
