@@ -39,12 +39,12 @@ def _test_train():
             #       Currently, specifying any `dilation_rate` value != 1 is
             #       incompatible with specifying any stride value != 1.
             # padding: one of `"valid"` or `"same"` (case-insensitive).
-            "conv_layer_params": {
-                # (0, 3, 186) -> (0, 3, 93)
-                (input_shape, 3, 1, 1, 'same'),
-                # (0, 3, 93) -> (0, 1, 186)
-                (input_shape * 2, 3, 1),
-            },
+            # "conv_layer_params": {
+            #     # (0, 3, 186) -> (0, 3, 93)
+            #     (input_shape, 3, 1, 1, 'same'),
+            #     # (0, 3, 93) -> (0, 1, 186)
+            #     (input_shape * 2, 3, 1),
+            # },
             "activation_fn": "sigmoid"
         }
         return net_kwargs
@@ -77,12 +77,12 @@ def _test_train():
             #       Currently, specifying any `dilation_rate` value != 1 is
             #       incompatible with specifying any stride value != 1.
             # padding: one of `"valid"` or `"same"` (case-insensitive).
-            "conv_layer_params": {
-                # (0, 3, 186) -> (0, 3, 93)
-                (input_shape, 3, 1, 1, 'same'),
-                # (0, 3, 93) -> (0, 1, 186)
-                (input_shape * 2, 3, 1),
-            },
+            # "conv_layer_params": {
+            #     # (0, 3, 186) -> (0, 3, 93)
+            #     (input_shape, 3, 1, 1, 'same'),
+            #     # (0, 3, 93) -> (0, 1, 186)
+            #     (input_shape * 2, 3, 1),
+            # },
             "activation_fn": "sigmoid"
         }
         return net_kwargs
@@ -91,7 +91,8 @@ def _test_train():
         "actor_net_kwargs_func": _actor_net_kwargs_func,
         "critic_net_kwargs_func": _critic_net_kwargs_func
     }
-    train_drl(train_loop_count=300, num_collect_episodes=10, agent_kwargs=agent_kwargs)
+    train_drl(train_loop_count=300, num_collect_episodes=10, agent_kwargs=agent_kwargs,
+              base_path="conv_layer_params_None")
 
 
 if __name__ == "__main__":
