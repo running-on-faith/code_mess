@@ -27,8 +27,8 @@ def get_agent(
         gamma=0.5,
         reward_scale_factor=1.0,
         gradient_clipping=None,
-        action_net_kwargs=None,
-        critic_net_kwargs=None,
+        actor_net_kwargs_func=None,
+        critic_net_kwargs_func=None,
 ):
     time_step_spec = env.time_step_spec()
     action_spec = env.action_spec()
@@ -37,10 +37,10 @@ def get_agent(
     logger.debug("action_spec: %s", action_spec)
     logger.debug("observation_spec: %s", observation_spec)
     # 建立 Actor 网络
-    action_net_kwargs = {} if action_net_kwargs is None else action_net_kwargs
-    actor_net = get_actor_network(env, state_with_flag=state_with_flag, **action_net_kwargs)
+    actor_net_kwargs = {} if actor_net_kwargs_func is None else actor_net_kwargs_func(observation_spec, action_spec)
+    actor_net = get_actor_network(env, state_with_flag=state_with_flag, **actor_net_kwargs)
     # 建立 Critic 网络
-    critic_net_kwargs = {} if action_net_kwargs is None else critic_net_kwargs
+    critic_net_kwargs = {} if critic_net_kwargs_func is None else critic_net_kwargs_func(observation_spec, action_spec)
     critic_net = get_critic_network(env, state_with_flag=state_with_flag, **critic_net_kwargs)
     # 建立 agent
     global_step = tf.compat.v1.train.get_or_create_global_step()
@@ -65,7 +65,8 @@ def get_agent(
     tf_agent.initialize()
     # Reset the train step
     tf_agent.train_step_counter.assign(0)
-    return tf_agent
+    agent_kwargs = {"actor_net_kwargs": actor_net_kwargs, "critic_net_kwargs": critic_net_kwargs}
+    return tf_agent, agent_kwargs
 
 
 if __name__ == "__main__":

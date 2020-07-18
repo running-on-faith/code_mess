@@ -24,15 +24,9 @@ logger = logging.getLogger()
 
 class CriticLSTMNetwork(network.Network):
 
-    def __init__(self,
-                 input_tensor_spec,
-                 lstm_kwargs,
-                 conv_layer_params,
-                 activation_fn=tf.keras.activations.sigmoid,
-                 kernel_initializer=None,
-                 batch_squash=True,
-                 dtype=tf.float32,
-                 name='CriticNetwork'):
+    def __init__(self, input_tensor_spec, lstm_kwargs,
+                 activation_fn=tf.keras.activations.relu,
+                 name='CriticLSTMNetwork', **kwargs):
         super().__init__(
             input_tensor_spec=input_tensor_spec,
             state_spec=(),
@@ -59,14 +53,9 @@ class CriticLSTMNetwork(network.Network):
             observation_spec,
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
-            conv_layer_params=conv_layer_params,
-            conv_type=CONV_TYPE_1D,
-            # fc_layer_params=fc_layer_params,
-            # dropout_layer_params=dropout_layer_params,
             activation_fn=activation_fn,
-            kernel_initializer=kernel_initializer,
-            batch_squash=batch_squash,
-            dtype=dtype
+            name=name,
+            **kwargs
         )
 
         # 设计 action_spec 相关网络
@@ -88,11 +77,11 @@ class CriticLSTMNetwork(network.Network):
         return tf.reshape(joint, [-1]), network_state
 
 
-def get_critic_network(env: TFPyEnvironment, state_with_flag: bool, critic_net_kwargs_func=None, **kwargs):
+def get_critic_network(env: TFPyEnvironment, state_with_flag: bool, **kwargs):
     observation_spec, action_spec = env.observation_spec(), env.action_spec()
-    kwargs.update(**critic_net_kwargs_func(observation_spec, action_spec))
     net = CriticLSTMNetwork(
-        input_tensor_spec=(observation_spec, action_spec), **kwargs
+        input_tensor_spec=(observation_spec, action_spec),
+        **kwargs
     )
     # plot_modal_2_file(net, 'critic.png')
     return net
