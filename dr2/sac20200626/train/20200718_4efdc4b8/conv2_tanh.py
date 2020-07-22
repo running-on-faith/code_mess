@@ -92,7 +92,7 @@ def _test_train():
         "critic_net_kwargs_func": _critic_net_kwargs_func
     }
     train_drl(train_loop_count=300, num_collect_episodes=10, agent_kwargs=agent_kwargs,
-              base_path="two_conv_layer_params_tanh")
+              base_path="two_conv_layer_params_tanh2")
 
 
 if __name__ == "__main__":
