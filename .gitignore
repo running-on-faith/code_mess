@@ -196,3 +196,4 @@ local.trace
 *.pb
 variables.data-*
 variables.index
+params.json
