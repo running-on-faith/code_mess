@@ -46,15 +46,6 @@ class ActorDistributionLSTMNetwork(network.DistributionNetwork):
                  input_tensor_spec,
                  output_tensor_spec,
                  lstm_kwargs,
-                 preprocessing_layers=None,
-                 preprocessing_combiner=None,
-                 conv_layer_params=None,
-                 fc_layer_params=(200, 100),
-                 dropout_layer_params=None,
-                 activation_fn=tf.keras.activations.relu,
-                 kernel_initializer=None,
-                 batch_squash=True,
-                 dtype=tf.float32,
                  discrete_projection_net=_categorical_projection_net,
                  continuous_projection_net=_normal_projection_net,
                  name='ActorDistributionNetwork',
@@ -66,15 +57,8 @@ class ActorDistributionLSTMNetwork(network.DistributionNetwork):
             input.
           output_tensor_spec: A nest of `tensor_spec.BoundedTensorSpec` representing
             the output.
-          preprocessing_layers: (Optional.) A nest of `tf.keras.layers.Layer`
-            representing preprocessing for the different observations.
-            All of these layers must not be already built. For more details see
-            the documentation of `networks.EncodingNetwork`.
-          preprocessing_combiner: (Optional.) A keras layer that takes a flat list
-            of tensors and combines them. Good options include
-            `tf.keras.layers.Add` and `tf.keras.layers.Concatenate(axis=-1)`.
-            This layer must not be already built. For more details see
-            the documentation of `networks.EncodingNetwork`.
+          kwargs:
+            can be params below
           conv_layer_params: Optional list of convolution layers parameters, where
             each item is a length-three tuple indicating (filters, kernel_size,
             stride).
@@ -122,9 +106,6 @@ class ActorDistributionLSTMNetwork(network.DistributionNetwork):
             state_spec=(),
             output_spec=output_spec,
             name=name)
-
-        if not kernel_initializer:
-            kernel_initializer = tf.compat.v1.keras.initializers.glorot_uniform()
 
         # 设计 observation_spec 相关网络
         state_spec = input_tensor_spec[0]

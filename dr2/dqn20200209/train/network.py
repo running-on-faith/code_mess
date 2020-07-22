@@ -357,7 +357,7 @@ class EnhanceEncodingNetwork(encoding_network.EncodingNetwork):
                  conv_layer_params=None,
                  fc_layer_params=None,
                  dropout_layer_params=None,
-                 activation_fn=tf.keras.activations.relu,
+                 activation_fn=tf.keras.activations.tanh,
                  weight_decay_params=None,
                  kernel_initializer=None,
                  batch_squash=True,
