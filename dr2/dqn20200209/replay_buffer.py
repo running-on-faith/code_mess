@@ -102,7 +102,7 @@ def _test_declined_replay_buffer():
     # 建立环境
     state_with_flag = True
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(env)
+    agent, agent_kwargs = get_agent(env)
     eval_policy = agent.policy
     collect_replay_buffer = DeclinedTFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)
     eval_observers = [collect_replay_buffer.add_batch]

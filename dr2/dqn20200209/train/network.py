@@ -605,7 +605,7 @@ def get_network(observation_spec, action_spec, network_kwargs_func=None, **kwarg
     # loss_fn = _huber_loss
     loss_fn = common.element_wise_squared_loss
     # loss_fn = common.element_wise_huber_loss
-    return network, optimizer, loss_fn
+    return network, optimizer, loss_fn, kwargs
 
 
 if __name__ == "__main__":

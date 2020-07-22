@@ -6,7 +6,10 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
+import json
 import logging
+import os
+
 import numpy as np
 from tf_agents.policies.policy_saver import PolicySaver
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
@@ -23,7 +26,7 @@ logger = logging.getLogger()
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
               train_count_per_loop=30, train_sample_batch_size=1024, epsilon_greedy=0.1, gamma=0.8,
-              network_kwargs_func=None):
+              network_kwargs_func=None, record_params=True, base_path=None):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -37,14 +40,42 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         the collect_policy method).
     :param gamma: reward衰减率
     :param network_kwargs_func: network kwargs function
+    :param record_params: 记录参数道文件:
+    :param base_path: 安装key_path分目录保存训练结果及参数
     :return:
     """
     logger.info("Train started")
     loop_n = 0
     env = get_env(state_with_flag=state_with_flag)
-    agent = get_agent(
+    agent, agent_kwargs = get_agent(
         env, epsilon_greedy=epsilon_greedy, gamma=gamma,
         network_kwargs_func=network_kwargs_func)
+    if record_params:
+        # 记录本次执行程序的参数
+        train_params = {
+            "train_loop_count": train_loop_count,
+            "num_eval_episodes": num_eval_episodes,
+            "num_collect_episodes": num_collect_episodes,
+            "state_with_flag": state_with_flag,
+            "eval_interval": eval_interval,
+            "train_count_per_loop": train_count_per_loop,
+            "train_sample_batch_size": train_sample_batch_size,
+            "agent_kwargs": agent_kwargs,
+        }
+
+        def json_default_func(obj):
+            if isinstance(obj, set):
+                return list(obj)
+
+        if base_path is not None:
+            os.makedirs(base_path, exist_ok=True)
+        else:
+            base_path = os.path.curdir
+
+        params_file_path = os.path.join(base_path, "params.json")
+        with open(params_file_path, 'w') as f:
+            json.dump(train_params, f, default=json_default_func, indent=4)
+
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
@@ -61,7 +92,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
         env, eval_policy, eval_observers, num_episodes=num_eval_episodes)
 
     run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collect_episodes,
-                   train_count_per_loop, train_loop_count, train_sample_batch_size)
+                   train_count_per_loop, train_loop_count, train_sample_batch_size, base_path)
 
 
 if __name__ == "__main__":

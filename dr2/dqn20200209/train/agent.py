@@ -20,7 +20,7 @@ def get_agent(env, epsilon_greedy=0.1, gamma=0.8, network_kwargs_func=None):
     get DdqnAgent
     """
     from tf_agents.agents.dqn.dqn_agent import DdqnAgent
-    network, optimizer, loss_fn = get_network(
+    network, optimizer, loss_fn, agent_kwargs = get_network(
         env.observation_spec(), env.action_spec(),
         network_kwargs_func=network_kwargs_func)
     global_step = tf.compat.v1.train.get_or_create_global_step()
@@ -37,7 +37,7 @@ def get_agent(env, epsilon_greedy=0.1, gamma=0.8, network_kwargs_func=None):
     agent.initialize()
     # Reset the train step
     agent.train_step_counter.assign(0)
-    return agent
+    return agent, agent_kwargs
 
 
 def _get_df():
