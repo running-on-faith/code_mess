@@ -39,8 +39,29 @@ def show_result(tot_stat_dic, loss_dic, file_name=None):
         logger.info(tot_stat_dic)
 
 
+def _interrupter_func(tot_stat_dic):
+    """
+    连续 20 数据点动作数量一样，或rr一致，则放弃训练
+    """
+    enable_save, enable_continue = True, True
+    stat_df = pd.DataFrame(tot_stat_dic).T[['rr', 'action_count']]
+    if stat_df.shape[0] == 0:
+        enable_save, enable_continue = False, True
+
+    recent_s = stat_df['rr'].iloc[-20:, ]
+    if all(recent_s == recent_s.mean()):
+        enable_save, enable_continue = False, False
+    else:
+        recent_s = stat_df['action_count'].iloc[-20:, ]
+        if all(recent_s == recent_s.mean()):
+            enable_save, enable_continue = False, False
+
+    return enable_save, enable_continue
+
+
 def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collect_episodes,
-                   train_count_per_loop, train_loop_count, train_sample_batch_size, base_path=None):
+                   train_count_per_loop, train_loop_count, train_sample_batch_size, base_path=None,
+                   interrupter_func=_interrupter_func):
     """
     进行循环训练
     :param agent: 总体轮次数
@@ -52,6 +73,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
     :param train_loop_count: 总训练轮数
     :param train_sample_batch_size: 每次训练提取样本数量
     :param base_path: 安装key_path分目录保存训练结果及参数
+    :param interrupter_func: 训练中断器，当训练结果不及预期时、或已经达到预期是及早终止训练
     :return:
     """
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
@@ -117,11 +139,24 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
                         stat_dic['action_count'], stat_dic['avg_action_period'])
             tot_stat_dic[train_step] = stat_dic
-            save_policy(saver, train_step, base_path=base_path)
+            if interrupter_func is not None:
+                enable_save, enable_continue = interrupter_func(tot_stat_dic)
+            else:
+                enable_save, enable_continue = True, True
+
+            # 保存结果
+            if enable_save:
+                save_policy(saver, train_step, base_path=base_path)
+
+            # 终止训练
+            if not enable_continue:
+                break
         else:
             logger.info('%d/%d) train_step=%d loss=%.8f',
                         loop_n, train_loop_count, train_step, _loss)
-    show_result(tot_stat_dic, loss_dic)
+
+    # 训练终止，展示训练结果
+    show_result(tot_stat_dic, loss_dic, f"{base_path}.png")
     logger.info("Train finished")
 
 
