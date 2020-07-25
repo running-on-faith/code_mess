@@ -86,7 +86,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     collect_driver = DynamicEpisodeDriver(
         env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
     # eval 由于历史行情相对确定,因此,获取最终rr只需要跑一次即可
-    final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix()
+    final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix(base_path=base_path)
     eval_observers = [final_trajectory_rr, plot_rr]
     eval_driver = DynamicEpisodeDriver(
         env, eval_policy, eval_observers, num_episodes=num_eval_episodes)
