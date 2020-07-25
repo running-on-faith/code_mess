@@ -141,16 +141,16 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
             tot_stat_dic[train_step] = stat_dic
             if interrupter_func is not None:
                 enable_save, enable_continue = interrupter_func(tot_stat_dic)
-            else:
-                enable_save, enable_continue = True, True
 
-            # 保存结果
-            if enable_save:
-                save_policy(saver, train_step, base_path=base_path)
+                # 保存结果
+                if enable_save:
+                    save_policy(saver, train_step, base_path=base_path)
 
-            # 终止训练
-            if not enable_continue:
-                break
+                # 终止训练
+                if not enable_continue:
+                    logger.error("训练结果不满足继续训练要求，退出循环")
+                    break
+
         else:
             logger.info('%d/%d) train_step=%d loss=%.8f',
                         loop_n, train_loop_count, train_step, _loss)
