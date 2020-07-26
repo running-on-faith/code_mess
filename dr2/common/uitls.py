@@ -7,6 +7,8 @@
 @desc    : 
 """
 import logging
+import os
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -159,7 +161,9 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
                         loop_n, train_loop_count, train_step, _loss)
 
     # 训练终止，展示训练结果
-    show_result(tot_stat_dic, loss_dic, f"{base_path}.png")
+    file_name = 'stat.png'
+    file_path = file_name if base_path is None else os.path.join(base_path, file_name)
+    show_result(tot_stat_dic, loss_dic, file_path)
     logger.info("Train finished")
 
 
