@@ -63,12 +63,12 @@ if __name__ == "__main__":
     gamma = 0.8
     # num_collect_episodes 被默认设置为 epsilon_greedy 倒数的 2 背,以确保又足够的样板,防止由于随机随机策略而导致价值计算失衡
     train_drl(
-        train_loop_count=200,
+        train_loop_count=500,
         num_collect_episodes=int(1 / epsilon_greedy),
         epsilon_greedy=epsilon_greedy,
         train_sample_batch_size=1024,
-        train_count_per_loop=50,
+        train_count_per_loop=20,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='lstm_two_conv_sigmoid'
+        base_path='lstm_two_conv_sigmoid_20200726_e1cf8337'
     )
