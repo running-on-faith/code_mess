@@ -39,22 +39,25 @@ def show_result(tot_stat_dic, loss_dic, file_name=None):
         logger.info(tot_stat_dic)
 
 
-def _interrupter_func(tot_stat_dic):
+def _interrupter_func(tot_stat_dic, min_check_len=20):
     """
     连续 20 数据点动作数量一样，或rr一致，则放弃训练
     """
     enable_save, enable_continue = True, True
     stat_df = pd.DataFrame(tot_stat_dic).T[['rr', 'action_count']]
-    if stat_df.shape[0] == 0:
+    data_len = stat_df.shape[0]
+    if data_len == 0:
         enable_save, enable_continue = False, True
-
-    recent_s = stat_df['rr'].iloc[-20:, ]
-    if all(recent_s == recent_s.mean()):
-        enable_save, enable_continue = False, False
+    elif data_len < min_check_len:
+        pass
     else:
-        recent_s = stat_df['action_count'].iloc[-20:, ]
+        recent_s = stat_df['rr'].iloc[-min_check_len:, ]
         if all(recent_s == recent_s.mean()):
             enable_save, enable_continue = False, False
+        else:
+            recent_s = stat_df['action_count'].iloc[-min_check_len:, ]
+            if all(recent_s == recent_s.mean()):
+                enable_save, enable_continue = False, False
 
     return enable_save, enable_continue
 
