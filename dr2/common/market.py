@@ -26,7 +26,7 @@ class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5,
                  fee_rate=3e-3, position_unit=10, state_with_flag=False,
                  reward_with_fee0=False, return_tot_reward=False,
-                 md_close_label='close', md_open_label='open', long_holding_punish=0):
+                 md_close_label='close', md_open_label='open', long_holding_punish=0, punish_value=1.0):
         """
         :param md_df: 行情数据
         :param data_factors: 因子数据,将作为 observation 返回
@@ -38,9 +38,10 @@ class QuotesMarket(object):
         :param return_tot_reward: 默认True, reward 是否是累计 rr, 如果 False, 仅返回当前状态与上一状态的 rr 净值
         :param md_close_label: close 标识 key
         :param md_open_label: open 标识 key
-        :param long_holding_punish: 默认为 0，
+        :param long_holding_punish: 默认为 0.0 数字是浮点型 np.float32
             数字大于0时，开始生效.持仓超过 限定数值后，开始对reward增加惩罚项。
             同时，返回的 observation 中包含连续持仓条数。
+        :param punish_value: 默认为 1.0 惩罚值
         :return:
         """
         self.data_close = md_df[md_close_label]
@@ -68,8 +69,9 @@ class QuotesMarket(object):
         self._reward_latest = 0.0
         self._done = False
         self.step_ret_latest = None
-        self.long_holding_punish = long_holding_punish
-        self._keep_holding_periods_len = 0
+        self.long_holding_punish = np.float32(long_holding_punish)
+        self._keep_holding_periods_len = 0.0
+        self.punish_value = punish_value
 
     @property
     def flag(self):
@@ -90,7 +92,7 @@ class QuotesMarket(object):
         self._reward_latest = 0.0
         self._done = False
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
-        self._keep_holding_periods_len = 0
+        self._keep_holding_periods_len = 0.0
         return self._observation_latest
 
     def _get_observation_latest(self):
@@ -110,7 +112,7 @@ class QuotesMarket(object):
             observation_latest.append(np.array([self.flag], dtype=np.float32))
             observation_latest.append(np.array([rr], dtype=np.float32))
 
-        if self.long_holding_punish > 0:
+        if self.long_holding_punish > 0.0:
             observation_latest.append(self._keep_holding_periods_len)
 
         if len(observation_latest) == 0:
@@ -131,7 +133,7 @@ class QuotesMarket(object):
         self.position_value = quotes
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
-        self._keep_holding_periods_len = 0
+        self._keep_holding_periods_len = 0.0
 
     def short(self):
         self._flag = _FLAG_SHORT
@@ -140,12 +142,12 @@ class QuotesMarket(object):
         self.position_value = - quotes
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
-        self._keep_holding_periods_len = 0
+        self._keep_holding_periods_len = 0.0
 
     def keep(self):
         quotes = self.data_open[self.step_counter] * self.position_unit
         self.position_value = quotes * self._flag
-        self._keep_holding_periods_len += 1
+        self._keep_holding_periods_len += 1.0
 
     def close_long(self):
         self._flag = _FLAG_EMPTY
@@ -154,7 +156,7 @@ class QuotesMarket(object):
         self.position_value = 0
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
-        self._keep_holding_periods_len = 0
+        self._keep_holding_periods_len = 0.0
 
     def close_short(self):
         self._flag = _FLAG_EMPTY
@@ -163,7 +165,7 @@ class QuotesMarket(object):
         self.position_value = 0
         self.fee_curr_step += quotes * self.fee_rate
         self.action_count += 1
-        self._keep_holding_periods_len = 0
+        self._keep_holding_periods_len = 0.0
 
     def step(self, action: int):
         if self._done:
@@ -228,9 +230,9 @@ class QuotesMarket(object):
                 _reward_latest1 = net_reward / price / self.position_unit
                 _reward_latest2 = (net_reward + self.fee_curr_step) / price / self.position_unit
 
-            if 0 < self.long_holding_punish < self._keep_holding_periods_len:
+            if 0.0 < self.long_holding_punish < self._keep_holding_periods_len:
                 # 持仓周期超过 long_holding_punish，对 reward 增加 惩罚项
-                self._reward_latest = _reward_latest1 - 1.0, _reward_latest2 - 1.0
+                self._reward_latest = _reward_latest1 - self.punish_value, _reward_latest2 - self.punish_value
             else:
                 self._reward_latest = _reward_latest1, _reward_latest2
 
@@ -240,9 +242,9 @@ class QuotesMarket(object):
             else:
                 self._reward_latest = net_reward / price / self.position_unit
 
-            if 0 < self.long_holding_punish < self._keep_holding_periods_len:
+            if 0.0 < self.long_holding_punish < self._keep_holding_periods_len:
                 # 持仓周期超过 long_holding_punish，对 reward 增加 惩罚项
-                self._reward_latest -= 1.0
+                self._reward_latest -= self.punish_value
 
         self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
         return self.step_ret_latest
