@@ -34,10 +34,11 @@ class AccountEnv(PyEnvironment):
 
     def __init__(self, md_df: pd.DataFrame, data_factors: np.ndarray,
                  state_with_flag=True, action_kind_count=2, batch_size=None,
-                 is_continuous_action=False,
+                 is_continuous_action=False, long_holding_punish=0,
                  **kwargs):
         super(AccountEnv, self).__init__()
         kwargs['state_with_flag'] = state_with_flag
+        kwargs['long_holding_punish'] = long_holding_punish
         self._batch_size = batch_size
         self.market = QuotesMarket(md_df, data_factors, **kwargs)
         self.is_continuous_action = is_continuous_action
@@ -48,22 +49,26 @@ class AccountEnv(PyEnvironment):
             shape=(1,), dtype=np.float32, name='flag', minimum=0.0, maximum=1.0)
         self._rr_spec = array_spec.ArraySpec(
             shape=(1,), dtype=np.float32, name='rr')
+        self._holding_period_spec = array_spec.BoundedArraySpec(
+            shape=(1,), dtype=np.float32, name='holding_period', minimum=0.0)
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.int32 if not is_continuous_action else np.float32,
             name='action', minimum=0.0, maximum=max(ACTIONS[:action_kind_count]))
         self.last_done_state = False
+        _observation_spec = [self._state_spec]
+        # 添加 flag、rr 结构
         if state_with_flag:
-            # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec, 'rr': self._rr_spec}
-            # _observation_spec 只能是数组形式,字典形式将会导致 encoding_network.EncodingNetwork 报错:
-            # encoder(observation, step_type=step_type, network_state=network_state)
-            # Key Error: 0
-            # File "/home/mg/github/code_mess/venv/lib/python3.6/site-packages/
-            #   tensorflow_core/python/util/nest.py", line 676,
-            # in _yield_flat_up_to
-            # at input_subtree = input_tree[shallow_key]
-            self._observation_spec = (self._state_spec, self._flag_spec, self._rr_spec)
+            _observation_spec.extend([self._flag_spec, self._rr_spec])
+
+        # 添加 持仓周期数 结构
+        if long_holding_punish>0:
+            _observation_spec.append(self._holding_period_spec)
+
+        # 如果只有一个数据，则无需数组形式
+        if len(_observation_spec) > 1:
+            self._observation_spec = tuple(_observation_spec)
         else:
-            self._observation_spec = self._state_spec
+            self._observation_spec = _observation_spec[0]
 
     def observation_spec(self):
         return self._observation_spec
@@ -121,12 +126,12 @@ def _get_df():
     return md_df[['close', 'open']], data_arr_batch
 
 
-def get_env(state_with_flag=True, is_continuous_action=False):
+def get_env(state_with_flag=True, is_continuous_action=False, **kwargs):
     from tf_agents.environments.tf_py_environment import TFPyEnvironment
     md_df, data_factors = _get_df()
     env = TFPyEnvironment(AccountEnv(
         md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag,
-        is_continuous_action=is_continuous_action))
+        is_continuous_action=is_continuous_action, **kwargs))
     return env
 
 
