@@ -242,6 +242,7 @@ class DDQN(Network):
         self.learning_rate = learning_rate
         state_spec = input_tensor_spec[0]
         input_shape = state_spec.shape[-1]
+        # TODO: bn 目前没有使用，稍后添加进网络
         self.bn = BatchNormalization(trainable=False)
         # Sequential 将会抛出异常:
         #   Weights for model sequential have not yet been created
@@ -257,14 +258,17 @@ class DDQN(Network):
         self._state_layer = LSTM(input_shape * 2, **lstm_kwargs)
         self._flag_layer = RepeatVector(input_shape * 2)
         self._rr_layer = RepeatVector(input_shape * 2)
-        preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer]
+        self._holding_period_layer = RepeatVector(input_shape * 2)
+        preprocessing_layers = [self._state_layer, self._flag_layer, self._rr_layer, self._holding_period_layer]
         # Reshape((-1, input_shape * 2))(x[1]) -> output_shape = (0, 1, 186)
         # Concatenate(axis=1) -> output_shape = (0, 3, 186)
         preprocessing_combiner = Lambda(
             lambda x: Concatenate(axis=1)(
-                [Reshape((-1, input_shape * 2))(x[1]),
-                 Reshape((-1, input_shape * 2))(x[0]),
-                 Reshape((-1, input_shape * 2))(x[2])]
+                [Reshape((-1, input_shape * 2))(x[1]),  # _flag_layer
+                 Reshape((-1, input_shape * 2))(x[0]),  # _state_layer
+                 Reshape((-1, input_shape * 2))(x[2]),  # _rr_layer
+                 Reshape((-1, input_shape * 2))(x[3]),  # _holding_period_layer
+                 ]
             )
         )
         # (0, 3, 186) -> (0, 1, 372)
@@ -294,19 +298,21 @@ class DDQN(Network):
 
         q_value_layer = Sequential()
         if dueling:
-            q_value_layer.add(Dense(action_count + 1,
-                                    activation=activation_fn
-                                    ))
-            q_value_layer.add(
-                Lambda(
-                    lambda i: (backend.expand_dims(i[:, 0], -1) + i[:, 1:] -
-                               backend.mean(i[:, 1:], keepdims=True)),
-                    output_shape=(action_count,)
-                )
-            )
+            q_value_layer.add(Dense(
+                action_count + 1,
+                activation=activation_fn
+            ))
+            q_value_layer.add(Lambda(
+                lambda i: (backend.expand_dims(i[:, 0], -1) + i[:, 1:] -
+                           backend.mean(i[:, 1:], keepdims=True)),
+                output_shape=(action_count,)
+            ))
         else:
-            q_value_layer.add(Dense(action_count, activation=activation_fn,
-                                    kernel_initializer='random_normal'))
+            q_value_layer.add(Dense(
+                action_count,
+                activation=activation_fn,
+                kernel_initializer='random_normal'
+            ))
 
         self._encoder = encoder
         self._q_value_layer = q_value_layer
@@ -324,7 +330,7 @@ class DDQN(Network):
           A tuple `(logits, network_state)`.
         """
         # encoder_input, flag_input = observation
-        new_obsercation = self.bn(observation[0]), observation[1], observation[2]
+        new_obsercation = self.bn(observation[0]), observation[1], observation[2], observation[3]
         state, network_state = self._encoder(
             new_obsercation, step_type=step_type, network_state=network_state)
 
