@@ -26,7 +26,7 @@ class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5,
                  fee_rate=3e-3, position_unit=10, state_with_flag=False,
                  reward_with_fee0=False, return_tot_reward=False,
-                 md_close_label='close', md_open_label='open', long_holding_punish=0, punish_value=1.0):
+                 md_close_label='close', md_open_label='open', long_holding_punish=0, punish_value=0.01):
         """
         :param md_df: 行情数据
         :param data_factors: 因子数据,将作为 observation 返回

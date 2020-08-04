@@ -67,7 +67,7 @@ if __name__ == "__main__":
         num_collect_episodes=int(1 / epsilon_greedy),
         epsilon_greedy=epsilon_greedy,
         train_sample_batch_size=1024,
-        train_count_per_loop=20,
+        train_count_per_loop=10,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
         base_path='lstm_two_conv_sigmoid_20200803_97950a40'

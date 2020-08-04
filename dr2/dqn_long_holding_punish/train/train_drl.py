@@ -41,7 +41,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     :return:
     """
     logger.info("Train started")
-    env = get_env(state_with_flag=state_with_flag, long_holding_punish=5)
+    env = get_env(state_with_flag=state_with_flag, long_holding_punish=5, punish_value=0.01)
     agent, agent_kwargs = get_agent(
         env, epsilon_greedy=epsilon_greedy, gamma=gamma,
         network_kwargs_func=network_kwargs_func)
