@@ -59,6 +59,8 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
             "eval_interval": eval_interval,
             "train_count_per_loop": train_count_per_loop,
             "train_sample_batch_size": train_sample_batch_size,
+            "epsilon_greedy": epsilon_greedy,
+            "gamma": gamma,
             "agent_kwargs": agent_kwargs,
         }
 
