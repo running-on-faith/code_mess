@@ -70,5 +70,5 @@ if __name__ == "__main__":
         train_count_per_loop=10,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='lstm_two_conv_sigmoid_20200803_97950a40'
+        base_path='lstm_two_conv_sigmoid_20200804_404afd54'
     )

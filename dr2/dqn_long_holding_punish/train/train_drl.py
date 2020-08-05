@@ -22,7 +22,8 @@ logger = logging.getLogger()
 def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
               state_with_flag=True, eval_interval=5,
               train_count_per_loop=30, train_sample_batch_size=1024, epsilon_greedy=0.1, gamma=0.8,
-              network_kwargs_func=None, record_params=True, base_path=None):
+              network_kwargs_func=None, record_params=True, base_path=None,
+              long_holding_punish=5, punish_value=0.01):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
@@ -38,10 +39,13 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     :param network_kwargs_func: network kwargs function
     :param record_params: 记录参数道文件:
     :param base_path: 安装key_path分目录保存训练结果及参数
+    :param long_holding_punish: 持仓超期惩罚周期
+    :param punish_value: 惩罚值
     :return:
     """
     logger.info("Train started")
-    env = get_env(state_with_flag=state_with_flag, long_holding_punish=5, punish_value=0.01)
+    env = get_env(state_with_flag=state_with_flag,
+                  long_holding_punish=long_holding_punish, punish_value=punish_value)
     agent, agent_kwargs = get_agent(
         env, epsilon_greedy=epsilon_greedy, gamma=gamma,
         network_kwargs_func=network_kwargs_func)
