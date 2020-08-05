@@ -76,5 +76,5 @@ if __name__ == "__main__":
         train_count_per_loop=50,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='lstm_two_conv_epsilon_greedy15_gamma5_cabd847e'
+        base_path='lstm_conv5_epsilon_greedy15_gamma5_0dc8faa9'
     )
