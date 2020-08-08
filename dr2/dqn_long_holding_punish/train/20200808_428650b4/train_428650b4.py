@@ -73,7 +73,7 @@ def test_train_env_param():
                 "long_holding_punish": 10,
                 "punish_value": 0.05,
             }
-            base_path = f'conv2_20200808_e0a6f147' \
+            base_path = f'conv2_20200808_18c0ff6e' \
                         f'_epsilon_greedy{int(epsilon_greedy * 10)}' \
                         f'_gamma{int(gamma * 10)}' \
                         f'_punish_value{int(punish_value * 100)}'
