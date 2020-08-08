@@ -40,7 +40,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4, 
     :param env_kwargs: Env kwargs
     :return:
     """
-    logger.info("Train started")
+    logger.info(f"Train {base_path if base_path is not None else ''} started")
     env_kwargs = {} if env_kwargs is None else env_kwargs
     env_kwargs.setdefault("state_with_flag", True)
     env = get_env(**env_kwargs)
