@@ -73,7 +73,7 @@ def test_train_env_param():
                 "long_holding_punish": 10,
                 "punish_value": 0.05,
             }
-            base_path = f'conv2_20200808_428650b4' \
+            base_path = f'conv2_20200808_e0a6f147' \
                         f'_epsilon_greedy{int(epsilon_greedy * 10)}' \
                         f'_gamma{int(gamma * 10)}' \
                         f'_punish_value{int(punish_value * 100)}'
@@ -90,6 +90,10 @@ def test_train_env_param():
             }
             logger.info("%s start", base_path)
             pool.apply_async(train_drl, kwds=kwargs)
+
+        pool.close()
+        logger.info("等待全部进程结束后退出")
+        pool.join()
 
 
 if __name__ == "__main__":
