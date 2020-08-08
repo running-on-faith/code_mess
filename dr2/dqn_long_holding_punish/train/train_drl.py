@@ -19,16 +19,14 @@ from dr2.dqn_long_holding_punish.train.agent import get_agent
 logger = logging.getLogger()
 
 
-def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
-              state_with_flag=True, eval_interval=5,
+def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4, eval_interval=5,
               train_count_per_loop=30, train_sample_batch_size=1024, epsilon_greedy=0.1, gamma=0.8,
               network_kwargs_func=None, record_params=True, base_path=None,
-              long_holding_punish=5, punish_value=0.01):
+              env_kwargs=None):
     """
     :param train_loop_count: 总体轮次数
     :param num_eval_episodes: 评估测试次数
     :param num_collect_episodes: 数据采集次数
-    :param state_with_flag:带 flag 标识
     :param eval_interval:评估间隔
     :param train_count_per_loop: 每轮次的训练次数
     :param train_sample_batch_size: 每次训练提取样本数量
@@ -39,13 +37,13 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     :param network_kwargs_func: network kwargs function
     :param record_params: 记录参数道文件:
     :param base_path: 安装key_path分目录保存训练结果及参数
-    :param long_holding_punish: 持仓超期惩罚周期
-    :param punish_value: 惩罚值
+    :param env_kwargs: Env kwargs
     :return:
     """
     logger.info("Train started")
-    env = get_env(state_with_flag=state_with_flag,
-                  long_holding_punish=long_holding_punish, punish_value=punish_value)
+    env_kwargs = {} if env_kwargs is None else env_kwargs
+    env_kwargs.setdefault("state_with_flag", True)
+    env = get_env(**env_kwargs)
     agent, agent_kwargs = get_agent(
         env, epsilon_greedy=epsilon_greedy, gamma=gamma,
         network_kwargs_func=network_kwargs_func)
@@ -55,11 +53,11 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
             "train_loop_count": train_loop_count,
             "num_eval_episodes": num_eval_episodes,
             "num_collect_episodes": num_collect_episodes,
-            "state_with_flag": state_with_flag,
             "eval_interval": eval_interval,
             "train_count_per_loop": train_count_per_loop,
             "train_sample_batch_size": train_sample_batch_size,
             "agent_kwargs": agent_kwargs,
+            "env_kwargs": env_kwargs,
         }
 
         def json_default_func(obj):
