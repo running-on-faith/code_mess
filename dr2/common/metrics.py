@@ -16,7 +16,7 @@ from tf_agents.trajectories.trajectory import Trajectory
 logger = logging.getLogger()
 
 
-class FinalTrajectoryMetric:
+class StateEpisodeRRMetric:
 
     def __init__(self, stat_action_count=True):
         self.replay_buffer = []
@@ -53,7 +53,7 @@ class FinalTrajectoryMetric:
         return stat_dic
 
 
-class PlotTrajectoryMatrix:
+class PlotTimeRRMatrix:
 
     def __init__(self, base_path=None, stat_action_count=True):
         self.base_path = os.path.join(os.path.curdir if base_path is None else base_path, 'images')
@@ -71,17 +71,21 @@ class PlotTrajectoryMatrix:
             is_last = trajectory.is_last().numpy()[0]
             if is_last:
                 self.epsilon_count += 1
-                pct_chgs = np.ones(len(self.replay_buffer))
+                rr_s = np.ones(len(self.replay_buffer))
                 action_counts, last_flag = np.zeros(len(self.replay_buffer)), None
                 for idx, _ in enumerate(self.replay_buffer):
-                    pct_chgs[idx] += _.reward.numpy()
+                    # 2020-08-09 原来使用 reward 进行 rr 统计
+                    # 由于 现在 reward可能包含持仓惩罚项,因此无法作为 rr,因此无法作为 rr来使用
+                    # 继续使用 observation 中的第 3 项 rr
+                    # 该rr为每一时刻的 "self.total_value / self.init_cash - 1",因此是累计的 rr
+                    rr_s[idx] = _.observation[2].numpy()[0, 0]
                     if self.stat_action_count:
                         flag = _.observation[1].numpy()[0, 0]
                         if last_flag != flag:
                             action_counts[idx] += 1
                             last_flag = flag
 
-                self.rr_dic[f"rr_{len(self.rr_dic)}"] = pct_chgs.cumprod() - 1
+                self.rr_dic[f"rr_{len(self.rr_dic)}"] = rr_s
                 self.action_dic[f"action_count_{len(self.action_dic)}"] = action_counts.cumsum()
                 self.replay_buffer = []
                 # logger.info("trajectory.is_last, len(self.replay_buffer)=%d\nrr list=%s",
@@ -105,7 +109,6 @@ class PlotTrajectoryMatrix:
             plt.savefig(file_path)
             plt.close()
             logger.debug("file_name: %s saved", file_path)
-            self.replay_buffer = []
             self.rr_dic = {}
             self.action_dic = {}
         else:
@@ -124,7 +127,7 @@ def run_and_get_result(driver):
     return results_dic
 
 
-def _test_matrix(matrix_class=PlotTrajectoryMatrix):
+def _test_matrix(matrix_class=PlotTimeRRMatrix):
     num_episodes = 1
     state_with_flag = True
     from dr2.common.env import get_env

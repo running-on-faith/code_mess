@@ -61,6 +61,10 @@ def network_kwargs_func(input_tensor_spec, action_spec):
 if __name__ == "__main__":
     epsilon_greedy = 0.1
     gamma = 0.8
+    env_kwargs = {
+        "long_holding_punish": 10,
+        "punish_value": 0.01,
+    }
     # num_collect_episodes 被默认设置为 epsilon_greedy 倒数的 2 背,以确保又足够的样板,防止由于随机随机策略而导致价值计算失衡
     train_drl(
         train_loop_count=500,
@@ -70,5 +74,6 @@ if __name__ == "__main__":
         train_count_per_loop=10,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='lstm_two_conv_sigmoid_20200804_404afd54'
+        base_path='lstm_two_conv_sigmoid_20200809_test_matrix',
+        env_kwargs=env_kwargs,
     )

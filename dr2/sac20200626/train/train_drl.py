@@ -12,7 +12,7 @@ import os
 from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.policies import greedy_policy
-from dr2.common.metrics import FinalTrajectoryMetric, PlotTrajectoryMatrix
+from dr2.common.metrics import StateEpisodeRRMetric, PlotTimeRRMatrix
 from dr2.common.env import get_env
 from dr2.common.uitls import run_train_loop
 from dr2.sac20200626.train.agent import get_agent
@@ -90,7 +90,7 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     collect_driver = DynamicEpisodeDriver(
         train_env, collect_policy, collect_observers, num_episodes=num_collect_episodes)
     # eval 由于历史行情相对确定,因此,获取最终汇报只需要跑一次即可
-    final_trajectory_rr, plot_rr = FinalTrajectoryMetric(), PlotTrajectoryMatrix(base_path)
+    final_trajectory_rr, plot_rr = StateEpisodeRRMetric(), PlotTimeRRMatrix(base_path)
     eval_observers = [final_trajectory_rr, plot_rr]
     eval_driver = DynamicEpisodeDriver(
         eval_env, eval_policy, eval_observers, num_episodes=num_eval_episodes)

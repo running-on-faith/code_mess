@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from tf_agents.policies.policy_saver import PolicySaver
 from tf_agents.utils import common
 
-from dr2.common.metrics import run_and_get_result, FinalTrajectoryMetric
+from dr2.common.metrics import run_and_get_result, StateEpisodeRRMetric
 from dr2.dqn20200209.train.policy import save_policy
 logger = logging.getLogger()
 
@@ -89,7 +89,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
     saver = PolicySaver(eval_driver.policy)
     # Evaluate the agent's policy once before training.
     results_dic = run_and_get_result(eval_driver)
-    stat_dic = results_dic[FinalTrajectoryMetric]
+    stat_dic = results_dic[StateEpisodeRRMetric]
     train_step, step_last = 0, None
     tot_stat_dic, loss_dic = {train_step: stat_dic}, {}
     for loop_n in range(1, train_loop_count + 1):
@@ -138,7 +138,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
         loss_dic[train_step] = _loss
         if train_step % eval_interval == 0:
             results_dic = run_and_get_result(eval_driver)
-            stat_dic = results_dic[FinalTrajectoryMetric]
+            stat_dic = results_dic[StateEpisodeRRMetric]
             logger.info('%d/%d) train_step=%d loss=%.8f rr = %.2f%% action_count = %.1f '
                         'avg_action_period = %.2f',
                         loop_n, train_loop_count, train_step, _loss, stat_dic['rr'] * 100,
