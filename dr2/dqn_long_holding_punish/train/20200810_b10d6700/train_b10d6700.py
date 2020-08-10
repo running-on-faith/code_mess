@@ -72,11 +72,36 @@ def test_train_env_param():
                 product(epsilon_greedy_list, gamma_list, [10], punish_value_list),
                 product(epsilon_greedy_list, gamma_list, [0], [0]),
         ):
+            # 参数组合如下
+            # 0.1 0.2 10 0.02
+            # 0.1 0.2 10 0.05
+            # 0.1 0.2 10 0.1
+            # 0.1 0.5 10 0.02
+            # 0.1 0.5 10 0.05
+            # 0.1 0.5 10 0.1
+            # 0.1 0.8 10 0.02
+            # 0.1 0.8 10 0.05
+            # 0.1 0.8 10 0.1
+            # 0.2 0.2 10 0.02
+            # 0.2 0.2 10 0.05
+            # 0.2 0.2 10 0.1
+            # 0.2 0.5 10 0.02
+            # 0.2 0.5 10 0.05
+            # 0.2 0.5 10 0.1
+            # 0.2 0.8 10 0.02
+            # 0.2 0.8 10 0.05
+            # 0.2 0.8 10 0.1
+            # 0.1 0.2 0 0
+            # 0.1 0.5 0 0
+            # 0.1 0.8 0 0
+            # 0.2 0.2 0 0
+            # 0.2 0.5 0 0
+            # 0.2 0.8 0 0
             env_kwargs = {
                 "long_holding_punish": long_holding_punish,
                 "punish_value": punish_value,
             }
-            base_path = f'conv2_20200809_32f7e12d' \
+            base_path = f'conv2_20200810_b10d6700' \
                         f'_epsilon_greedy{int(epsilon_greedy * 10)}' \
                         f'_gamma{int(gamma * 10)}' \
                         f'_punish_value{int(punish_value * 100)}'
