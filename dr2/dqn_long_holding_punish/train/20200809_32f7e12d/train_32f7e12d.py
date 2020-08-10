@@ -61,17 +61,20 @@ def network_kwargs_func(input_tensor_spec, action_spec):
 def test_train_env_param():
     import logging
     from multiprocessing import Pool, cpu_count
-    from itertools import product
+    from itertools import product, chain
 
     logger = logging.getLogger()
     epsilon_greedy_list = [0.1, 0.2]
     gamma_list = [0.2, 0.5, 0.8]
     punish_value_list = [0.02, 0.05, 0.1]
     with Pool(cpu_count()) as pool:
-        for epsilon_greedy, gamma, punish_value in product(epsilon_greedy_list, gamma_list, punish_value_list):
+        for epsilon_greedy, gamma, long_holding_punish, punish_value in chain(
+                product(epsilon_greedy_list, gamma_list, [10], punish_value_list),
+                product(epsilon_greedy_list, gamma_list, [0], [0]),
+        ):
             env_kwargs = {
-                "long_holding_punish": 10,
-                "punish_value": 0.05,
+                "long_holding_punish": long_holding_punish,
+                "punish_value": punish_value,
             }
             base_path = f'conv2_20200809_32f7e12d' \
                         f'_epsilon_greedy{int(epsilon_greedy * 10)}' \
