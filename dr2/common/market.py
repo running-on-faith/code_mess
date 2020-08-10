@@ -24,8 +24,7 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 
 class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5,
-                 fee_rate=3e-3, position_unit=10, state_with_flag=False,
-                 reward_with_fee0=False, return_tot_reward=False,
+                 fee_rate=3e-3, position_unit=10, state_with_flag=False, reward_with_fee0=False,
                  md_close_label='close', md_open_label='open', long_holding_punish=0, punish_value=0.01):
         """
         :param md_df: 行情数据
@@ -35,7 +34,6 @@ class QuotesMarket(object):
         :param position_unit: 持仓单位
         :param state_with_flag: 默认False, observation 是否包含 多空标识,以及 当前 累计收益率 rr
         :param reward_with_fee0: 默认False, reward 是否包含 fee=0 状态的 reward
-        :param return_tot_reward: 默认True, reward 是否是累计 rr, 如果 False, 仅返回当前状态与上一状态的 rr 净值
         :param md_close_label: close 标识 key
         :param md_open_label: open 标识 key
         :param long_holding_punish: 默认为 0.0 数字是浮点型 np.float32
@@ -63,12 +61,10 @@ class QuotesMarket(object):
         self._flag = _FLAG_EMPTY
         self.state_with_flag = state_with_flag
         self.reward_with_fee0 = reward_with_fee0
-        self.return_tot_reward = return_tot_reward
         self.action_count = 0
         self._observation_latest = None
-        self._reward_latest = 0.0
         self._done = False
-        self.step_ret_latest = None
+        self._step_ret_latest = None
         self.long_holding_punish = np.float32(long_holding_punish)
         self._keep_holding_periods_len = 0.0
         self.punish_value = punish_value
@@ -89,9 +85,8 @@ class QuotesMarket(object):
         self.fee_tot = 0
         self.action_count = 0
         self._observation_latest = self._get_observation_latest()
-        self._reward_latest = 0.0
         self._done = False
-        self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
+        self._step_ret_latest = self._observation_latest, 0.0, self._done
         self._keep_holding_periods_len = 0.0
         return self._observation_latest
 
@@ -167,12 +162,15 @@ class QuotesMarket(object):
         self.action_count += 1
         self._keep_holding_periods_len = 0.0
 
+    @property
+    def step_ret_latest(self):
+        return self._step_ret_latest
+
     def step(self, action: int):
         if self._done:
             raise ValueError(f"It's Done state. max_step_count={self.max_step_count}, "
                              f"current step={self.step_counter}, total_value={self.total_value}")
         self.fee_curr_step = 0
-        reward_last = self._reward_latest
         if action == ACTION_LONG:
             if self._flag == _FLAG_EMPTY:
                 self.long()
@@ -223,31 +221,26 @@ class QuotesMarket(object):
 
         self._observation_latest = self._get_observation_latest()
         if self.reward_with_fee0:
-            if self.return_tot_reward:
-                _reward_latest1 = net_reward / price / self.position_unit + reward_last[0]
-                _reward_latest2 = (net_reward + self.fee_curr_step) / price / self.position_unit + reward_last[1]
-            else:
-                _reward_latest1 = net_reward / price / self.position_unit
-                _reward_latest2 = (net_reward + self.fee_curr_step) / price / self.position_unit
+            # 计算含fee reward
+            _reward_latest1 = net_reward / price / self.position_unit
+            _reward_latest2 = (net_reward + self.fee_curr_step) / price / self.position_unit
 
             if 0.0 < self.long_holding_punish < self._keep_holding_periods_len:
                 # 持仓周期超过 long_holding_punish，对 reward 增加 惩罚项
-                self._reward_latest = _reward_latest1 - self.punish_value, _reward_latest2 - self.punish_value
+                reward_latest = - self.punish_value, - self.punish_value
             else:
-                self._reward_latest = _reward_latest1, _reward_latest2
+                reward_latest = _reward_latest1, _reward_latest2
 
         else:
-            if self.return_tot_reward:
-                self._reward_latest = net_reward / price / self.position_unit + reward_last
-            else:
-                self._reward_latest = net_reward / price / self.position_unit
-
+            # 仅计算计费的reward
             if 0.0 < self.long_holding_punish < self._keep_holding_periods_len:
-                # 持仓周期超过 long_holding_punish，对 reward 增加 惩罚项
-                self._reward_latest -= self.punish_value
+                # 持仓超过周期限制后 reward 返回固定惩罚值
+                reward_latest = -self.punish_value
+            else:
+                reward_latest = net_reward / price / self.position_unit
 
-        self.step_ret_latest = self._observation_latest, self._reward_latest, self._done
-        return self.step_ret_latest
+        self._step_ret_latest = self._observation_latest, reward_latest, self._done
+        return self._step_ret_latest
 
 
 def _test_quote_market():
@@ -264,27 +257,27 @@ def _test_quote_market():
     # 建立 QuotesMarket
     qm = QuotesMarket(md_df=md_df[['close', 'open']], data_factors=data_arr_batch, state_with_flag=True)
     next_observation = qm.reset()
-    assert len(next_observation) == 2
-    assert next_observation['state'].shape[0] == n_step
-    assert next_observation['flag'] == FLAG_EMPTY
+    assert len(next_observation) == 3
+    assert next_observation[0].shape[0] == n_step
+    assert next_observation[1] == FLAG_EMPTY
     next_observation, reward, done = qm.step(ACTION_LONG)
-    assert len(next_observation) == 2
-    assert next_observation['flag'] == FLAG_LONG
+    assert len(next_observation) == 3
+    assert next_observation[1] == FLAG_LONG
     assert not done
     next_observation, reward, done = qm.step(ACTION_CLOSE)
-    assert next_observation['flag'] == FLAG_EMPTY
+    assert next_observation[1] == FLAG_EMPTY
     assert reward != 0
     next_observation, reward, done = qm.step(ACTION_CLOSE)
-    assert next_observation['flag'] == FLAG_EMPTY
+    assert next_observation[1] == FLAG_EMPTY
     assert reward == 0
     next_observation, reward, done = qm.step(ACTION_KEEP)
-    assert next_observation['flag'] == FLAG_EMPTY
+    assert next_observation[1] == FLAG_EMPTY
     assert reward == 0
     next_observation, reward, done = qm.step(ACTION_SHORT)
-    assert next_observation['flag'] == FLAG_SHORT
+    assert next_observation[1] == FLAG_SHORT
     assert not done
     next_observation, reward, done = qm.step(ACTION_KEEP)
-    assert next_observation['flag'] == FLAG_SHORT
+    assert next_observation[1] == FLAG_SHORT
     assert reward != 0
     try:
         qm.step(4)
