@@ -164,7 +164,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
     file_name = 'stat.png'
     file_path = file_name if base_path is None else os.path.join(base_path, file_name)
     show_result(tot_stat_dic, loss_dic, file_path)
-    logger.info("Train finished")
+    logger.info("Train of %s finished", '' if base_path is None else base_path)
 
 
 if __name__ == "__main__":
