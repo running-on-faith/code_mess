@@ -55,10 +55,12 @@ def _interrupter_func(tot_stat_dic, min_check_len=20):
     else:
         recent_s = stat_df['rr'].iloc[-min_check_len:, ]
         if all(recent_s == recent_s.mean()):
+            logger.warning("近 %d 个周期,收益率 %s, 平局值 %f", min_check_len, recent_s, recent_s.mean())
             enable_save, enable_continue = False, False
         else:
             recent_s = stat_df['action_count'].iloc[-min_check_len:, ]
             if all(recent_s == recent_s.mean()):
+                logger.warning("近 %d 个周期,交易次数 %s, 平局值 %f", min_check_len, recent_s, recent_s.mean())
                 enable_save, enable_continue = False, False
 
     return enable_save, enable_continue
@@ -81,6 +83,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
     :param interrupter_func: 训练中断器，当训练结果不及预期时、或已经达到预期是及早终止训练
     :return:
     """
+    base_path_str = '' if base_path is None else base_path
     # (Optional) Optimize by wrapping some of the code in a graph using TF function.
     agent.train = common.function(agent.train)
     collect_driver.run = common.function(collect_driver.run)
@@ -153,7 +156,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
 
                 # 终止训练
                 if not enable_continue:
-                    logger.error("训练结果不满足继续训练要求，退出循环")
+                    logger.error("训练结果不满足继续训练要求.退出循环. %s", base_path_str)
                     break
 
         else:
@@ -164,7 +167,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
     file_name = 'stat.png'
     file_path = file_name if base_path is None else os.path.join(base_path, file_name)
     show_result(tot_stat_dic, loss_dic, file_path)
-    logger.info("Train of %s finished", '' if base_path is None else base_path)
+    logger.info("Train of %s finished", base_path_str)
 
 
 if __name__ == "__main__":
