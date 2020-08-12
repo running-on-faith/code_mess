@@ -25,23 +25,29 @@ class StateEpisodeRRMetric:
 
     def __call__(self, trajectory: Trajectory):
         self.replay_buffer.append(trajectory)
-        if trajectory.is_last():
-            pct_chgs = np.ones(len(self.replay_buffer))
-            action_counts, last_flag = np.zeros(len(self.replay_buffer)), None
-            for idx, _ in enumerate(self.replay_buffer):
-                pct_chgs[idx] += _.reward.numpy()
-                if self.stat_action_count:
-                    flag = _.observation[1].numpy()[0, 0]
-                    if last_flag != flag:
-                        action_counts[idx] += 1
-                        last_flag = flag
+        try:
+            is_last = trajectory.is_last().numpy()[0]
+            if is_last:
+                action_counts, last_flag = np.zeros(len(self.replay_buffer)), None
+                for idx, _ in enumerate(self.replay_buffer):
+                    if self.stat_action_count:
+                        flag = _.observation[1].numpy()[0, 0]
+                        if last_flag != flag:
+                            action_counts[idx] += 1
+                            last_flag = flag
 
-            rr = pct_chgs.prod() - 1
-            action_count = action_counts.sum()
-            self.data_dic['rr'].append(rr)
-            self.data_dic['action_count'].append(action_count)
-            self.data_dic['avg_action_period'].append(len(self.replay_buffer) / action_count)
-            self.replay_buffer = []
+                # 2020-08-09 原来使用 reward 进行 rr 统计
+                # 由于 现在 reward可能包含持仓惩罚项,因此无法作为 rr,因此无法作为 rr来使用
+                # 继续使用 observation 中的第 3 项 rr
+                # 该rr为每一时刻的 "self.total_value / self.init_cash - 1",因此是累计的 rr
+                rr = trajectory.observation[2].numpy()[0, 0]
+                action_count = action_counts.sum()
+                self.data_dic['rr'].append(rr)
+                self.data_dic['action_count'].append(action_count)
+                self.data_dic['avg_action_period'].append(len(self.replay_buffer) / action_count)
+                self.replay_buffer = []
+        except ValueError:
+            pass
 
     def result(self):
         stat_dic = {
