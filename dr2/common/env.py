@@ -126,9 +126,38 @@ def _get_df():
     return md_df[['close', 'open']], data_arr_batch
 
 
-def get_env(state_with_flag=True, is_continuous_action=False, **kwargs):
+@functools.lru_cache()
+def _get_mock_df():
+    n_step = 60
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    instrument_type = 'RB'
+    from ibats_common.example.data import load_data
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
+                      ).set_index('trade_date')[ohlcav_col_name_list]
+    md_df.index = pd.DatetimeIndex(md_df.index)
+    open_price = close_price = np.sin(np.linspace(0, np.pi * 100, md_df.shape[0]))
+    high_price = open_price * 1.01
+    low_price = open_price * 0.99
+    md_df["open"] = open_price
+    md_df["high"] = high_price
+    md_df["low"] = low_price
+    md_df["close"] = close_price
+    from ibats_common.backend.factor import get_factor, transfer_2_batch
+    factors_df = get_factor(md_df, trade_date_series, delivery_date_series, dropna=True)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    md_df = md_df.loc[df_index, :]
+    return md_df[['close', 'open']], data_arr_batch
+
+
+def get_env(state_with_flag=True, is_continuous_action=False, is_mock_data=False, **kwargs):
     from tf_agents.environments.tf_py_environment import TFPyEnvironment
-    md_df, data_factors = _get_df()
+    if is_mock_data:
+        md_df, data_factors = _get_mock_df()
+    else:
+        md_df, data_factors = _get_df()
+
     env = TFPyEnvironment(AccountEnv(
         md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag,
         is_continuous_action=is_continuous_action, **kwargs))
