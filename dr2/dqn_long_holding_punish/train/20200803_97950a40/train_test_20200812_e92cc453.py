@@ -48,9 +48,9 @@ def network_kwargs_func(input_tensor_spec, action_spec):
         #       incompatible with specifying any stride value != 1.
         # padding: one of `"valid"` or `"same"` (case-insensitive).
         "conv_layer_params": {
-            # (0, 3, 186) -> (0, 3, 93)
+            # (0, 4, 186) -> (0, 4, 93)
             (input_shape, 3, 1, 1, 'same'),
-            # (0, 3, 93) -> (0, 1, 186)
+            # (0, 4, 93) -> (0, 2, 186)
             (input_shape * 2, 3, 1),
         },
         "activation_fn": "sigmoid"
