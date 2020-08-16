@@ -137,9 +137,9 @@ def _get_mock_df():
     md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
-    open_price = close_price = np.sin(np.linspace(0, np.pi * 100, md_df.shape[0]))
-    high_price = open_price * 1.01
-    low_price = open_price * 0.99
+    open_price = close_price = np.sin(np.linspace(0, np.pi * 100, md_df.shape[0])) * 100 + 1000
+    high_price = open_price + 10
+    low_price = open_price - 10
     md_df["open"] = open_price
     md_df["high"] = high_price
     md_df["low"] = low_price
