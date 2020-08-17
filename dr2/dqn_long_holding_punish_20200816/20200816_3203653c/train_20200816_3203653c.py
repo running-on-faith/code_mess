@@ -6,7 +6,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 
 """
-from dr2.dqn_long_holding_punish.train.train_drl import train_drl
+from dr2.dqn_long_holding_punish_20200816.train_drl import train_drl
 
 
 def network_kwargs_func(input_tensor_spec, action_spec):
