@@ -113,7 +113,7 @@ class DDQN(Network):
         # fc_layer_params = [input_shape]
         # dropout_layer_params = [fc_dropout_layer_params]
         encoder = EnhanceEncodingNetwork(
-            input_tensor_spec,
+            input_tensor_spec[:3],
             preprocessing_layers=preprocessing_layers,
             preprocessing_combiner=preprocessing_combiner,
             conv_layer_params=conv_layer_params,
