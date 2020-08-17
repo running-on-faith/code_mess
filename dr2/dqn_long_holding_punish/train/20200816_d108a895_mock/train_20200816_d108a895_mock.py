@@ -4,7 +4,7 @@
 @Time    : 2020/8/16 下午8:59
 @File    : train_20200816_af0ed8eb_mock.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    : 实验结果发现当前网络无效预测sin曲线下的交易
 """
 from dr2.dqn_long_holding_punish.train.train_drl import train_drl
 
