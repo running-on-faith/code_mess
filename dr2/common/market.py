@@ -25,7 +25,8 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 class QuotesMarket(object):
     def __init__(self, md_df: pd.DataFrame, data_factors, init_cash=2e5,
                  fee_rate=3e-3, position_unit=10, state_with_flag=False, reward_with_fee0=False,
-                 md_close_label='close', md_open_label='open', long_holding_punish=0, punish_value=0.01):
+                 md_close_label='close', md_open_label='open',
+                 long_holding_punish=0, punish_value=0.01, reward_multiplier=1):
         """
         :param md_df: 行情数据
         :param data_factors: 因子数据,将作为 observation 返回
@@ -39,7 +40,8 @@ class QuotesMarket(object):
         :param long_holding_punish: 默认为 0.0 数字是浮点型 np.float32
             数字大于0时，开始生效.持仓超过 限定数值后，开始对reward增加惩罚项。
             同时，返回的 observation 中包含连续持仓条数。
-        :param punish_value: 默认为 1.0 惩罚值
+        :param punish_value: 默认为 0.01 惩罚值
+        :param reward_multiplier: 默认为乘数 1.0
         :return:
         """
         self.data_close = md_df[md_close_label]
@@ -68,6 +70,7 @@ class QuotesMarket(object):
         self.long_holding_punish = np.float32(long_holding_punish)
         self._keep_holding_periods_len = 0.0
         self.punish_value = punish_value
+        self.reward_multiplier = reward_multiplier
 
     @property
     def flag(self):
@@ -239,6 +242,7 @@ class QuotesMarket(object):
             else:
                 reward_latest = net_reward / price / self.position_unit
 
+        reward_latest *= self.reward_multiplier
         self._step_ret_latest = self._observation_latest, reward_latest, self._done
         return self._step_ret_latest
 
