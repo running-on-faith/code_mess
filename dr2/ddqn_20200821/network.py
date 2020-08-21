@@ -34,7 +34,9 @@ class DDQN(Network):
                  dtype=tf.float32,
                  name='QNetwork',
                  dueling=True,
-                 learning_rate=0.001):
+                 learning_rate=0.001,
+                 batch_normalization=True,
+                 ):
         """Creates an instance of `QNetwork`.
 
         Args:
@@ -58,6 +60,7 @@ class DDQN(Network):
             observations with shape [BxTx...].
           dtype: The dtype to use by the convolution and fully connected layers.
           name: A string representing the name of the network.
+          batch_normalization: 是否进行bn操作,默认 True.
 
         Raises:
           ValueError: If `input_tensor_spec` contains more than one observation. Or
@@ -75,7 +78,8 @@ class DDQN(Network):
         self.learning_rate = learning_rate
         state_spec = input_tensor_spec[0]
         input_shape = state_spec.shape[-1]
-        self.bn = BatchNormalization(trainable=False)
+        self.batch_normalization = batch_normalization
+        self.bn = BatchNormalization(trainable=False) if batch_normalization else None
         # Sequential 将会抛出异常:
         #   Weights for model sequential have not yet been created
         # layer = Sequential([
@@ -158,7 +162,11 @@ class DDQN(Network):
           A tuple `(logits, network_state)`.
         """
         # encoder_input, flag_input = observation
-        new_obsercation = self.bn(observation[0]), observation[1], observation[2]
+        if self.batch_normalization:
+            new_obsercation = self.bn(observation[0]), observation[1], observation[2]
+        else:
+            new_obsercation = observation[0], observation[1], observation[2]
+
         state, network_state = self._encoder(
             new_obsercation, step_type=step_type, network_state=network_state)
 
