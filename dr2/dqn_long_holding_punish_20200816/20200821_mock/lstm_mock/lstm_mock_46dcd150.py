@@ -74,6 +74,6 @@ if __name__ == "__main__":
         train_count_per_loop=50,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='20200821_lstm_conv_mock',
+        base_path='20200821_lstm_conv_mock_46dcd150',
         env_kwargs=env_kwargs,
     )
