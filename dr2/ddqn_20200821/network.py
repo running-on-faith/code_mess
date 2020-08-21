@@ -162,7 +162,11 @@ class DDQN(Network):
         state, network_state = self._encoder(
             new_obsercation, step_type=step_type, network_state=network_state)
 
-        q_value = self._q_value_layer((state, observation[3]))
+        if len(observation) == 4:
+            # punish value
+            q_value = self._q_value_layer((state, observation[3]))
+        else:
+            q_value = self._q_value_layer(state)
         try:
             q_numpy = q_value.numpy()
             if np.isnan(q_numpy).any():
