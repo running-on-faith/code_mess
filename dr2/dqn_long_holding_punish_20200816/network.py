@@ -27,7 +27,7 @@ class DDQN(Network):
                  input_tensor_spec,
                  action_spec,
                  lstm_kwargs,
-                 conv_layer_params,
+                 conv_layer_params=None,
                  activation_fn=tf.keras.activations.sigmoid,
                  kernel_initializer=None,
                  batch_squash=True,
