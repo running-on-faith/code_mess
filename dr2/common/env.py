@@ -127,7 +127,7 @@ def _get_df():
 
 
 @functools.lru_cache()
-def _get_mock_df():
+def _get_mock_df(period_len=40):
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     instrument_type = 'RB'
@@ -137,7 +137,9 @@ def _get_mock_df():
     md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
-    open_price = close_price = np.sin(np.linspace(0, np.pi * 100, md_df.shape[0])) * 100 + 1000
+    data_len = md_df.shape[0]
+    # 每40天为一个 2π 周期
+    open_price = close_price = np.sin(np.linspace(0, data_len * np.pi / period_len, data_len)) * 100 + 1000
     high_price = open_price + 10
     low_price = open_price - 10
     md_df["open"] = open_price
@@ -233,5 +235,13 @@ def account_env_test():
     #     Average Return:  0.0
 
 
+def _test_get_mock_df():
+    import matplotlib.pyplot as plt
+    md_df, data_arr_batch = _get_mock_df()
+    plt.plot(md_df['close'])
+    plt.show()
+
+
 if __name__ == "__main__":
-    account_env_test()
+    # account_env_test()
+    _test_get_mock_df()
