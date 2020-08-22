@@ -28,6 +28,8 @@ class DDQN(Network):
                  action_spec,
                  lstm_kwargs,
                  conv_layer_params=None,
+                 fc_layer_params=None,
+                 fc_dropout_layer_params=None,
                  activation_fn=tf.keras.activations.sigmoid,
                  kernel_initializer=None,
                  batch_squash=True,
@@ -44,8 +46,8 @@ class DDQN(Network):
             input observations.
           action_spec: A nest of `tensor_spec.BoundedTensorSpec` representing the
             actions.
-          recurrent_dropout: a float number within range [0, 1). The ratio that the
-            recurrent state weights need to dropout.
+          fc_layer_params: Optional list of fully_connected parameters, where each
+            item is the number of units in the layer.
           fc_dropout_layer_params: Optional list of dropout layer parameters, where
             each item is the fraction of input units to drop. The dropout layers are
             interleaved with the fully connected layers; there is a dropout layer
@@ -115,8 +117,8 @@ class DDQN(Network):
             preprocessing_combiner=preprocessing_combiner,
             conv_layer_params=conv_layer_params,
             conv_type=CONV_TYPE_1D,
-            # fc_layer_params=fc_layer_params,
-            # dropout_layer_params=dropout_layer_params,
+            fc_layer_params=fc_layer_params,
+            dropout_layer_params=fc_dropout_layer_params,
             activation_fn=activation_fn,
             kernel_initializer=kernel_initializer,
             batch_squash=batch_squash,
