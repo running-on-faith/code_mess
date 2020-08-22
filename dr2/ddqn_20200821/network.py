@@ -430,7 +430,7 @@ class EnhanceEncodingNetwork(encoding_network.EncodingNetwork):
 
 def get_network(observation_spec, action_spec, network_kwargs_func=None, **kwargs):
     from tf_agents.utils import common
-    # TODO: fc_layer_params 需要参数化
+    # TODO: learning_rate 参数化
     if network_kwargs_func is not None:
         network_kwargs = network_kwargs_func(observation_spec, action_spec)
         kwargs.update(network_kwargs)
@@ -450,8 +450,9 @@ def get_network(observation_spec, action_spec, network_kwargs_func=None, **kwarg
 
         return backend.mean(tf.where(cond, squared_loss, quadratic_loss))
 
-    # loss_fn = _huber_loss
-    loss_fn = common.element_wise_squared_loss
+    # TODO: loss_fn 参数化
+    loss_fn = _huber_loss
+    # loss_fn = common.element_wise_squared_loss
     # loss_fn = common.element_wise_huber_loss
     return network, optimizer, loss_fn, kwargs
 
