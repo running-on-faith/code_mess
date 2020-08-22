@@ -28,7 +28,7 @@
 ![result](train_mock_20200821_3b9cd7fd/20200822_lstm_no_punish_multiplier10_gamma10_mock_79c42345/images/0022_2020-08-22 12:31:16_episode_final_plot.png)
 
 #### 4. 20200822_lstm_fc2_no_punish_multiplier10_gamma10_mock_e52009a4
-
+![result](train_mock_20200821_3b9cd7fd/20200822_lstm_fc2_no_punish_multiplier10_gamma10_mock_e52009a4/images/0164_2020-08-22 21:49:43_episode_final_plot.png)
 等待结果
 
 
@@ -52,9 +52,21 @@
 gamma = 1.0,\
 train_count_per_loop=10,
 
+![result](reproduce_20200623_517fb234_at_20200822_356111be/reproduce_20200623_517fb234_at_20200822_356111be_2/images/0201_2020-08-23 07:02:04_episode_final_plot.png)
+
 #### 2. 测试 train_20200822_39d511da_mock
 与 reproduce_20200623_517fb234_at_20200822_07096044 参数一致
 只是使用模拟行情
+
+![result](reproduce_20200623_517fb234_at_20200822_356111be/train_20200822_39d511da_mock/images/0077_2020-08-22 23:30:01_episode_final_plot.png)
+
+....
+
+#### 3. 测试 reproduce_20200623_517fb234_at_20200822_7b5636ff
+将 reward 参数取负数,看看是不是因为 奖励数据取反了导致的训练失效
+关键参数
+> "reward_multiplier": -1,
+
 
 
 #### 测试结果:
