@@ -59,7 +59,7 @@ def network_kwargs_func(input_tensor_spec, action_spec):
 
 if __name__ == "__main__":
     epsilon_greedy = 0.05
-    gamma = 0
+    gamma = 1.0
     env_kwargs = {
         # "long_holding_punish": 10,
         # "punish_value": 0.02,
@@ -76,6 +76,6 @@ if __name__ == "__main__":
         train_count_per_loop=100,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='20200821_lstm_no_punish_multiplier10_gamma0_mock_79c42345',
+        base_path='20200822_lstm_no_punish_multiplier10_gamma10_mock_79c42345',
         env_kwargs=env_kwargs,
     )
