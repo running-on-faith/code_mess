@@ -64,7 +64,7 @@ def network_kwargs_func(input_tensor_spec, action_spec):
         # ),
         # 两次全连接
         "fc_layer_params": [input_shape // 2, input_shape // 4],
-        "dropout_layer_params": [0.2, 0.2],
+        "fc_dropout_layer_params": [0.2, 0.2],
         'batch_normalization': False,
         "activation_fn": "sigmoid"
     }
@@ -90,6 +90,6 @@ if __name__ == "__main__":
         train_count_per_loop=100,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='20200822_lstm_fc2_no_punish_multiplier10_gamma10_mock_79c42345',
+        base_path='20200822_lstm_fc2_no_punish_multiplier10_gamma10_mock_e52009a4',
         env_kwargs=env_kwargs,
     )
