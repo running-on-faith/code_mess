@@ -6,7 +6,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 重现 20200623 517fb234 的训练结果
 """
-from dr2.dqn20200209.train.train_drl import train_drl
+from dr2.ddqn_20200821.train_drl import train_drl
 
 
 def network_kwargs_func(input_tensor_spec, action_spec):
