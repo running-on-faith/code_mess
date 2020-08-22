@@ -2,9 +2,9 @@
 """
 @author  : MG
 @Time    : 2020/8/22 下午9:52
-@File    : reproduce_20200623_517fb234_at_20200822_7b5636ff.py
+@File    : reproduce_20200623_517fb234_at_20200822_87308516.py
 @contact : mmmaaaggg@163.com
-@desc    : 
+@desc    : reward_multiplier": -1
 """
 from dr2.ddqn_20200821.train_drl import train_drl
 
@@ -36,7 +36,6 @@ if __name__ == "__main__":
     env_kwargs = {
         "reward_multiplier": -1
     }
-    # num_collect_episodes 被默认设置为 epsilon_greedy 倒数的 2 背,以确保又足够的样板,防止由于随机随机策略而导致价值计算失衡
     train_drl(
         train_loop_count=500,
         num_collect_episodes=5,
