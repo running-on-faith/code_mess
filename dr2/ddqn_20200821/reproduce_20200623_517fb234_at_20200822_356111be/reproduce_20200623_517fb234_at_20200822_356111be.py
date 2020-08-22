@@ -46,5 +46,5 @@ if __name__ == "__main__":
         train_count_per_loop=10,
         gamma=gamma,
         network_kwargs_func=network_kwargs_func,
-        base_path='reproduce_20200623_517fb234_at_20200822_1145b30e'
+        base_path='reproduce_20200623_517fb234_at_20200822_356111be'
     )
