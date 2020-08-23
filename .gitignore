@@ -187,6 +187,12 @@ checkpoint
 *.doc
 *.docx
 *.docx#
+variables.data*
+variables.index
+*.pb
+*.pbtxt
+params.json
 
 # tensorflow tmp files
 local.trace
+*.png
