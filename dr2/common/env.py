@@ -10,10 +10,12 @@
 import functools
 import pandas as pd
 import numpy as np
+from ibats_common.example import get_trade_date_series, get_delivery_date_series
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
-from dr2.dqn20200209.train.market import QuotesMarket
+from dr2.common.market import QuotesMarket
+from drl import DATA_FOLDER_PATH
 
 ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP = 0, 1, 2, 3
 ACTIONS = [ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP]
@@ -31,33 +33,42 @@ FLAGS = [FLAG_LONG, FLAG_SHORT, FLAG_EMPTY]
 class AccountEnv(PyEnvironment):
 
     def __init__(self, md_df: pd.DataFrame, data_factors: np.ndarray,
-                 state_with_flag=True, action_kind_count=2, batch_size=None, **kwargs):
+                 state_with_flag=True, action_kind_count=2, batch_size=None,
+                 is_continuous_action=False, long_holding_punish=0,
+                 **kwargs):
         super(AccountEnv, self).__init__()
         kwargs['state_with_flag'] = state_with_flag
+        kwargs['long_holding_punish'] = long_holding_punish
         self._batch_size = batch_size
         self.market = QuotesMarket(md_df, data_factors, **kwargs)
+        self.is_continuous_action = is_continuous_action
+        self.action_kind_count = action_kind_count
         self._state_spec = array_spec.ArraySpec(
             shape=data_factors.shape[1:], dtype=data_factors.dtype, name='state')
         self._flag_spec = array_spec.BoundedArraySpec(
             shape=(1,), dtype=np.float32, name='flag', minimum=0.0, maximum=1.0)
         self._rr_spec = array_spec.ArraySpec(
             shape=(1,), dtype=np.float32, name='rr')
+        self._holding_period_spec = array_spec.BoundedArraySpec(
+            shape=(1,), dtype=np.float32, name='holding_period', minimum=0.0)
         self._action_spec = array_spec.BoundedArraySpec(
-            shape=(1,), dtype=np.int32, name='action', minimum=0.0,
-            maximum=max(ACTIONS[:action_kind_count]))
+            shape=(1,), dtype=np.int32 if not is_continuous_action else np.float32,
+            name='action', minimum=0.0, maximum=max(ACTIONS[:action_kind_count]))
         self.last_done_state = False
+        _observation_spec = [self._state_spec]
+        # 添加 flag、rr 结构
         if state_with_flag:
-            # self._observation_spec = {'state': self._state_spec, 'flag': self._flag_spec, 'rr': self._rr_spec}
-            # _observation_spec 只能是数组形式,字典形式将会导致 encoding_network.EncodingNetwork 报错:
-            # encoder(observation, step_type=step_type, network_state=network_state)
-            # Key Error: 0
-            # File "/home/mg/github/code_mess/venv/lib/python3.6/site-packages/
-            #   tensorflow_core/python/util/nest.py", line 676,
-            # in _yield_flat_up_to
-            # at input_subtree = input_tree[shallow_key]
-            self._observation_spec = (self._state_spec, self._flag_spec, self._rr_spec)
+            _observation_spec.extend([self._flag_spec, self._rr_spec])
+
+        # 添加 持仓周期数 结构
+        if long_holding_punish>0:
+            _observation_spec.append(self._holding_period_spec)
+
+        # 如果只有一个数据，则无需数组形式
+        if len(_observation_spec) > 1:
+            self._observation_spec = tuple(_observation_spec)
         else:
-            self._observation_spec = self._state_spec
+            self._observation_spec = _observation_spec[0]
 
     def observation_spec(self):
         return self._observation_spec
@@ -75,6 +86,9 @@ class AccountEnv(PyEnvironment):
     def _step(self, action):
         if self.last_done_state:
             return self._reset()
+        if self.is_continuous_action:
+            action = int(np.round(action))
+
         observation, rewards, self.last_done_state = self.market.step(action)
         if self.last_done_state:
             return ts.termination(observation, rewards)
@@ -98,22 +112,57 @@ class AccountEnv(PyEnvironment):
 def _get_df():
     n_step = 60
     ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    instrument_type = 'RB'
     from ibats_common.example.data import load_data
-    md_df = load_data('RB.csv', folder_path='/home/mg/github/IBATS_Common/ibats_common/example/data'
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
     from ibats_common.backend.factor import get_factor, transfer_2_batch
-    factors_df = get_factor(md_df, dropna=True)
+    factors_df = get_factor(md_df, trade_date_series, delivery_date_series, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
     return md_df[['close', 'open']], data_arr_batch
 
 
-def get_env(state_with_flag=True):
+@functools.lru_cache()
+def _get_mock_df(period_len=40):
+    n_step = 60
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
+    instrument_type = 'RB'
+    from ibats_common.example.data import load_data
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
+                      ).set_index('trade_date')[ohlcav_col_name_list]
+    md_df.index = pd.DatetimeIndex(md_df.index)
+    data_len = md_df.shape[0]
+    # 每40天为一个 2π 周期
+    open_price = close_price = np.sin(np.linspace(0, data_len * np.pi / period_len, data_len)) * 100 + 1000
+    high_price = open_price + 10
+    low_price = open_price - 10
+    md_df["open"] = open_price
+    md_df["high"] = high_price
+    md_df["low"] = low_price
+    md_df["close"] = close_price
+    from ibats_common.backend.factor import get_factor, transfer_2_batch
+    factors_df = get_factor(md_df, trade_date_series, delivery_date_series, dropna=True)
+    df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
+    md_df = md_df.loc[df_index, :]
+    return md_df[['close', 'open']], data_arr_batch
+
+
+def get_env(state_with_flag=True, is_continuous_action=False, is_mock_data=False, **kwargs):
     from tf_agents.environments.tf_py_environment import TFPyEnvironment
-    md_df, data_factors = _get_df()
+    if is_mock_data:
+        md_df, data_factors = _get_mock_df()
+    else:
+        md_df, data_factors = _get_df()
+
     env = TFPyEnvironment(AccountEnv(
-        md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag))
+        md_df=md_df, data_factors=data_factors, state_with_flag=state_with_flag,
+        is_continuous_action=is_continuous_action, **kwargs))
     return env
 
 
@@ -186,5 +235,13 @@ def account_env_test():
     #     Average Return:  0.0
 
 
+def _test_get_mock_df():
+    import matplotlib.pyplot as plt
+    md_df, data_arr_batch = _get_mock_df()
+    plt.plot(md_df['close'])
+    plt.show()
+
+
 if __name__ == "__main__":
-    account_env_test()
+    # account_env_test()
+    _test_get_mock_df()

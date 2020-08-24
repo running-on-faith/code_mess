@@ -11,10 +11,8 @@ import numpy as np
 import pandas as pd
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.utils import common
-from tf_agents.policies import greedy_policy
 from dr2.dqn20200209.train.agent import get_agent
-from dr2.dqn20200209.train.env import get_env
-from dr2.dqn20200209.train.policy import get_policy
+from dr2.common.env import get_env
 
 logger = logging.getLogger()
 
@@ -116,7 +114,6 @@ def train_drl(train_loop_count=20, num_eval_episodes=1, num_collect_episodes=4,
     eval_policy = agent.policy
     collect_policy = agent.collect_policy
 
-    from tf_agents.metrics import tf_metrics
     from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
     # collect
     collect_replay_buffer = TFUniformReplayBuffer(agent.collect_data_spec, env.batch_size)

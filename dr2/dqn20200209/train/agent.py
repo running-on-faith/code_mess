@@ -86,7 +86,7 @@ def test_agent_run():
     # from tf_agents.metrics.py_metrics import AverageReturnMetric
     from tf_agents.metrics.tf_metrics import AverageReturnMetric
     from tf_agents.drivers.py_driver import PyDriver
-    from dr2.dqn20200209.train.env import AccountEnv
+    from dr2.common.env import AccountEnv
     from tf_agents.policies.random_tf_policy import RandomTFPolicy
     from tf_agents.trajectories import trajectory
 
