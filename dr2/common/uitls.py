@@ -68,7 +68,7 @@ def _interrupter_func(tot_stat_dic, min_check_len=20):
 
 def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collect_episodes,
                    train_count_per_loop, train_loop_count, train_sample_batch_size, base_path=None,
-                   interrupter_func=_interrupter_func):
+                   interrupter_func=_interrupter_func, enable_save_model=True):
     """
     进行循环训练
     :param agent: 总体轮次数
@@ -81,6 +81,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
     :param train_sample_batch_size: 每次训练提取样本数量
     :param base_path: 安装key_path分目录保存训练结果及参数
     :param interrupter_func: 训练中断器，当训练结果不及预期时、或已经达到预期是及早终止训练
+    :param enable_save_model: 保存模型,默认为 True
     :return:
     """
     base_path_str = '' if base_path is None else base_path
@@ -151,7 +152,7 @@ def run_train_loop(agent, collect_driver, eval_driver, eval_interval, num_collec
                 enable_save, enable_continue = interrupter_func(tot_stat_dic)
 
                 # 保存结果
-                if enable_save:
+                if enable_save_model and enable_save:
                     save_policy(saver, train_step, base_path=base_path)
 
                 # 终止训练
