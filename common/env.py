@@ -109,17 +109,23 @@ class AccountEnv(PyEnvironment):
 
 
 @functools.lru_cache()
-def _get_df():
-    n_step = 60
-    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
-    instrument_type = 'RB'
+def load_md(instrument_type):
     from ibats_common.example.data import load_data
-    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
-    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
+    ohlcav_col_name_list = ["open", "high", "low", "close", "amount", "volume"]
     md_df = load_data(f'{instrument_type}.csv', folder_path=DATA_FOLDER_PATH
                       ).set_index('trade_date')[ohlcav_col_name_list]
     md_df.index = pd.DatetimeIndex(md_df.index)
+    return md_df
+
+
+@functools.lru_cache()
+def _get_df():
     from ibats_common.backend.factor import get_factor, transfer_2_batch
+    n_step = 60
+    instrument_type = 'RB'
+    md_df = load_md(instrument_type)
+    trade_date_series = get_trade_date_series(DATA_FOLDER_PATH)
+    delivery_date_series = get_delivery_date_series(instrument_type, DATA_FOLDER_PATH)
     factors_df = get_factor(md_df, trade_date_series, delivery_date_series, dropna=True)
     df_index, df_columns, data_arr_batch = transfer_2_batch(factors_df, n_step=n_step)
     md_df = md_df.loc[df_index, :]
