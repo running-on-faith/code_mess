@@ -3,7 +3,7 @@ decorator==4.4.1
 ffn==0.3.4
 future==0.18.2
 h5py==2.10.0
-IBATS-Common==0.18.1
+IBATS-Common==0.18.3
 IBATS-Utils==1.2.8
 lxml==4.4.2
 Markdown==3.1.1
@@ -22,5 +22,5 @@ TA-Lib==0.4.17
 tensorflow==2.2.0
 xlrd==1.2.0
 tf-agents>=0.5.0
-statsmodels
-empyrical
+statsmodels==0.11.1
+empyrical==0.5.3

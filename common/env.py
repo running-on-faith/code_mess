@@ -14,7 +14,7 @@ from ibats_common.example import get_trade_date_series, get_delivery_date_series
 from tf_agents.environments.py_environment import PyEnvironment
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
-from dr2.common.market import QuotesMarket
+from ibats_common.backend.rl.emulator.market2 import QuotesMarket
 from drl import DATA_FOLDER_PATH
 
 ACTION_LONG, ACTION_SHORT, ACTION_CLOSE, ACTION_KEEP = 0, 1, 2, 3
@@ -191,9 +191,7 @@ def account_env_test():
     else:
         from tf_agents.policies.random_tf_policy import RandomTFPolicy
         from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
-        from tf_agents.utils.nest_utils import batch_nested_array
         from tf_agents.environments.tf_py_environment import TFPyEnvironment
-        from tf_agents.trajectories import trajectory
         env = TFPyEnvironment(env)  # TFPyEnvironment 会自动将 env 置为 batched=True batch_size = 1
         policy = RandomTFPolicy(time_step_spec=env.time_step_spec(), action_spec=env.action_spec())
         replay_buffer = TFUniformReplayBuffer(policy.trajectory_spec, env.batch_size)

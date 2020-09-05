@@ -9,7 +9,7 @@
 import logging
 import tensorflow as tf
 from tf_agents.agents.dqn import dqn_agent
-from dr2.common.env import _get_df
+from common.env import _get_df
 from dr2.dqn_long_holding_punish_20200816.network import get_network
 
 logger = logging.getLogger()
@@ -74,7 +74,7 @@ def test_agent_run():
     # from tf_agents.metrics.py_metrics import AverageReturnMetric
     from tf_agents.metrics.tf_metrics import AverageReturnMetric
     from tf_agents.drivers.py_driver import PyDriver
-    from dr2.common.env import AccountEnv
+    from common.env import AccountEnv
     from tf_agents.policies.random_tf_policy import RandomTFPolicy
     from tf_agents.trajectories import trajectory
 

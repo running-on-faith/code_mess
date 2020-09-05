@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from tf_agents.policies.policy_saver import PolicySaver
 from tf_agents.utils import common
 
-from dr2.common.metrics import run_and_get_result, StateEpisodeRRMetric
+from common.metrics import run_and_get_result, StateEpisodeRRMetric
 from dr2.dqn20200209.train.policy import save_policy
 logger = logging.getLogger()
 
