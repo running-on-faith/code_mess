@@ -8,8 +8,11 @@
 """
 import pandas as pd
 import numpy as np
+import logging
 from ibats_common.backend.rl.emulator.account import Account, VERSION_V2
 from params_optimizer.optimizer import SimpleStrategy
+
+logger = logging.getLogger()
 
 
 def run_on_range(strategy: SimpleStrategy, md_df: pd.DataFrame, factors_arr: np.ndarray, date_from=None, date_to=None):
@@ -29,8 +32,9 @@ def run_on_range(strategy: SimpleStrategy, md_df: pd.DataFrame, factors_arr: np.
 
     date_from = pd.to_datetime(date_from)
     date_to = pd.to_datetime(date_to)
-    matches_from = None if date_from is None else date_from <= md_df
-    matches_to = None if date_to is None else md_df <= date_to
+    logger.error("date_from=%s, date_to=%s", date_from, date_to)
+    matches_from = None if date_from is None else date_from <= md_df.index
+    matches_to = None if date_to is None else md_df.index <= date_to
     if matches_from is not None and matches_to is not None:
         matches = matches_from & matches_to
     elif matches_from is None and matches_to is not None:
