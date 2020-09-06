@@ -39,8 +39,10 @@ class SimpleStrategy:
             factors = factor_generator(md_df, **factor_kwargs)
             key = json.dumps(params_kwargs)
             strategy = cls(**strategy_kwargs)
-            result = run_on_range(strategy, md_df, factors, date_from, date_to)
-            result_dic[key] = result
+            reward_df = run_on_range(strategy, md_df, factors, date_from, date_to)
+            result_dic[key] = {
+                "reward_df": reward_df,
+            }
 
         return result_dic
 
@@ -100,7 +102,7 @@ def _test_optimizer():
     def factor_generator(df: pd.DataFrame, short=12, long=26, signal=9):
         import talib
         close_s = df['close']
-        dif, dea, macd = talib.MACD(close_s, fastperiod=12, slowperiod=24, signalperiod=9)
+        dif, dea, macd = talib.MACD(close_s, fastperiod=short, slowperiod=long, signalperiod=signal)
         factors = np.expand_dims(macd, axis=1)
         return factors
 
