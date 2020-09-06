@@ -58,7 +58,7 @@ def run_on_range(strategy: SimpleStrategy, md_df: pd.DataFrame, factors_arr: np.
         action = strategy.run(next_state)
         next_state, reward, done = env.step(action)
 
-    reward_df = env.plot_data()
+    reward_df = env.generate_reward_df()
     return reward_df
 
 
