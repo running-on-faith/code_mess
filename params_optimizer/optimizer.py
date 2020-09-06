@@ -11,6 +11,8 @@ import typing
 import pandas as pd
 import numpy as np
 import json
+# noinspection PyUnresolvedReferences
+import ffn  # NOQA
 from ibats_common.backend.rl.emulator.market2 import ACTION_SHORT, ACTION_LONG, ACTION_CLOSE, ACTION_KEEP
 from common.env import load_md
 
@@ -27,7 +29,8 @@ class SimpleStrategy:
     @classmethod
     def bulk_run_on_range(cls, md_df: pd.DataFrame,
                           factor_generator: typing.Callable[[pd.DataFrame, typing.Any], np.ndarray],
-                          params_kwargs_iter: typing.Iterable[dict], date_from=None, date_to=None):
+                          params_kwargs_iter: typing.Iterable[dict], date_from=None, date_to=None,
+                          risk_free=0.03):
         """
         优化器
         """
@@ -40,8 +43,14 @@ class SimpleStrategy:
             key = json.dumps(params_kwargs)
             strategy = cls(**strategy_kwargs)
             reward_df = run_on_range(strategy, md_df, factors, date_from, date_to)
+            nav_stats = reward_df['nav'].calc_stats()
+            nav_stats.set_riskfree_rate(risk_free)
+            nav_fee0_stats = reward_df['nav_fee0'].calc_stats()
+            nav_fee0_stats.set_riskfree_rate(risk_free)
             result_dic[key] = {
                 "reward_df": reward_df,
+                "nav_stats": nav_stats,
+                "nav_fee0_stats": nav_fee0_stats,
             }
 
         return result_dic
@@ -113,11 +122,24 @@ def _test_optimizer():
         factor_generator=factor_generator,
         params_kwargs_iter=[{
             "strategy_kwargs": {"buy_line": 80, "sell_line": 20},
-            "factor_kwargs": {}
+            "factor_kwargs": {"short": 12, "long": 26, "signal": 9}
         }],
         date_from=date_from, date_to=date_to)
 
-    print(result_dic)
+    data_4_shown = []
+    for key, result_dic in result_dic.items():
+        print('\n', key, ':\n')
+        dic = json.loads(key)
+        data_dic = dic['factor_kwargs']
+        data_dic['calmar'] = result_dic['nav_stats'].calmar
+        data_4_shown.append(data_dic)
+        for name, item in result_dic.items():
+            print('\t', name)
+            print('\t', item)
+
+    print("data_4_shown:")
+    for _ in data_4_shown:
+        print(_)
 
 
 if __name__ == "__main__":
