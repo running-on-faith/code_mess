@@ -242,7 +242,7 @@ def load_md_matlab(file_path) -> pd.DataFrame:
     return df
 
 
-def _test_optimizer2():
+def bulk_backtest_show_result():
     """
     以带日期范围的上下界买卖策略为例测试程序是否可以正常运行
     """
@@ -258,12 +258,14 @@ def _test_optimizer2():
         return factors
 
     date_from, date_to = '2013-01-01', '2018-12-31'
+    file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
+    output_path = r'c:\Users\zerenhe-lqb\Downloads\数据展示\数据展示\data2.json'
+    md_df = load_md_matlab(file_path)
     # md_df = load_md(instrument_type='RB')
-    md_df = load_md_matlab(file_path=r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls')
     contract_month = 1
     periods = generate_available_period(contract_month, date_from, date_to)
     params_kwargs_iter = [{
-        "strategy_kwargs": {"buy_line": 40, "sell_line": -40, 'periods': periods},
+        "strategy_kwargs": {"buy_line": -5, "sell_line": 5, 'periods': periods, "lower_buy_higher_sell": False},
         "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
     } for _ in itertools.product(range(8, 15), range(16, 30, 2), range(6, 13))]
     result_dic = DoubleThresholdWithinPeriodsBSStrategy.bulk_run_on_range(
@@ -273,14 +275,15 @@ def _test_optimizer2():
         date_from=date_from, date_to=date_to)
 
     data_4_shown = []
-    for key, result_dic in result_dic.items():
+    for n, (key, result_dic) in enumerate(result_dic.items(), start=1):
         logger.info("key: %s", key)
         dic = json.loads(key)
         data_dic = dic['factor_kwargs']
         data_dic['calmar'] = result_dic['nav_stats'].calmar
         data_4_shown.append(data_dic)
-        for n, (name, item) in enumerate(result_dic.items(), start=1):
-            logger.debug("%3d) name:%s\n%s", n, name, item)
+        # for n, (name, item) in enumerate(result_dic.items(), start=1):
+        #     logger.debug("%3d) name:%s\n%s", n, name, item)
+        logger.debug("%3d) %s", n, data_dic)
 
         reward_df = result_dic['reward_df']
         factor_kwargs = result_dic["params_kwargs"]["factor_kwargs"]
@@ -292,15 +295,14 @@ def _test_optimizer2():
                  f"_signal{factor_kwargs['signal']}"
         )
 
-    logger.info("data_4_shown:", len(data_4_shown))
-    for n, _ in enumerate(data_4_shown):
-        logger.debug("%3d) %s", n, _)
-
-    with open(r'c:\Users\zerenhe-lqb\Downloads\数据展示\数据展示\data2.json', 'w') as f:
+    # 保持测试结果数据
+    with open(output_path, 'w') as f:
         json.dump([[_['short'], _['long'], _['signal'], _['calmar']] for _ in data_4_shown], f)
+
+    # 打开浏览器展示结果
 
 
 if __name__ == "__main__":
     # _test_optimizer()
     # _test_generate_available_period()
-    _test_optimizer2()
+    bulk_backtest_show_result()
