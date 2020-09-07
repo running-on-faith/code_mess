@@ -8,13 +8,19 @@
 """
 import abc
 import typing
+from datetime import datetime, timedelta
+
 import pandas as pd
 import numpy as np
 import json
+import logging
 # noinspection PyUnresolvedReferences
 import ffn  # NOQA
+from ibats_common.analysis.plot import plot_twin
 from ibats_common.backend.rl.emulator.market2 import ACTION_SHORT, ACTION_LONG, ACTION_CLOSE, ACTION_KEEP
 from common.env import load_md
+
+logger = logging.getLogger()
 
 
 class SimpleStrategy:
@@ -51,6 +57,7 @@ class SimpleStrategy:
                 "reward_df": reward_df,
                 "nav_stats": nav_stats,
                 "nav_fee0_stats": nav_fee0_stats,
+                "params_kwargs": params_kwargs,
             }
 
         return result_dic
@@ -225,10 +232,21 @@ def _test_generate_available_period():
     print(periods)
 
 
+def load_md_matlab(file_path) -> pd.DataFrame:
+    df = pd.read_excel(file_path, header=None)
+    dt_base = datetime.strptime('1899-12-30', '%Y-%m-%d')
+    dt_s = df[0].apply(lambda x: dt_base + timedelta(days=x))
+    df.index = dt_s
+    df.rename(columns={1: 'open', 2: 'high', 3: 'low', 4: 'close'}, inplace=True)
+    df = df[['open', 'high', 'low', 'close']]
+    return df
+
+
 def _test_optimizer2():
     """
     以带日期范围的上下界买卖策略为例测试程序是否可以正常运行
     """
+    import itertools
 
     def factor_generator(df: pd.DataFrame, short=12, long=26, signal=9):
         import talib
@@ -240,32 +258,46 @@ def _test_optimizer2():
         return factors
 
     date_from, date_to = '2013-01-01', '2018-12-31'
-    md_df = load_md(instrument_type='RB')
+    # md_df = load_md(instrument_type='RB')
+    md_df = load_md_matlab(file_path=r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls')
     contract_month = 1
     periods = generate_available_period(contract_month, date_from, date_to)
+    params_kwargs_iter = [{
+        "strategy_kwargs": {"buy_line": 40, "sell_line": -40, 'periods': periods},
+        "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
+    } for _ in itertools.product(range(8, 15), range(16, 30, 2), range(6, 13))]
     result_dic = DoubleThresholdWithinPeriodsBSStrategy.bulk_run_on_range(
         md_df,
         factor_generator=factor_generator,
-        params_kwargs_iter=[{
-            "strategy_kwargs": {"buy_line": 50, "sell_line": -50, 'periods': periods},
-            "factor_kwargs": {"short": 12, "long": 26, "signal": 9}
-        }],
+        params_kwargs_iter=params_kwargs_iter,
         date_from=date_from, date_to=date_to)
 
     data_4_shown = []
     for key, result_dic in result_dic.items():
-        print('\n', key, ':\n')
+        logger.info("key: %s", key)
         dic = json.loads(key)
         data_dic = dic['factor_kwargs']
         data_dic['calmar'] = result_dic['nav_stats'].calmar
         data_4_shown.append(data_dic)
-        for name, item in result_dic.items():
-            print('\t', name)
-            print('\t', item)
+        for n, (name, item) in enumerate(result_dic.items(), start=1):
+            logger.debug("%3d) name:%s\n%s", n, name, item)
 
-    print("data_4_shown:")
-    for _ in data_4_shown:
-        print(_)
+        reward_df = result_dic['reward_df']
+        factor_kwargs = result_dic["params_kwargs"]["factor_kwargs"]
+        plot_twin(
+            reward_df[["value", "value_fee0"]], reward_df[['close']],
+            enable_show_plot=False,
+            name=f"long{factor_kwargs['long']}"
+                 f"_short{factor_kwargs['short']}"
+                 f"_signal{factor_kwargs['signal']}"
+        )
+
+    logger.info("data_4_shown:", len(data_4_shown))
+    for n, _ in enumerate(data_4_shown):
+        logger.debug("%3d) %s", n, _)
+
+    with open(r'c:\Users\zerenhe-lqb\Downloads\数据展示\数据展示\data2.json', 'w') as f:
+        json.dump([[_['short'], _['long'], _['signal'], _['calmar']] for _ in data_4_shown], f)
 
 
 if __name__ == "__main__":
