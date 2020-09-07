@@ -32,7 +32,6 @@ def run_on_range(strategy: SimpleStrategy, md_df: pd.DataFrame, factors_arr: np.
 
     date_from = pd.to_datetime(date_from)
     date_to = pd.to_datetime(date_to)
-    logger.error("date_from=%s, date_to=%s", date_from, date_to)
     matches_from = None if date_from is None else date_from <= md_df.index
     matches_to = None if date_to is None else md_df.index <= date_to
     if matches_from is not None and matches_to is not None:
@@ -51,6 +50,8 @@ def run_on_range(strategy: SimpleStrategy, md_df: pd.DataFrame, factors_arr: np.
         sub_md_df = md_df
         sub_factors_arr = factors_arr
 
+    logger.info("date_from=%s, date_to=%s, data_length=%d, factor_shape",
+                date_from, date_to, sub_md_df.shape[0], sub_factors_arr.shape)
     env = Account(sub_md_df, sub_factors_arr, expand_dims=False, state_with_flag=False, version=VERSION_V2)
     next_state = env.reset()
     done = False
