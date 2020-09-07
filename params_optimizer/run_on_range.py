@@ -50,7 +50,7 @@ def run_on_range(strategy: SimpleStrategy, md_df: pd.DataFrame, factors_arr: np.
         sub_md_df = md_df
         sub_factors_arr = factors_arr
 
-    logger.info("date_from=%s, date_to=%s, data_length=%d, factor_shape",
+    logger.info("date_from=%s, date_to=%s, data_length=%d, factor_shape=%s",
                 date_from, date_to, sub_md_df.shape[0], sub_factors_arr.shape)
     env = Account(sub_md_df, sub_factors_arr, expand_dims=False, state_with_flag=False, version=VERSION_V2)
     next_state = env.reset()
