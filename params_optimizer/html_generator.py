@@ -8,7 +8,11 @@
 import os
 
 
-def generate_html(file_path, labels, x_label, y_label, z_label, color_label, symbol_size_label):
+def generate_html(file_path, labels, x_label, y_label, z_label,
+                  color_label, symbol_size_label, js_file_name='data.js'):
+    """
+    生成 echarts 浏览用 html 文件
+    """
     content_labels = '[\n' + \
                      ',\n'.join([f"\t\t\t{{"
                                  f"\n\t\t\t\tname: '{_}', "
@@ -38,43 +42,42 @@ def generate_html(file_path, labels, x_label, y_label, z_label, color_label, sym
 <body>
     <!-- 为ECharts准备一个具备大小（宽高）的Dom -->
     <div id="app"></div>
-    <script src="./data.js"> </script>
+    <script src="./""" + js_file_name + """"> </script>
     <script type="text/javascript">
         // 基于准备好的dom，初始化echarts实例
         let app = echarts.init(document.getElementById('app'))
-
+        
         var indices = {
             name: 0,
             group: 1,
             id: 16
         };
-        var schema = """ + content_labels + \
-              """
-          var data;
-      
-          var fieldIndices = schema.reduce(function (obj, item) {
-              obj[item.name] = item.index;
-              return obj;
-          }, {});
-      
-          var groupCategories = [];
-          var groupColors = [];
-          var data;
-          var fieldNames = schema.map(function (item) {
-              return item.name;
-          });
-      
-          // fieldNames = fieldNames.slice(2, fieldNames.length - 2);
-          // console.log(fieldNames)
-      
-      
-          function getMaxOnExtent(data) {
-              var colorMax = -Infinity;
-              var symbolSizeMax = -Infinity;
-              var colorMin = Infinity;
-              var symbolSizeMin = Infinity;
-      
-              for (var i = 0; i < data.length; i++) {
+        var schema = """ + content_labels + """
+        var data;
+    
+        var fieldIndices = schema.reduce(function (obj, item) {
+            obj[item.name] = item.index;
+            return obj;
+        }, {});
+    
+        var groupCategories = [];
+        var groupColors = [];
+        var data;
+        var fieldNames = schema.map(function (item) {
+            return item.name;
+        });
+    
+        // fieldNames = fieldNames.slice(2, fieldNames.length - 2);
+        // console.log(fieldNames)
+    
+    
+        function getMaxOnExtent(data) {
+            var colorMax = -Infinity;
+            var symbolSizeMax = -Infinity;
+            var colorMin = Infinity;
+            var symbolSizeMin = Infinity;
+    
+            for (var i = 0; i < data.length; i++) {
                   var item = data[i];
                   var colorVal = item[fieldIndices[config.color]];
                   var symbolSizeVal = item[fieldIndices[config.symbolSize]];
@@ -82,172 +85,172 @@ def generate_html(file_path, labels, x_label, y_label, z_label, color_label, sym
                   colorMin = Math.min(colorVal, colorMin);
                   symbolSizeMax = Math.max(symbolSizeVal, symbolSizeMax);
                   symbolSizeMin = Math.min(symbolSizeVal, symbolSizeMin);
-              }
-              return {
+            }
+            return {
                   max: {
-                      color: colorMax,
-                      symbolSize: symbolSizeMax,
+                        color: colorMax,
+                        symbolSize: symbolSizeMax,
                   },
                   min: {
-                      color: colorMin,
-                      symbolSize: symbolSizeMin,
+                        color: colorMin,
+                        symbolSize: symbolSizeMin,
                   }
-              };
-          }
-      
-          var config = app.config = {
-              xAxis3D: '""" + x_label + """',
-              yAxis3D: '""" + y_label + """',
-              zAxis3D: '""" + z_label + """',
-              color: '""" + color_label + """',
-              symbolSize: '""" + symbol_size_label + """',
-      
-              onChange: function () {
+            };
+        }
+    
+        var config = app.config = {
+            xAxis3D: '""" + x_label + """',
+            yAxis3D: '""" + y_label + """',
+            zAxis3D: '""" + z_label + """',
+            color: '""" + color_label + """',
+            symbolSize: '""" + symbol_size_label + """',
+    
+            onChange: function () {
                   var max = getMaxOnExtent(data);
                   if (data) {
-                      app.setOption({
-                          visualMap: [{
-                              max: max.max.color / 2
-                          }, {
-                              max: max.max.symbolSize / 2
-                          }],
-                          xAxis3D: {
-                              name: config.xAxis3D
-                          },
-                          yAxis3D: {
-                              name: config.yAxis3D
-                          },
-                          zAxis3D: {
-                              name: config.zAxis3D
-                          },
-                          series: {
-                              dimensions: [
-                                  config.xAxis3D,
-                                  config.yAxis3D,
-                                  config.yAxis3D,
-                                  config.color,
-                                  config.symbolSiz
-                              ],
-                              data: data.map(function (item, idx) {
-                                  return [
-                                      item[fieldIndices[config.xAxis3D]],
-                                      item[fieldIndices[config.yAxis3D]],
-                                      item[fieldIndices[config.zAxis3D]],
-                                      item[fieldIndices[config.color]],
-                                      item[fieldIndices[config.symbolSize]],
-                                  ];
-                              })
-                          }
-                      });
+                        app.setOption({
+                            visualMap: [{
+                                  max: max.max.color / 2
+                            }, {
+                                  max: max.max.symbolSize / 2
+                            }],
+                            xAxis3D: {
+                                  name: config.xAxis3D
+                            },
+                            yAxis3D: {
+                                  name: config.yAxis3D
+                            },
+                            zAxis3D: {
+                                  name: config.zAxis3D
+                            },
+                            series: {
+                                  dimensions: [
+                                        config.xAxis3D,
+                                        config.yAxis3D,
+                                        config.yAxis3D,
+                                        config.color,
+                                        config.symbolSiz
+                                  ],
+                                  data: data.map(function (item, idx) {
+                                        return [
+                                            item[fieldIndices[config.xAxis3D]],
+                                            item[fieldIndices[config.yAxis3D]],
+                                            item[fieldIndices[config.zAxis3D]],
+                                            item[fieldIndices[config.color]],
+                                            item[fieldIndices[config.symbolSize]],
+                                        ];
+                                  })
+                            }
+                        });
                   }
-              }
-          };
-          app.configParameters = {};
-      
-          ['xAxis3D', 'yAxis3D', 'zAxis3D', 'color', 'symbolSize'].forEach(function (fieldName) {
-              app.configParameters[fieldName] = {
+            }
+        };
+        app.configParameters = {};
+    
+        ['xAxis3D', 'yAxis3D', 'zAxis3D', 'color', 'symbolSize'].forEach(function (fieldName) {
+            app.configParameters[fieldName] = {
                   options: fieldNames
-              };
-          });
-      
-          var max = getMaxOnExtent(data);
-          app.setOption({
-              tooltip: {},
-              visualMap: [{
+            };
+        });
+    
+        var max = getMaxOnExtent(data);
+        app.setOption({
+            tooltip: {},
+            visualMap: [{
                   top: 10,
                   calculable: true,
                   dimension: 3,
                   max: max.max.color / 2,
                   min: max.min.color,
                   inRange: {
-                      color: ['#1710c0', '#0b9df0', '#00fea8', '#00ff0d', '#f5f811', '#f09a09', '#fe0300']
+                        color: ['#1710c0', '#0b9df0', '#00fea8', '#00ff0d', '#f5f811', '#f09a09', '#fe0300']
                   },
                   textStyle: {
-                      color: '#fff'
+                        color: '#fff'
                   }
-              }, {
+            }, {
                   bottom: 10,
                   calculable: true,
                   dimension: 4,
                   max: max.max.symbolSize / 2,
                   min: max.min.symbolSize,
                   inRange: {
-                      symbolSize: [10, 40]
+                        symbolSize: [10, 40]
                   },
                   textStyle: {
-                      color: '#fff'
+                        color: '#fff'
                   }
-              }],
-              xAxis3D: {
+            }],
+            xAxis3D: {
                   name: config.xAxis3D,
                   type: 'value',
                   scale: true
-              },
-              yAxis3D: {
+            },
+            yAxis3D: {
                   name: config.yAxis3D,
                   type: 'value',
                   scale: true
-              },
-              zAxis3D: {
+            },
+            zAxis3D: {
                   name: config.zAxis3D,
                   type: 'value',
                   scale: true
-              },
-              grid3D: {
+            },
+            grid3D: {
                   environment : 'rgba(0,0,0,.5)',
                   axisLine: {
-                      show: true,
-                      lineStyle: {
-                          color: '#fff'
-                      }
+                        show: true,
+                        lineStyle: {
+                            color: '#fff'
+                        }
                   },
                   axisPointer: {
-                      lineStyle: {
-                          color: '#ffbd67'
-                      }
+                        lineStyle: {
+                            color: '#ffbd67'
+                        }
                   },
                   viewControl: {
-                      // autoRotate: true
-                      // projection: 'orthographic'
+                        // autoRotate: true
+                        // projection: 'orthographic'
                   }
-              },
-              series: [{
+            },
+            series: [{
                   type: 'scatter3D',
                   dimensions: [
-                      config.xAxis3D,
-                      config.yAxis3D,
-                      config.yAxis3D,
-                      config.color,
-                      config.symbolSiz
+                        config.xAxis3D,
+                        config.yAxis3D,
+                        config.yAxis3D,
+                        config.color,
+                        config.symbolSiz
                   ],
                   data: data.map(function (item, idx) {
-                      return [
-                          item[fieldIndices[config.xAxis3D]],
-                          item[fieldIndices[config.yAxis3D]],
-                          item[fieldIndices[config.zAxis3D]],
-                          item[fieldIndices[config.color]],
-                          item[fieldIndices[config.symbolSize]],
-                          idx
-                      ];
+                        return [
+                            item[fieldIndices[config.xAxis3D]],
+                            item[fieldIndices[config.yAxis3D]],
+                            item[fieldIndices[config.zAxis3D]],
+                            item[fieldIndices[config.color]],
+                            item[fieldIndices[config.symbolSize]],
+                            idx
+                        ];
                   }),
                   symbolSize: 12,
                   // symbol: 'triangle',
                   itemStyle: {
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.8)'
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.8)'
                   },
                   emphasis: {
-                      itemStyle: {
-                          color: '#fff'
-                      }
+                        itemStyle: {
+                            color: '#fff'
+                        }
                   }
-              }]
-          });
-      </script>
-      </body>
-      
-      </html>
-          """
+            }]
+        });
+    </script>
+</body>
+
+</html>
+            """
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(content)
     return file_path
@@ -263,6 +266,7 @@ def _test_generate_html():
         z_label=output_labels[1],
         color_label=output_labels[3],
         symbol_size_label=output_labels[2],
+        js_file_name='data.js'
     )
     print(html_file_path)
     from ibats_utils.mess import open_file_with_system_app
