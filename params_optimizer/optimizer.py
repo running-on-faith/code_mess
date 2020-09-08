@@ -18,6 +18,8 @@ import logging
 import ffn  # NOQA
 from ibats_common.analysis.plot import plot_twin
 from ibats_common.backend.rl.emulator.market2 import ACTION_SHORT, ACTION_LONG, ACTION_CLOSE, ACTION_KEEP
+from ibats_utils.mess import open_file_with_system_app
+
 from common.env import load_md
 
 logger = logging.getLogger()
@@ -259,7 +261,7 @@ def bulk_backtest_show_result():
 
     date_from, date_to = '2013-01-01', '2018-12-31'
     file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
-    output_path = r'c:\Users\zerenhe-lqb\Downloads\数据展示\数据展示\data2.json'
+    output_path = r'data.js'
     md_df = load_md_matlab(file_path)
     # md_df = load_md(instrument_type='RB')
     contract_month = 1
@@ -280,6 +282,9 @@ def bulk_backtest_show_result():
         dic = json.loads(key)
         data_dic = dic['factor_kwargs']
         data_dic['calmar'] = result_dic['nav_stats'].calmar
+        data_dic['cagr'] = result_dic['nav_stats'].cagr
+        data_dic['daily_sharpe'] = result_dic['nav_stats'].daily_sharpe
+
         data_4_shown.append(data_dic)
         # for n, (name, item) in enumerate(result_dic.items(), start=1):
         #     logger.debug("%3d) name:%s\n%s", n, name, item)
@@ -297,9 +302,14 @@ def bulk_backtest_show_result():
 
     # 保持测试结果数据
     with open(output_path, 'w') as f:
-        json.dump([[_['short'], _['long'], _['signal'], _['calmar']] for _ in data_4_shown], f)
+        f.write("var data = \n")
+        json.dump([[
+            _['short'], _['long'], _['signal'], _['calmar'], _['cagr'], _['daily_sharpe']
+        ] for _ in data_4_shown], f)
 
     # 打开浏览器展示结果
+    html_file_path = './index.html'
+    open_file_with_system_app(html_file_path)
 
 
 if __name__ == "__main__":
