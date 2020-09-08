@@ -1,4 +1,20 @@
-<!DOCTYPE html>
+"""
+@author  : MG
+@Time    : 2020/9/8 9:55
+@File    : html_generator.py
+@contact : mmmaaaggg@163.com
+@desc    : 用于
+"""
+import os
+
+
+def generate_html(file_path, labels, x_label, y_label, z_label, color_label, symbol_size_label):
+    content_labels = '[\n' + \
+                     ',\n'.join([f"\t\t\t{{"
+                                 f"\n\t\t\t\tname: '{_}', "
+                                 f"\n\t\t\t\tindex: {n}\n\t\t\t}}" for n, _ in enumerate(labels)]) + \
+                     '\n\t\t\t];'
+    content = """<!DOCTYPE html>
 <html>
 
 <head>
@@ -32,36 +48,8 @@
             group: 1,
             id: 16
         };
-        var schema = [
-			{
-				name: 'short', 
-				index: 0
-			},
-			{
-				name: 'long', 
-				index: 1
-			},
-			{
-				name: 'signal', 
-				index: 2
-			},
-			{
-				name: 'calmar', 
-				index: 3
-			},
-			{
-				name: 'cagr', 
-				index: 4
-			},
-			{
-				name: 'daily_sharpe', 
-				index: 5
-			},
-			{
-				name: 'period', 
-				index: 6
-			}
-			];
+        var schema = """ + content_labels + \
+              """
           var data;
       
           var fieldIndices = schema.reduce(function (obj, item) {
@@ -108,11 +96,11 @@
           }
       
           var config = app.config = {
-              xAxis3D: 'short',
-              yAxis3D: 'period',
-              zAxis3D: 'long',
-              color: 'calmar',
-              symbolSize: 'signal',
+              xAxis3D: '""" + x_label + """',
+              yAxis3D: '""" + y_label + """',
+              zAxis3D: '""" + z_label + """',
+              color: '""" + color_label + """',
+              symbolSize: '""" + symbol_size_label + """',
       
               onChange: function () {
                   var max = getMaxOnExtent(data);
@@ -259,4 +247,25 @@
       </body>
       
       </html>
-          
+          """
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    return file_path
+
+
+def _test_generate_html():
+    output_labels = ['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period']
+    html_file_path = generate_html(
+        os.path.join('html', 'index.html'),
+        labels=output_labels,
+        x_label=output_labels[0],
+        y_label=output_labels[6],
+        z_label=output_labels[1],
+        color_label=output_labels[3],
+        symbol_size_label=output_labels[2],
+    )
+    print(html_file_path)
+
+
+if __name__ == "__main__":
+    _test_generate_html()
