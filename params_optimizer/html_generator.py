@@ -265,6 +265,8 @@ def _test_generate_html():
         symbol_size_label=output_labels[2],
     )
     print(html_file_path)
+    from ibats_utils.mess import open_file_with_system_app
+    open_file_with_system_app(html_file_path)
 
 
 if __name__ == "__main__":
