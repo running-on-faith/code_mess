@@ -55,6 +55,10 @@
             {
                 name: 'daily_sharpe',
                 index: 5
+            },
+            {
+                name: 'period',
+                index: 5
             }
         ];
         var data;
@@ -104,7 +108,7 @@
 
         var config = app.config = {
             xAxis3D: 'short',
-            yAxis3D: 'long',
+            yAxis3D: 'period',
             zAxis3D: 'signal',
             color: 'calmar',
             symbolSize: 'daily_sharpe',
