@@ -36,7 +36,7 @@ class SimpleStrategy:
         pass
 
     @classmethod
-    def bulk_run_on_range(cls, md_df: pd.DataFrame,
+    def bulk_run_on_range(cls, md_loader: typing.Callable[[str], pd.DataFrame],
                           factor_generator: typing.Callable[[pd.DataFrame, typing.Any], np.ndarray],
                           params_kwargs_iter: typing.Iterable[dict], date_from=None, date_to=None,
                           risk_free=0.03):
@@ -46,8 +46,10 @@ class SimpleStrategy:
         from params_optimizer.run_on_range import run_on_range
         result_dic = {}
         for params_kwargs in params_kwargs_iter:
+            md_loader_kwargs = params_kwargs.setdefault('md_loader_kwargs', {})
             strategy_kwargs = params_kwargs.setdefault('strategy_kwargs', {})
             factor_kwargs = params_kwargs.setdefault('factor_kwargs', {})
+            md_df = md_loader(**md_loader_kwargs)
             factors = factor_generator(md_df, **factor_kwargs)
             key = json.dumps(params_kwargs)
             strategy = cls(**strategy_kwargs)
@@ -173,11 +175,11 @@ def _test_optimizer():
         return factors
 
     date_from, date_to = '2013-01-01', '2018-12-31'
-    md_df = load_md(instrument_type='RB')
     result_dic = DoubleThresholdBSStrategy.bulk_run_on_range(
-        md_df,
+        load_md,  # md_df = load_md(instrument_type='RB')
         factor_generator=factor_generator,
         params_kwargs_iter=[{
+            "md_loader_kwargs": {"instrument_type": "RB"},
             "strategy_kwargs": {"buy_line": 50, "sell_line": -50},
             "factor_kwargs": {"short": 12, "long": 26, "signal": 9}
         }],
@@ -263,16 +265,20 @@ def bulk_backtest_show_result(auto_open_html=True):
     date_from, date_to = '2013-01-01', '2018-12-31'
     file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
     output_path = os.path.join('html', 'data.js')
-    md_df = load_md_matlab(file_path)
+    # md_df = load_md_matlab(file_path)
     # md_df = load_md(instrument_type='RB')
     contract_month = 1
     periods = generate_available_period(contract_month, date_from, date_to)
     params_kwargs_iter = [{
+        "md_loader_kwargs": {"period": _[3]},
         "strategy_kwargs": {"buy_line": -5, "sell_line": 5, 'periods': periods, "lower_buy_higher_sell": False},
         "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
-    } for _ in itertools.product(range(8, 15), range(16, 30, 2), range(6, 13))]
+    } for _ in itertools.product(
+        range(6, 13, 2), range(14, 30, 3), range(5, 10),  # short, long, signal
+        [5, 10, 15, 20, 30, 60, 120],  # file_path  BarSize=*
+    )]
     result_dic = DoubleThresholdWithinPeriodsBSStrategy.bulk_run_on_range(
-        md_df,
+        lambda period: load_md_matlab(f'd:\\github\\matlab_mass\\data\\历年RB01BarSize={period}高开低收.xls'),
         factor_generator=factor_generator,
         params_kwargs_iter=params_kwargs_iter,
         date_from=date_from, date_to=date_to)
@@ -282,6 +288,7 @@ def bulk_backtest_show_result(auto_open_html=True):
         logger.info("key: %s", key)
         dic = json.loads(key)
         data_dic = dic['factor_kwargs']
+        data_dic.update(dic['md_loader_kwargs'])
         data_dic['calmar'] = result_dic['nav_stats'].calmar
         data_dic['cagr'] = result_dic['nav_stats'].cagr
         data_dic['daily_sharpe'] = result_dic['nav_stats'].daily_sharpe
@@ -293,10 +300,12 @@ def bulk_backtest_show_result(auto_open_html=True):
 
         reward_df = result_dic['reward_df']
         factor_kwargs = result_dic["params_kwargs"]["factor_kwargs"]
+        md_loader_kwargs = result_dic["params_kwargs"]["md_loader_kwargs"]
         plot_twin(
             reward_df[["value", "value_fee0"]], reward_df[['close']],
             enable_show_plot=False,
-            name=f"long{factor_kwargs['long']}"
+            name=f"period{md_loader_kwargs['period']}"
+                 f"_long{factor_kwargs['long']}"
                  f"_short{factor_kwargs['short']}"
                  f"_signal{factor_kwargs['signal']}"
         )
@@ -305,7 +314,8 @@ def bulk_backtest_show_result(auto_open_html=True):
     with open(output_path, 'w') as f:
         f.write("var data = \n")
         json.dump([[
-            _['short'], _['long'], _['signal'], _['calmar'], _['cagr'], _['daily_sharpe']
+            _['short'], _['long'], _['signal'],
+            _['calmar'], _['cagr'], _['daily_sharpe'], _['period']
         ] for _ in data_2_js], f)
 
     # 打开浏览器展示结果
