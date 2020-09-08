@@ -72,6 +72,7 @@ def bulk_backtest_show_result(auto_open_html=True):
     以带日期范围的上下界买卖策略为例测试程序是否可以正常运行
     """
     import itertools
+    from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
 
     def factor_generator(df: pd.DataFrame, short=12, long=26, signal=9):
         import talib
