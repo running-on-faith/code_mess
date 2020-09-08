@@ -6,6 +6,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 参数优化器
 """
+import functools
 import os
 from datetime import datetime, timedelta
 
@@ -17,6 +18,8 @@ import logging
 import ffn  # NOQA
 from ibats_common.analysis.plot import plot_twin
 from ibats_utils.mess import open_file_with_system_app
+
+from params_optimizer.html_generator import generate_html
 
 logger = logging.getLogger()
 
@@ -57,7 +60,9 @@ def _test_generate_available_period():
     print(periods)
 
 
+@functools.lru_cache()
 def load_md_matlab(file_path) -> pd.DataFrame:
+    logger.info("Load %s", file_path)
     df = pd.read_excel(file_path, header=None)
     dt_base = datetime.strptime('1899-12-30', '%Y-%m-%d')
     dt_s = df[0].apply(lambda x: dt_base + timedelta(days=x))
@@ -73,7 +78,30 @@ def bulk_backtest_show_result(auto_open_html=True):
     """
     import itertools
     from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
+    # 参数配置
+    date_from, date_to = '2013-01-01', '2018-12-31'
+    output_js_path = os.path.join('html', 'data.js')
+    output_json_path = os.path.join('html', 'data.json')
+    output_labels = ['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period']
+    # file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
+    # md_df = load_md_matlab(file_path)
+    # md_df = load_md(instrument_type='RB')
+    # 数据文件所在目录
+    xls_data_dir_path = r"d:\github\matlab_mass\data"
+    contract_month = 1  # 合约月份
+    # 生成有效的时间段范围
+    periods = generate_available_period(contract_month, date_from, date_to)
+    # 披露策略执行参数
+    params_kwargs_iter = [{
+        "md_loader_kwargs": {"period": _[3]},
+        "strategy_kwargs": {"buy_line": -5, "sell_line": 5, 'periods': periods, "lower_buy_higher_sell": False},
+        "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
+    } for _ in itertools.product(
+        range(4, 13, 1), range(14, 30, 3), range(5, 10),  # short, long, signal
+        [5, 10, 15, 20, 30, 60, 120],  # file_path  BarSize=*
+    )]
 
+    # 因子生成器
     def factor_generator(df: pd.DataFrame, short=12, long=26, signal=9):
         import talib
         close_s = df['close']
@@ -83,28 +111,16 @@ def bulk_backtest_show_result(auto_open_html=True):
         factors = np.array([_ for _ in zip(dates, macd)])
         return factors
 
-    date_from, date_to = '2013-01-01', '2018-12-31'
-    file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
-    output_path = os.path.join('html', 'data.js')
-    # md_df = load_md_matlab(file_path)
-    # md_df = load_md(instrument_type='RB')
-    contract_month = 1
-    periods = generate_available_period(contract_month, date_from, date_to)
-    params_kwargs_iter = [{
-        "md_loader_kwargs": {"period": _[3]},
-        "strategy_kwargs": {"buy_line": -5, "sell_line": 5, 'periods': periods, "lower_buy_higher_sell": False},
-        "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
-    } for _ in itertools.product(
-        range(6, 13, 2), range(14, 30, 3), range(5, 10),  # short, long, signal
-        [5, 10, 15, 20, 30, 60, 120],  # file_path  BarSize=*
-    )]
+    # 策略批量运行
     result_dic = DoubleThresholdWithinPeriodsBSStrategy.bulk_run_on_range(
-        lambda period: load_md_matlab(f'd:\\github\\matlab_mass\\data\\历年RB01BarSize={period}高开低收.xls'),
+        lambda period: load_md_matlab(
+            os.path.join(xls_data_dir_path, f'历年RB{contract_month:02d}BarSize={period}高开低收.xls')),
         factor_generator=factor_generator,
         params_kwargs_iter=params_kwargs_iter,
         date_from=date_from, date_to=date_to)
 
-    data_2_js = []
+    # 策略结果整理
+    data_2_js, data_len = [], len(result_dic)
     for n, (key, result_dic) in enumerate(result_dic.items(), start=1):
         logger.info("key: %s", key)
         dic = json.loads(key)
@@ -117,11 +133,12 @@ def bulk_backtest_show_result(auto_open_html=True):
         data_2_js.append(data_dic)
         # for n, (name, item) in enumerate(result_dic.items(), start=1):
         #     logger.debug("%3d) name:%s\n%s", n, name, item)
-        logger.debug("%3d) %s", n, data_dic)
+        logger.debug("%3d/%3d) %s", n, data_len, data_dic)
 
         reward_df = result_dic['reward_df']
         factor_kwargs = result_dic["params_kwargs"]["factor_kwargs"]
         md_loader_kwargs = result_dic["params_kwargs"]["md_loader_kwargs"]
+        # 生成plot图
         plot_twin(
             reward_df[["value", "value_fee0"]], reward_df[['close']],
             enable_show_plot=False,
@@ -132,16 +149,27 @@ def bulk_backtest_show_result(auto_open_html=True):
         )
 
     # 保持测试结果数据
-    with open(output_path, 'w') as f:
+    with open(output_js_path, 'w') as f:
         f.write("var data = \n")
-        json.dump([[
-            _['short'], _['long'], _['signal'],
-            _['calmar'], _['cagr'], _['daily_sharpe'], _['period']
-        ] for _ in data_2_js], f)
+        json.dump([[_[name] for name in output_labels] for _ in data_2_js], f)
+
+    with open(output_json_path, 'w') as f:
+        json.dump([[_[name] for name in output_labels] for _ in data_2_js], f)
+
+    # 输出 html
+    html_file_path = generate_html(
+        os.path.join('html', 'index.html'),
+        labels=output_labels,
+        x_label=output_labels[0],
+        y_label=output_labels[5],
+        z_label=output_labels[2],
+        color_label=output_labels[3],
+        symbol_size_label=output_labels[4],
+    )
 
     # 打开浏览器展示结果
     if auto_open_html:
-        html_file_path = os.path.abspath('html/index.html')
+        html_file_path = os.path.abspath(html_file_path)
         open_file_with_system_app(html_file_path)
 
 
