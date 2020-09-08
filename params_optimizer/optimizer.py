@@ -81,7 +81,7 @@ def bulk_backtest_show_result(auto_open_html=True):
     # 参数配置
     date_from, date_to = '2013-01-01', '2018-12-31'
     output_js_path = os.path.join('html', 'data.js')
-    output_json_path = os.path.join('html', 'data.json')
+    output_csv_path = os.path.join('html', 'data.csv')
     output_labels = ['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period']
     # file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
     # md_df = load_md_matlab(file_path)
@@ -153,15 +153,14 @@ def bulk_backtest_show_result(auto_open_html=True):
         f.write("var data = \n")
         json.dump([[_[name] for name in output_labels] for _ in data_2_js], f)
 
-    with open(output_json_path, 'w') as f:
-        json.dump([[_[name] for name in output_labels] for _ in data_2_js], f)
+    pd.DataFrame(data_2_js).to_csv(output_csv_path, index=None)
 
     # 输出 html
     html_file_path = generate_html(
         os.path.join('html', 'index.html'),
         labels=output_labels,
         x_label=output_labels[0],
-        y_label=output_labels[5],
+        y_label=output_labels[6],
         z_label=output_labels[2],
         color_label=output_labels[3],
         symbol_size_label=output_labels[4],
