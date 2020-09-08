@@ -6,6 +6,7 @@
 @contact : mmmaaaggg@163.com
 @desc    : 参数优化器
 """
+import os
 import abc
 import typing
 from datetime import datetime, timedelta
@@ -244,7 +245,7 @@ def load_md_matlab(file_path) -> pd.DataFrame:
     return df
 
 
-def bulk_backtest_show_result():
+def bulk_backtest_show_result(auto_open_html=True):
     """
     以带日期范围的上下界买卖策略为例测试程序是否可以正常运行
     """
@@ -261,7 +262,7 @@ def bulk_backtest_show_result():
 
     date_from, date_to = '2013-01-01', '2018-12-31'
     file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
-    output_path = r'data.js'
+    output_path = os.path.join('html', 'data.js')
     md_df = load_md_matlab(file_path)
     # md_df = load_md(instrument_type='RB')
     contract_month = 1
@@ -276,7 +277,7 @@ def bulk_backtest_show_result():
         params_kwargs_iter=params_kwargs_iter,
         date_from=date_from, date_to=date_to)
 
-    data_4_shown = []
+    data_2_js = []
     for n, (key, result_dic) in enumerate(result_dic.items(), start=1):
         logger.info("key: %s", key)
         dic = json.loads(key)
@@ -285,7 +286,7 @@ def bulk_backtest_show_result():
         data_dic['cagr'] = result_dic['nav_stats'].cagr
         data_dic['daily_sharpe'] = result_dic['nav_stats'].daily_sharpe
 
-        data_4_shown.append(data_dic)
+        data_2_js.append(data_dic)
         # for n, (name, item) in enumerate(result_dic.items(), start=1):
         #     logger.debug("%3d) name:%s\n%s", n, name, item)
         logger.debug("%3d) %s", n, data_dic)
@@ -305,11 +306,12 @@ def bulk_backtest_show_result():
         f.write("var data = \n")
         json.dump([[
             _['short'], _['long'], _['signal'], _['calmar'], _['cagr'], _['daily_sharpe']
-        ] for _ in data_4_shown], f)
+        ] for _ in data_2_js], f)
 
     # 打开浏览器展示结果
-    html_file_path = './index.html'
-    open_file_with_system_app(html_file_path)
+    if auto_open_html:
+        html_file_path = os.path.abspath('html/index.html')
+        open_file_with_system_app(html_file_path)
 
 
 if __name__ == "__main__":
