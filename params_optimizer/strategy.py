@@ -25,7 +25,7 @@ class SimpleStrategy:
     """
 
     def run_on_range(self, md_df: pd.DataFrame, factors_arr: np.ndarray,
-                     date_from=None, date_to=None):
+                     date_from=None, date_to=None, log_header=None):
         """
         指定价格时间序列，因子矩阵, 时间段, 执行模拟运行,生成绩效统计结果
         :strategy 策略信息
@@ -33,6 +33,7 @@ class SimpleStrategy:
         :factor_df 因子数据, None则不传送因子数据,非空情况下需要与md_df第一维长度一致
         :date_from 起始日期, None则从行情头部开始
         :date_to 截止日期, None 则运行至行情结束
+        :log_header 日至头，仅用于记录日至使用
         :return:
         """
         if factors_arr is not None:
@@ -40,6 +41,7 @@ class SimpleStrategy:
             assert md_df.shape[0] == factors_arr.shape[0], \
                 f"md_df.shape[0]=={md_df.shape[0]}, but factors.shape[0]={factors_arr.shape[0]}"
 
+        log_header = '' if log_header is None else log_header
         date_from = pd.to_datetime(date_from)
         date_to = pd.to_datetime(date_to)
         matches_from = None if date_from is None else date_from <= md_df.index
@@ -60,8 +62,8 @@ class SimpleStrategy:
             sub_md_df = md_df
             sub_factors_arr = factors_arr
 
-        logger.info("date_from=%s, date_to=%s, data_length=%d, factor_shape=%s",
-                    date_from, date_to, sub_md_df.shape[0], sub_factors_arr.shape)
+        logger.info("%s date_from=%s, date_to=%s, data_length=%d, factor_shape=%s",
+                    log_header, date_from, date_to, sub_md_df.shape[0], sub_factors_arr.shape)
         env = Account(sub_md_df, sub_factors_arr, expand_dims=False, state_with_flag=False, version=VERSION_V2)
         next_state = env.reset()
         done = False
@@ -80,12 +82,13 @@ class SimpleStrategy:
     def bulk_run_on_range(cls, md_loader: typing.Callable[[str], pd.DataFrame],
                           factor_generator: typing.Callable[[pd.DataFrame, typing.Any], np.ndarray],
                           params_kwargs_iter: typing.Iterable[dict], date_from=None, date_to=None,
-                          risk_free=0.03):
+                          risk_free=0.03, name=None):
         """
         优化器
         """
         result_dic = {}
-        for params_kwargs in params_kwargs_iter:
+        log_header_name = " " if name is None else name + " "
+        for n, params_kwargs in enumerate(params_kwargs_iter, start=1):
             md_loader_kwargs = params_kwargs.setdefault('md_loader_kwargs', {})
             strategy_kwargs = params_kwargs.setdefault('strategy_kwargs', {})
             factor_kwargs = params_kwargs.setdefault('factor_kwargs', {})
@@ -93,7 +96,9 @@ class SimpleStrategy:
             factors = factor_generator(md_df, **factor_kwargs)
             key = json.dumps(params_kwargs)
             strategy = cls(**strategy_kwargs)
-            reward_df = strategy.run_on_range(md_df, factors, date_from, date_to)
+            reward_df = strategy.run_on_range(
+                md_df, factors, date_from, date_to,
+                log_header=f'{log_header_name}{n}) ')
             nav_stats = reward_df['nav'].calc_stats()
             nav_stats.set_riskfree_rate(risk_free)
             nav_fee0_stats = reward_df['nav_fee0'].calc_stats()
@@ -197,6 +202,41 @@ class DoubleThresholdWithinPeriodsBSStrategy(DoubleThresholdBSStrategy):
             action = ACTION_CLOSE
         else:
             action = super().run(factors)
+
+        return action
+
+
+class CrossBSStrategy(SimpleStrategy):
+
+    def __init__(self, short_idx, long_idx, lower_boundary=20, high_boundary=80, lower_buy_higher_sell=True):
+        self.short_idx = short_idx
+        self.long_idx = long_idx
+        self.lower_boundary = lower_boundary
+        self.high_boundary = high_boundary
+        self.lower_buy_higher_sell = lower_buy_higher_sell
+        # 上一个周期的 缓存值
+        self._short_last, self._long_last = None, None
+
+    def run(self, factors: np.ndarray) -> int:
+        if self._short_last is None:
+            # 首次加载时缓存数据
+            self._short_last = factors[self.short_idx]
+            self._long_last = factors[self.long_idx]
+            return ACTION_KEEP
+
+        short = factors[self.short_idx]
+        long = factors[self.long_idx]
+        if self._short_last < self.lower_boundary and \
+                self._short_last < self._long_last and \
+                long < short:
+            action = ACTION_LONG if self.lower_buy_higher_sell else ACTION_SHORT
+
+        elif self._short_last > self.lower_boundary and \
+                self._short_last > self._long_last and \
+                long > short:
+            action = ACTION_LONG if self.lower_buy_higher_sell else ACTION_SHORT
+        else:
+            action = ACTION_KEEP
 
         return action
 

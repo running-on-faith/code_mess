@@ -123,7 +123,7 @@ def bulk_backtest_show_result(
             os.path.join(xls_data_dir_path, f'历年RB{contract_month:02d}BarSize={period}高开低收.xls')),
         factor_generator=factor_generator,
         params_kwargs_iter=params_kwargs_iter,
-        date_from=date_from, date_to=date_to)
+        date_from=date_from, date_to=date_to, name=name)
 
     # 策略结果整理
     data_2_js, data_len = [], len(result_dic)
@@ -189,7 +189,7 @@ def bulk_backtest_show_result(
 
 
 def do_macd_test():
-    from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
+    from params_optimizer.strategy import CrossBSStrategy
     contract_month = 1
     date_from, date_to = '2013-01-01', '2020-12-31'
     periods = generate_available_period(contract_month, date_from, date_to)
@@ -212,13 +212,13 @@ def do_macd_test():
         return factors
 
     bulk_backtest_show_result(
-        strategy_cls=DoubleThresholdWithinPeriodsBSStrategy,
+        strategy_cls=CrossBSStrategy,
         date_from=date_from,
         date_to=date_to,
         contract_month=contract_month,
         params_kwargs_iter=params_kwargs_iter,
         factor_generator=factor_generator,
-        name='macd',
+        name='kdj',
     )
 
 
