@@ -7,6 +7,7 @@
 @desc    : 参数优化器
 """
 import functools
+import itertools
 import os
 from datetime import datetime, timedelta
 
@@ -75,51 +76,49 @@ def load_md_matlab(file_path) -> pd.DataFrame:
     return df
 
 
-def bulk_backtest_show_result(auto_open_html=True):
+def bulk_backtest_show_result(
+        strategy_cls, date_from, date_to,
+        contract_month, params_kwargs_iter, factor_generator,
+        name='test', xls_data_dir_path=r"d:\github\matlab_mass\data",
+        output_labels=['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period'],
+        auto_open_html=True, tiny_random_shift_xyz=True):
     """
     以带日期范围的上下界买卖策略为例测试程序是否可以正常运行
+    :strategy_cls 策略类
+    :date_from 起始日期
+    :date_to 截止日期
+    :contract_month 合约月份
+    :params_kwargs_iter 参数迭代器
+    :factor_generator 因子生成器
+    :name 名称，用于生产 html以及data文件时命名
+    :xls_data_dir_path xls 文件目录
+    :output_labels 输出标签
+    :auto_open_html 自动打开 html
+    :tiny_random_shift_xyz xyz三轴扰动
     """
     import itertools
-    from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
     # 参数配置
-    date_from, date_to = '2013-01-01', '2020-12-31'
-    js_file_name = 'data.js'
+
+    js_file_name = f'data_{name}.js'
     output_js_path = os.path.join('html', js_file_name)
-    output_csv_path = os.path.join('html', 'data.csv')
-    output_labels = ['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period']
+    output_csv_path = os.path.join('html', f'data_{name}.csv')
+
     # file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
     # md_df = load_md_matlab(file_path)
     # md_df = load_md(instrument_type='RB')
     # 数据文件所在目录
-    xls_data_dir_path = r"d:\github\matlab_mass\data"
-    contract_month = 1  # 合约月份
+    # contract_month = 1  # 合约月份
     # 由于xyz都是整数，大数据情况下，很多点将会重叠在一个圆心位置，
     # 因此围绕圆心0.5为半径进行扰动
-    tiny_random_shift_xyz = True
+    # tiny_random_shift_xyz = True
     # 生成有效的时间段范围
-    periods = generate_available_period(contract_month, date_from, date_to)
+
     # 披露策略执行参数
-    params_kwargs_iter = [{
-        "md_loader_kwargs": {"period": _[3]},
-        "strategy_kwargs": {"buy_line": -5, "sell_line": 5, 'periods': periods, "lower_buy_higher_sell": False},
-        "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
-    } for _ in itertools.product(
-        range(4, 13, 1), range(14, 30, 3), range(5, 10),  # short, long, signal
-        [5, 10, 15, 20, 30, 60, 120],  # file_path  BarSize=*
-    )]
 
     # 因子生成器
-    def factor_generator(df: pd.DataFrame, short=12, long=26, signal=9):
-        import talib
-        close_s = df['close']
-        dates = df.index.to_numpy()
-        dif, dea, macd = talib.MACD(close_s, fastperiod=short, slowperiod=long, signalperiod=signal)
-        # factors = np.expand_dims(macd, axis=1)
-        factors = np.array([_ for _ in zip(dates, macd)])
-        return factors
 
     # 策略批量运行
-    result_dic = DoubleThresholdWithinPeriodsBSStrategy.bulk_run_on_range(
+    result_dic = strategy_cls.bulk_run_on_range(
         lambda period: load_md_matlab(
             os.path.join(xls_data_dir_path, f'历年RB{contract_month:02d}BarSize={period}高开低收.xls')),
         factor_generator=factor_generator,
@@ -189,7 +188,91 @@ def bulk_backtest_show_result(auto_open_html=True):
         open_file_with_system_app(html_file_path)
 
 
+def do_macd_test():
+    from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
+    contract_month = 1
+    date_from, date_to = '2013-01-01', '2020-12-31'
+    periods = generate_available_period(contract_month, date_from, date_to)
+    params_kwargs_iter = [{
+        "md_loader_kwargs": {"period": _[3]},
+        "strategy_kwargs": {"buy_line": -5, "sell_line": 5, 'periods': periods, "lower_buy_higher_sell": False},
+        "factor_kwargs": {"short": _[0], "long": _[1], "signal": _[2]}
+    } for _ in itertools.product(
+        range(4, 13, 1), range(14, 30, 3), range(5, 10),  # short, long, signal
+        [5, 10, 15, 20, 30, 60, 120],  # file_path  BarSize=*
+    )]
+
+    def factor_generator(df: pd.DataFrame, short=12, long=26, signal=9):
+        import talib
+        close_s = df['close']
+        dates = df.index.to_numpy()
+        dif, dea, macd = talib.MACD(close_s, fastperiod=short, slowperiod=long, signalperiod=signal)
+        # factors = np.expand_dims(macd, axis=1)
+        factors = np.array([_ for _ in zip(dates, macd)])
+        return factors
+
+    bulk_backtest_show_result(
+        strategy_cls=DoubleThresholdWithinPeriodsBSStrategy,
+        date_from=date_from,
+        date_to=date_to,
+        contract_month=contract_month,
+        params_kwargs_iter=params_kwargs_iter,
+        factor_generator=factor_generator,
+        name='macd',
+    )
+
+
+def do_kdj_test():
+    from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
+    contract_month = 1
+    date_from, date_to = '2013-01-01', '2020-12-31'
+    periods = generate_available_period(contract_month, date_from, date_to)
+    params_kwargs_iter = [{
+        "md_loader_kwargs": {"period": _[3]},
+        "strategy_kwargs": {"buy_line": 20, "sell_line": 80, 'periods': periods, "lower_buy_higher_sell": False},
+        "factor_kwargs": {"fastk_period": _[0], "slowk_period": _[1], "slowd_period": _[2]}
+    } for _ in itertools.product(
+        np.arange(6.0, 15.0), np.arange(2.0, 6.0), np.arange(2.0, 6.0),  # fastk_period, slowk_period, slowd_period
+        [5, 10, 15, 20, 30, 60, 120],  # file_path  BarSize=*
+    )]
+
+    def factor_generator(
+            df: pd.DataFrame,
+            fastk_period=9.0,
+            slowk_period=3.0,
+            slowd_period=3.0):
+        import talib
+        close_s = df['close'].to_numpy(dtype='f8')
+        high_s = df['high'].to_numpy(dtype='f8')
+        low_s = df['low'].to_numpy(dtype='f8')
+        dates = df.index.to_numpy()
+        # KDJ 值对应的函数是 STOCH
+        slowk, slowd = talib.STOCH(
+            close_s, high_s, low_s,
+            fastk_period=fastk_period,
+            slowk_period=slowk_period,
+            slowk_matype=0.0,
+            slowd_period=slowd_period,
+            slowd_matype=0.0)
+        # 求出J值，J = (3*K)-(2*D)
+        slowj = list(map(lambda x, y: 3 * x - 2 * y, slowk, slowd))
+        factors = np.array([_ for _ in zip(dates, slowk, slowd, slowj)])
+        return factors
+
+    bulk_backtest_show_result(
+        strategy_cls=DoubleThresholdWithinPeriodsBSStrategy,
+        date_from=date_from,
+        date_to=date_to,
+        contract_month=contract_month,
+        params_kwargs_iter=params_kwargs_iter,
+        factor_generator=factor_generator,
+        name='kdj',
+    )
+
+
 if __name__ == "__main__":
     # _test_optimizer()
     # _test_generate_available_period()
-    bulk_backtest_show_result()
+    # bulk_backtest_show_result()
+    # do_macd_test()
+    do_kdj_test()
