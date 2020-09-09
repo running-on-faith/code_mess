@@ -79,8 +79,9 @@ def bulk_backtest_show_result(auto_open_html=True):
     import itertools
     from params_optimizer.strategy import DoubleThresholdWithinPeriodsBSStrategy
     # 参数配置
-    date_from, date_to = '2013-01-01', '2018-12-31'
-    output_js_path = os.path.join('html', 'data.js')
+    date_from, date_to = '2013-01-01', '2020-12-31'
+    js_file_name = 'data.js'
+    output_js_path = os.path.join('html', js_file_name)
     output_csv_path = os.path.join('html', 'data.csv')
     output_labels = ['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period']
     # file_path = r'd:\github\matlab_mass\data\历年RB01BarSize=10高开低收.xls'
@@ -89,6 +90,9 @@ def bulk_backtest_show_result(auto_open_html=True):
     # 数据文件所在目录
     xls_data_dir_path = r"d:\github\matlab_mass\data"
     contract_month = 1  # 合约月份
+    # 由于xyz都是整数，大数据情况下，很多点将会重叠在一个圆心位置，
+    # 因此围绕圆心0.5为半径进行扰动
+    tiny_random_shift_xyz = True
     # 生成有效的时间段范围
     periods = generate_available_period(contract_month, date_from, date_to)
     # 披露策略执行参数
@@ -125,6 +129,15 @@ def bulk_backtest_show_result(auto_open_html=True):
         logger.info("key: %s", key)
         dic = json.loads(key)
         data_dic = dic['factor_kwargs']
+        if tiny_random_shift_xyz:
+            # 由于xyz都是整数，大数据情况下，很多点将会重叠在一个圆心位置，
+            # 因此围绕圆心0.5为半径进行扰动
+            for _ in data_dic.keys():
+                try:
+                    data_dic[_] = data_dic[_] + np.random.random() - 0.5
+                except TypeError:
+                    pass
+
         data_dic.update(dic['md_loader_kwargs'])
         data_dic['calmar'] = result_dic['nav_stats'].calmar
         data_dic['cagr'] = result_dic['nav_stats'].cagr
@@ -163,7 +176,8 @@ def bulk_backtest_show_result(auto_open_html=True):
         y_label=output_labels[6],
         z_label=output_labels[2],
         color_label=output_labels[3],
-        symbol_size_label=output_labels[4],
+        symbol_size_label=output_labels[5],
+        js_file_name=js_file_name,
     )
 
     # 打开浏览器展示结果
