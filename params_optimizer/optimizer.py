@@ -62,6 +62,9 @@ def _test_generate_available_period():
 
 @functools.lru_cache()
 def load_md_matlab(file_path) -> pd.DataFrame:
+    """
+    加载 matlab 导出的 wind 的数据，日期轴做相应处理
+    """
     logger.info("Load %s", file_path)
     df = pd.read_excel(file_path, header=None)
     dt_base = datetime.strptime('1899-12-30', '%Y-%m-%d')
