@@ -79,8 +79,8 @@ def load_md_matlab(file_path) -> pd.DataFrame:
 def bulk_backtest_show_result(
         strategy_cls, date_from, date_to,
         contract_month, params_kwargs_iter, factor_generator,
+        output_labels, xyz_label_indexes=[0, 1, 2],
         name='test', xls_data_dir_path=r"d:\github\matlab_mass\data",
-        output_labels=['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period'],
         auto_open_html=True, tiny_random_shift_xyz=True):
     """
     以带日期范围的上下界买卖策略为例测试程序是否可以正常运行
@@ -90,9 +90,10 @@ def bulk_backtest_show_result(
     :contract_month 合约月份
     :params_kwargs_iter 参数迭代器
     :factor_generator 因子生成器
+    :output_labels 输出标签
+    :xyz_label_indexes x,y,z 三个轴的标签索引
     :name 名称，用于生产 html以及data文件时命名
     :xls_data_dir_path xls 文件目录
-    :output_labels 输出标签
     :auto_open_html 自动打开 html
     :tiny_random_shift_xyz xyz三轴扰动
     """
@@ -157,26 +158,24 @@ def bulk_backtest_show_result(
         plot_twin(
             reward_df[["value", "value_fee0"]], reward_df[['close']],
             enable_show_plot=False,
-            name=f"period{md_loader_kwargs['period']}"
-                 f"_long{factor_kwargs['long']}"
-                 f"_short{factor_kwargs['short']}"
-                 f"_signal{factor_kwargs['signal']}"
+            name=f"period{md_loader_kwargs['period']}_" +
+                 '_'.join([f'{k}{v}' for k, v in factor_kwargs.items()])
         )
 
     # 保持测试结果数据
     with open(output_js_path, 'w') as f:
         f.write("var data = \n")
-        json.dump([[_[name] for name in output_labels] for _ in data_2_js], f)
+        json.dump([[_[label] for label in output_labels] for _ in data_2_js], f)
 
     pd.DataFrame(data_2_js).to_csv(output_csv_path, index=None)
 
     # 输出 html
     html_file_path = generate_html(
-        os.path.join('html', 'index.html'),
+        os.path.join('html', f'{name}.html'),
         labels=output_labels,
-        x_label=output_labels[0],
-        y_label=output_labels[6],
-        z_label=output_labels[2],
+        x_label=output_labels[xyz_label_indexes[0]],
+        y_label=output_labels[xyz_label_indexes[1]],
+        z_label=output_labels[xyz_label_indexes[2]],
         color_label=output_labels[3],
         symbol_size_label=output_labels[5],
         js_file_name=js_file_name,
@@ -218,7 +217,9 @@ def do_macd_test():
         contract_month=contract_month,
         params_kwargs_iter=params_kwargs_iter,
         factor_generator=factor_generator,
-        name='kdj',
+        output_labels=['short', 'long', 'signal', 'calmar', 'cagr', 'daily_sharpe', 'period'],
+        xyz_label_indexes=[0, 6, 2],
+        name='macd',
     )
 
 
@@ -266,6 +267,8 @@ def do_kdj_test():
         contract_month=contract_month,
         params_kwargs_iter=params_kwargs_iter,
         factor_generator=factor_generator,
+        output_labels=['fastk_period', 'slowk_period', 'slowd_period', 'calmar', 'cagr', 'daily_sharpe', 'period'],
+        xyz_label_indexes=[0, 1, 2],
         name='kdj',
     )
 

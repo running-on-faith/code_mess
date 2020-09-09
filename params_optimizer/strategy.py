@@ -98,7 +98,7 @@ class SimpleStrategy:
             strategy = cls(**strategy_kwargs)
             reward_df = strategy.run_on_range(
                 md_df, factors, date_from, date_to,
-                log_header=f'{log_header_name}{n}) ')
+                log_header=f'{log_header_name}{n})')
             nav_stats = reward_df['nav'].calc_stats()
             nav_stats.set_riskfree_rate(risk_free)
             nav_fee0_stats = reward_df['nav_fee0'].calc_stats()
