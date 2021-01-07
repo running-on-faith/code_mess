@@ -5,7 +5,7 @@ future==0.18.2
 h5py==2.10.0
 IBATS-Common==0.17.2
 IBATS-Utils==1.2.8
-lxml==4.4.2
+lxml==4.6.2
 Markdown==3.1.1
 matplotlib==3.1.2
 mysqlclient==1.4.6
