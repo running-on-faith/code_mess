@@ -19,5 +19,5 @@ redis==3.3.11
 scikit-learn==0.22.1
 scipy==1.4.1
 TA-Lib==0.4.17
-tensorflow==2.1.0
+tensorflow==2.9.3
 xlrd==1.2.0
